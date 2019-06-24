@@ -47,6 +47,7 @@ class RangeTable {
     }
     return minval;
   }
+  int operator[](int idx);
  protected:
   int sz;
   int *table;
@@ -114,6 +115,8 @@ public:
 class PolyMat : public RoutingMat {
  public:
   PolyMat (char *s) : RoutingMat(s) { }
+  int getOverhang (int w) { return (*overhang)[w]; }
+  int getNotchOverhang (int w) { return (*notch_overhang)[w]; }
  protected:
   int width;
 
@@ -128,6 +131,9 @@ class PolyMat : public RoutingMat {
 class FetMat : public Material {
  public:
   FetMat (char *s) { name = s; }
+  int getSpacing (int w) {
+    return (*spacing)[w];
+  }
 protected:
   int width;
   int num_dummy;		/* # of dummy poly needed */
@@ -152,6 +158,15 @@ protected:
 class DiffMat : public Material {
  public:
   DiffMat (char *s) { name = s; }
+
+  /* return diffusion overhang, given width of fet and whether or not
+     the edge of the diffusion has a contact or not */
+  int effOverhang(int w, int hasvia = 0);
+  int viaSpaceEdge ();
+  int viaSpaceMid ();
+  int getPolySpacing () { return polyspacing; }
+  int getNotchSpacing () { return notchspacing; }
+  int getOppDiffSpacing (int flavor) { return oppspacing[flavor]; }
 protected:
   int width;
   int *spacing;
@@ -170,8 +185,9 @@ class Contact : public Material {
   Contact (char *s) {
     name = s;
   }
+  int width() { return width_int; }
 protected:
-  int width, spacing;
+  int width_int, spacing;
   Material *lower, *upper;
   int sym_surround;
   int asym_surround;

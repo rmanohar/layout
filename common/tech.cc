@@ -572,7 +572,7 @@ void Technology::Init (const char *s)
     if (config_get_int (buf) < 1) {
       fatal_error ("%s: has to be at least 1", buf);
     }
-    cmat->width = config_get_int (buf);
+    cmat->width_int = config_get_int (buf);
     
     snprintf (buf+k, BUF_SZ-k-1, "%s.spacing", contacts[i]);
     if (config_get_int (buf) < 1) {
@@ -614,4 +614,55 @@ void Technology::Init (const char *s)
     }
   }
   A_FREE (contacts);
+}
+
+
+int RangeTable::operator[](int idx)
+{
+  int i;
+
+  if (sz == 1) {
+    return table[0];
+  }
+  
+  for (i=0; i < sz; i += 2) {
+    Assert (i+1 < sz, "Hmm");
+    if (idx <= table[i]) {
+      return table[i+1];
+    }
+  }
+  return table[sz-1];
+}
+
+
+/*--- derived rules ---*/
+int DiffMat::viaSpaceEdge ()
+{
+  Assert (viaup, "Hmm");
+  return via_edge + via_fet + viaup->width();
+}
+
+int DiffMat::viaSpaceMid ()
+{
+  Assert (viaup, "Hmm");
+  return 2*via_fet + viaup->width();
+}
+
+int DiffMat::effOverhang (int w, int hasvia)
+{
+  int t;
+
+  Assert (viaup, "Hmm");
+
+  t = (*overhang)[w];
+  if (!hasvia) {
+    return t;
+  }
+  int s = viaSpaceEdge ();
+  if (s > t) {
+    return s;
+  }
+  else {
+    return t;
+  }
 }

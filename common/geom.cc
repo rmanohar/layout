@@ -28,8 +28,6 @@
 #include "geom.h"
 #include "tech.h"
 
-Layer *Layer::base = NULL;
-
 Tile::Tile ()
 {
   /*-- default tile is a space tile that is infinitely large --*/
@@ -44,6 +42,7 @@ Tile::Tile ()
   up = NULL;
   down = NULL;
   space = 1;
+  virt = 0;
   attr = 0;
 }
   
@@ -61,6 +60,12 @@ Layer::Layer (Material *m)
 
   hint->up = vhint;
   vhint->down = hint;
+}
+
+Layer::~Layer()
+{
+  /* XXX: delete all tiles! */
+  
 }
 
 void Layer::allocOther (int sz)
@@ -91,33 +96,34 @@ void Layer::setDownLink (Layer *x)
   hint->down = x->vhint;
 }
   
-void Geometry::Init()
+void Layout::Init()
 {
   Technology::Init ("layout.conf");
-  
+}
+
+Layout::Layout()
+{
   /*-- create all the layers --*/
+  Assert (Technology::T, "Initialization error");
 
   /* 1. base layer for diff, well, fets */
-  Layer *base = new Layer (Technology::T->poly);
-  Layer::base = base;
+  base = new Layer (Technology::T->poly);
 
   /* 2. Also has #flavors*6 materials! */
   int sz = config_get_table_size ("act.dev_flavors");
   Assert (sz > 0, "Hmm");
 
-  base->allocOther (sz*6);
-
-  /* order: nfet, pfet, 
-            ndiff, pdiff
-            nfet_well, pfet_well
-  */
+  base->allocOther (sz*4);
   for (int i=0; i < sz; i++) {
-    base->setOther (6*i+2*0 + EDGE_NFET, Technology::T->fet[EDGE_NFET][i]);
-    base->setOther (6*i+2*0 + EDGE_PFET, Technology::T->fet[EDGE_PFET][i]);
-    base->setOther (6*i+2*1 + EDGE_NFET, Technology::T->diff[EDGE_NFET][i]);
-    base->setOther (6*i+2*1 + EDGE_PFET, Technology::T->diff[EDGE_PFET][i]);
-    base->setOther (6*i+2*2 + EDGE_NFET, Technology::T->well[EDGE_NFET][i]);
-    base->setOther (6*i+2*2 + EDGE_PFET, Technology::T->well[EDGE_PFET][i]);
+    base->setOther (TOTAL_OFFSET(i, EDGE_NFET, FET_OFFSET),
+		    Technology::T->fet[EDGE_NFET][i]);
+    base->setOther (TOTAL_OFFSET(i, EDGE_PFET, FET_OFFSET),
+		    Technology::T->fet[EDGE_PFET][i]);
+
+    base->setOther (TOTAL_OFFSET(i, EDGE_NFET, DIFF_OFFSET),
+		    Technology::T->diff[EDGE_NFET][i]);
+    base->setOther (TOTAL_OFFSET(i, EDGE_PFET, DIFF_OFFSET),
+		    Technology::T->diff[EDGE_PFET][i]);
   }
 
   Layer *prev = base;
@@ -130,3 +136,47 @@ void Geometry::Init()
   }
 }
 
+Layout::~Layout()
+{
+  Layer *t, *l;
+
+  t = base;
+
+  while (t) {
+    l = t;
+    t = t->up;
+    delete l;
+  }
+}
+
+
+FetMat *Layout::getFet (int type, int flavor)
+{
+  FetMat *f;
+  Material *m;
+  m = base->other[TOTAL_OFFSET(flavor,type,FET_OFFSET)];
+  f = Technology::T->fet[type][flavor];
+  Assert (f == m, "Eh?");
+  return f;
+}
+
+DiffMat *Layout::getDiff (int type, int flavor)
+{
+  DiffMat *d;
+  Material *m;
+  m = base->other[TOTAL_OFFSET(flavor,type,DIFF_OFFSET)];
+  d = Technology::T->diff[type][flavor];
+  Assert (d == m, "Eh?");
+  return d;
+}
+
+WellMat *Layout::getWell (int type, int flavor)
+{
+  return Technology::T->well[type][flavor];
+}
+
+
+PolyMat *Layout::getPoly ()
+{
+  return Technology::T->poly;
+}

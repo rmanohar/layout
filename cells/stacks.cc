@@ -414,31 +414,42 @@ static void extend_gatepair (netlist_t *N, struct gate_pairs **gpp,
     if (!other.n) tryn = 0;
     if (!other.p) tryp = 0;
 
-    if (other.n) {
-      if (dir) {
-	gp->r.n = other.n;
-      }
-      else {
-	gp->l.n = other.n;
-      }
-      sn->visited = sn->nfolds;
-    }
-    if (other.p) {
-      if (dir) {
-	gp->r.p = other.p;
-      }
-      else {
-	gp->l.p = other.p;
-      }
-      sp->visited = sp->nfolds;
-    }
-
     struct gate_pairs *tmp;
     NEW (tmp, struct gate_pairs);
     tmp->basepair = 1;
     tmp->visited = 1;
     tmp->u.e.n = sn;
     tmp->u.e.p = sp;
+    tmp->l = gp->l;
+    tmp->r = gp->r;
+
+    if (other.n) {
+      if (dir) {
+	tmp->l = gp->r;
+	gp->r.n = other.n;
+	tmp->r = gp->r;
+      }
+      else {
+	tmp->r = gp->l;
+	gp->l.n = other.n;
+	tmp->l = gp->l;
+      }
+      sn->visited = sn->nfolds;
+    }
+    if (other.p) {
+      if (dir) {
+	tmp->l = gp->r;
+	gp->r.p = other.p;
+	tmp->r = gp->r;
+      }
+      else {
+	tmp->r = gp->l;
+	gp->l.p = other.p;
+	tmp->l = gp->l;
+      }
+      sp->visited = sp->nfolds;
+    }
+
 
     if (gp->basepair) {
       struct gate_pairs *t2;
@@ -631,10 +642,10 @@ list_t *stacks_create (netlist_t *N)
     }
     node_degree (n, &pc, &nc);
     maxedges += WEIGHT_SHARING*(pc + nc);
-    if (nc & 1) {
+    if ((nc & 1) || nc > 2) {
       n->contact = 1;
     }
-    if (pc & 1) {
+    if ((pc & 1) || pc > 2) {
       n->contact = 1;
     }
     if (nc > 0 && pc > 0) {
@@ -954,6 +965,12 @@ list_t *stacks_create (netlist_t *N)
     extend_gatepair (N, &gp, 1);
     //dump_pair (N, gp);
     list_value (li) = gp;
+
+    gp->l.n->contact = 1;
+    gp->l.p->contact = 1;
+    
+    gp->r.n->contact = 1;
+    gp->r.p->contact = 1;
   }
 
   /*-- finally, any orphaned edges get stacked up as normal --*/
@@ -1007,5 +1024,3 @@ list_t *stacks_create (netlist_t *N)
   list_append (retlist, stk_p);
   return retlist;
 }
-
-

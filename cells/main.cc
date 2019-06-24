@@ -34,7 +34,7 @@ int main (int argc, char **argv)
   Process *p;
   
   Act::Init (&argc, &argv);
-  Geometry::Init();
+  Layout::Init();
 
   a = new Act ("test.act");
   a->Expand();
