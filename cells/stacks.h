@@ -68,6 +68,7 @@ struct gate_pairs {
 };
 
 
+list_t *stacks_create (netlist_t *N);
 void geom_create_from_stack (netlist_t *N, list_t *stacks);
 
 

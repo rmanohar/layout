@@ -25,7 +25,7 @@ TARGETS=$(EXE)
 
 LAYOUTLIB=libactlayout.a
 
-OBJS=stacks.o cellgen.o
+OBJS=stacks.o cellgen.o main.o
 
 SRCS=$(OBJS:.o=.cc)
 

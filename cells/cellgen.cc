@@ -6,7 +6,7 @@
 #include <act/layout/tech.h>
 #include "stacks.h"
 
-void print_dualstack_tcl (netlist_t *N, struct gate_pairs *gp)
+void print_dualstack (netlist_t *N, struct gate_pairs *gp)
 {
   int flavor;
   if (gp->basepair) {
@@ -18,6 +18,38 @@ void print_dualstack_tcl (netlist_t *N, struct gate_pairs *gp)
     flavor = tmp->u.e.n->flavor;
   }
 
+  WellMat *nfet_well = Technology::T->well[EDGE_NFET][flavor];
+  WellMat *pfet_well = Technology::T->well[EDGE_PFET][flavor];
+
+  DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
+  DiffMat *pdiff = Technology::T->diff[EDGE_PFET][flavor];
+
+  FetMat *nfet = Technology::T->fet[EDGE_NFET][flavor];
+  FetMat *pfet = Technology::T->fet[EDGE_PFET][flavor];
+
+  PolyMat *poly = Technology::T->poly;
+
+  /* ok, now we can draw! */
+  Assert (nfet && pfet && poly && ndiff && pdiff, "What?");
+
+  /* let's draw rectangles */
+  
+
+}
+
+void print_singlestack (netlist_t *N, list_t *l)
+{
+  int flavor;
+  node_t *n;
+  edge_t *e;
+
+  if (list_length (l) < 3) return;
+
+  n = (node_t *) list_value (list_first (l));
+  e = (edge_t *) list_value (list_next (list_first (l)));
+
+  flavor = e->flavor;
+  
   WellMat *nfet_well = Technology::T->well[EDGE_NFET][flavor];
   WellMat *pfet_well = Technology::T->well[EDGE_PFET][flavor];
 
