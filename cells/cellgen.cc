@@ -332,7 +332,7 @@ static int emit_rectangle (FILE *fp,
 		   dx, dy - yup*poverhang, e->l, yup*poverhang);
 
   print_rectangle (fp, N, p->getName(), NULL, dx, dy + yup*e->w,
-		   e->l, yup*(e->w + uoverhang));
+		   e->l, yup*uoverhang);
 
   dx += e->l;
   
@@ -754,7 +754,19 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
       list_t *stack = (list_t *) list_value (si);
       sprintf (buf, "stk_n%d", num++);
       fp = fopen (buf, "w");
-      print_singlestack (fp, N, L, stack);
+      b = print_singlestack (fp, N, L, stack);
+
+      if (b.n.llx < b.n.urx && b.n.lly < b.n.ury) {
+	WellMat *well = Technology::T->well[EDGE_NFET][b.flavor];
+	if (well) {
+	  print_rectangle (fp, N, well->getName(), N->nsc,
+			   b.n.llx - well->getOverhang(),
+			   b.n.lly - well->getOverhang(),
+			   (b.n.urx - b.n.llx) + 2*well->getOverhang(),
+			   (b.n.ury - b.n.lly) + 2*well->getOverhang());
+	}
+      }
+
       fclose (fp);
     }
   }
@@ -767,7 +779,17 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
       list_t *stack = (list_t *) list_value (si);
       sprintf (buf, "stk_p%d", num++);
       fp = fopen (buf, "w");
-      print_singlestack (fp, N, L, stack);
+      b = print_singlestack (fp, N, L, stack);
+      if (b.p.llx < b.p.urx && b.p.lly < b.p.ury) {
+	WellMat *well = Technology::T->well[EDGE_PFET][b.flavor];
+	if (well) {
+	  print_rectangle (fp, N, well->getName(), N->nsc,
+			   b.p.llx - well->getOverhang(),
+			   b.p.lly - well->getOverhang(),
+			   (b.p.urx - b.p.llx) + 2*well->getOverhang(),
+			   (b.p.ury - b.p.lly) + 2*well->getOverhang());
+	}
+      }
       fclose (fp);
     }
   }
