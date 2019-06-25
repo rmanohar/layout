@@ -685,6 +685,9 @@ list_t *stacks_create (netlist_t *N)
   pairs = heap_new (32);
   rawpairs = list_new ();
 
+#if 0
+  printf ("raw-pairs:\n");
+#endif
   for (li = list_first (nnodes); li; li = list_next (li)) {
     node_t *l, *m;
     l = (node_t *) list_value (li);
@@ -792,6 +795,11 @@ list_t *stacks_create (netlist_t *N)
     /* for each element of the heap, attempt to extend the size using
        one of the pairs */
     gp = (struct gate_pairs *) heap_remove_min (pairs);
+#if 0
+    /* XXX: need to prune the search tree */
+    printf ("looking-at:\n");
+    dump_pair (N, gp);
+#endif
 
     /*-- find potential extensions to this pair! --*/
 
@@ -872,6 +880,10 @@ list_t *stacks_create (netlist_t *N)
 	  found = 1;
 	  if (!find_pairs (pairs, gnew)) {
 	    heap_insert (pairs, maxedges - COST(gnew), gnew);
+#if 0
+	    printf ("new-pair: ");
+	    dump_pair (N, gnew);
+#endif
 	  }
 	  else {
 	    delete_pair (gnew);

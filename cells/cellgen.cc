@@ -53,6 +53,18 @@ static void dump_edge (netlist_t *N, edge_t *e)
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
+
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
+struct BBox {
+  int flavor;
+  struct {
+    int llx, lly, urx, ury;
+  } p, n;
+};
+
 /*
   emits rectangles needed upto the FET.
   If it is right edge, also emits the final diffusion of the right edge.
@@ -126,11 +138,24 @@ static int locate_fetedge (Layout *L, int dx,
     dx += rect;
   }
 
+
   return dx;
 }
 
 
-
+static void print_rectangle (FILE *fp, netlist_t *N,
+			     const char *mat, node_t *name,
+			     int llx, int lly, int wx, int wy)
+{
+  fprintf (fp, "rect ");
+  if (name) {
+    dump_node (fp, N, name);
+  }
+  else {
+    fprintf (fp, "#");
+  }
+  fprintf (fp, " %s %d %d %d %d\n", mat, llx, lly, llx + wx, lly + wy);
+}
 
 /*
   emits rectangles needed upto the FET.
@@ -142,7 +167,8 @@ static int emit_rectangle (FILE *fp,
 			   int dx, int dy,
 			   unsigned int flags,
 			   edge_t *prev,
-			   node_t *left, edge_t *e, int yup)
+			   node_t *left, edge_t *e, int yup,
+			   BBox *ret)
 {
   DiffMat *d;
   FetMat *f;
@@ -150,6 +176,59 @@ static int emit_rectangle (FILE *fp,
   int rect;
   int fet_type; /* -1 = downward notch, +1 = upward notch, 0 = same
 		   width */
+
+  BBox b;
+
+  if (ret) {
+    b = *ret;
+  }
+  else {
+    b.p.llx = dx;
+    b.p.lly = 0;
+    b.p.urx = dx;
+    b.p.ury = 0;
+    b.n = b.p;
+  }
+
+#define RECT_UPDATE(type,x,y,rx,ry)			\
+  do {							\
+    if (type == EDGE_PFET) {				\
+      if (b.p.llx >= b.p.urx || b.p.lly >= b.p.ury) {	\
+	b.p.llx = MIN(x,rx);				\
+	b.p.lly = MIN(y,ry);				\
+	b.p.urx = MAX(x,rx);				\
+	b.p.ury = MAX(y,ry);				\
+      }							\
+      else {						\
+	b.p.llx = MIN(b.p.llx,x);			\
+	b.p.llx = MIN(b.p.llx,rx);			\
+	b.p.lly = MIN(b.p.lly,y);			\
+	b.p.lly = MIN(b.p.lly,ry);			\
+	b.p.urx = MAX(b.p.urx,x);			\
+	b.p.urx = MAX(b.p.urx,rx);			\
+	b.p.ury = MAX(b.p.ury,y);			\
+	b.p.ury = MAX(b.p.ury,ry);			\
+      }							\
+    } else {						\
+      if (b.n.llx >= b.n.urx || b.n.lly >= b.n.ury) {	\
+	b.n.llx = MIN(x,rx);				\
+	b.n.lly = MIN(y,ry);				\
+	b.n.urx = MAX(x,rx);				\
+	b.n.ury = MAX(y,ry);				\
+      }							\
+      else {						\
+	b.n.llx = MIN(b.n.llx,x);			\
+	b.n.llx = MIN(b.n.llx,rx);			\
+	b.n.lly = MIN(b.n.lly,y);			\
+	b.n.lly = MIN(b.n.lly,ry);			\
+	b.n.urx = MAX(b.n.urx,x);			\
+	b.n.urx = MAX(b.n.urx,rx);			\
+	b.n.ury = MAX(b.n.ury,y);			\
+	b.n.ury = MAX(b.n.ury,ry);			\
+      }							\
+    }							\
+  } while (0)
+  
 
 #if 0
   printf ("emit rect: left=");
@@ -166,6 +245,7 @@ static int emit_rectangle (FILE *fp,
   d = L->getDiff (e->type, e->flavor);
   f = L->getFet (e->type, e->flavor);
   p = L->getPoly ();
+  b.flavor = e->flavor;
 
   rect = 0;
   if (flags & EDGE_FLAGS_LEFT) {
@@ -205,20 +285,15 @@ static int emit_rectangle (FILE *fp,
     pad = 0;
   }
 
-  fprintf (fp, "rect ");
-  if (left->contact) {
-    dump_node (fp, N, left);
-  }
-  else {
-    fprintf (fp, "#");
-  }
-  fprintf (fp, " %s", d->getName());
-  fprintf (fp, " %d %d %d", dx, dy, dx + rect);
   if (fet_type == 0) {
-    fprintf (fp, " %d\n", dy + yup*e->w);
+    print_rectangle (fp, N, d->getName(), left->contact ? left : NULL,
+		     dx, dy, rect, yup*e->w);
+    RECT_UPDATE(e->type, dx, dy, dx+rect, dy + yup*e->w);
   }
   else {
-    fprintf (fp, " %d\n", dy + yup*prev->w);
+    print_rectangle (fp, N, d->getName(), left->contact ? left : NULL,
+		     dx, dy, rect, yup*prev->w);
+    RECT_UPDATE(e->type, dx,dy,dx+rect, dy + yup*prev->w);
   }
   dx += rect;
 
@@ -237,15 +312,13 @@ static int emit_rectangle (FILE *fp,
     }
     rect += pad;
     pad = 0;
-    fprintf (fp, "rect #");
-    fprintf (fp, " %s", d->getName());
-    fprintf (fp, " %d %d %d %d\n", dx, dy, dx + rect, dy + yup*e->w);
+    print_rectangle (fp, N, d->getName(), NULL, dx, dy, rect, yup*e->w);
+    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e->w);
     dx += rect;
   }
 
   /* now print fet */
-  fprintf (fp, "rect # %s", f->getName());
-  fprintf (fp, " %d %d %d %d\n", dx, dy, dx + e->l, dy + yup*e->w);
+  print_rectangle (fp, N, f->getName(), NULL, dx, dy, e->l, yup*e->w);
 
   int poverhang = p->getOverhang (e->l);
   int uoverhang = poverhang;
@@ -255,13 +328,11 @@ static int emit_rectangle (FILE *fp,
   }
 
   /* now print poly edges */
-  fprintf (fp, "rect ");
-  dump_node (fp, N, e->g);
-  fprintf (fp, " %s", p->getName());
-  fprintf (fp, " %d %d %d %d\n", dx, dy - yup*poverhang, dx + e->l, dy);
+  print_rectangle (fp, N, p->getName(), e->g,
+		   dx, dy - yup*poverhang, e->l, yup*poverhang);
 
-  fprintf (fp, "rect # %s", p->getName());
-  fprintf (fp, " %d %d %d %d\n", dx, dy + yup*e->w, dx + e->l, dy + yup*(e->w + uoverhang));
+  print_rectangle (fp, N, p->getName(), NULL, dx, dy + yup*e->w,
+		   e->l, yup*(e->w + uoverhang));
 
   dx += e->l;
   
@@ -275,21 +346,24 @@ static int emit_rectangle (FILE *fp,
       right = e->a;
     }
     rect = d->effOverhang (e->w, right->contact);
-    fprintf (fp, "rect ");
-    dump_node (fp, N, right);
-    fprintf (fp, " %s", d->getName());
-    fprintf (fp, " %d %d %d %d\n", dx, dy, dx + rect, dy + yup*e->w);
+    print_rectangle (fp, N, d->getName(), right, dx, dy, rect, yup*e->w);
+    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e->w);
     dx += rect;
+  }
+
+  if (ret) {
+    *ret = b;
   }
 
   return dx;
 }
 
-int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
+BBox print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
 {
   int flavor;
   int xpos, xpos_p;
   int diffspace;
+  BBox b;
   
   if (gp->basepair) {
     flavor = gp->u.e.n->flavor;
@@ -317,6 +391,12 @@ int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
   xpos = 0;
   xpos_p = 0;
 
+  b.p.llx = 0;
+  b.p.lly = 0;
+  b.p.urx = 0;
+  b.p.ury = 0;
+  b.n = b.p;
+
   int padn, padp;
   int fposn, fposp;
 
@@ -341,12 +421,12 @@ int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
     xpos = emit_rectangle (fp, N, L, padn, xpos, yn,
 			   EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
 			   NULL,
-			   gp->l.n, gp->u.e.n, -1);
+			   gp->l.n, gp->u.e.n, -1, &b);
     
     xpos_p = emit_rectangle (fp, N, L, padp, xpos_p, yp,
 			     EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
 			     NULL,
-			     gp->l.p, gp->u.e.p, 1);
+			     gp->l.p, gp->u.e.p, 1, &b);
   }
   else {
     listitem_t *li;
@@ -438,7 +518,7 @@ int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
       
       if (tmp->u.e.n) {
 	xpos = emit_rectangle (fp, N, L, padn, xpos, yn, flagsn,
-			       prevn, leftn, tmp->u.e.n, -1);
+			       prevn, leftn, tmp->u.e.n, -1, &b);
 	prevn = tmp->u.e.n;
 	if (!tmp->u.e.p) {
 	  xpos_p = xpos;
@@ -447,7 +527,7 @@ int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
       
       if (tmp->u.e.p) {
 	xpos_p = emit_rectangle (fp, N, L, padp, xpos_p, yp, flagsp,
-				 prevp, leftp, tmp->u.e.p, 1);
+				 prevp, leftp, tmp->u.e.p, 1, &b);
 
 	prevp = tmp->u.e.p;
 	if (!tmp->u.e.n) {
@@ -457,10 +537,10 @@ int print_dualstack (FILE *fp, netlist_t *N, Layout *L, struct gate_pairs *gp)
       
     }
   }
-  return MAX (xpos, xpos_p);
+  return b;
 }
 
-int print_singlestack (FILE *fp, netlist_t *N, Layout *L, list_t *l)
+BBox print_singlestack (FILE *fp, netlist_t *N, Layout *L, list_t *l)
 {
   int flavor;
   int type;
@@ -468,8 +548,15 @@ int print_singlestack (FILE *fp, netlist_t *N, Layout *L, list_t *l)
   edge_t *e;
   edge_t *prev;
   int xpos = 0;
+  BBox b;
 
-  if (list_length (l) < 3) return 0;
+  b.p.llx = 0;
+  b.p.lly = 0;
+  b.p.urx = 0;
+  b.p.ury = 0;
+  b.n = b.p;
+
+  if (list_length (l) < 3) return b;
 
   n = (node_t *) list_value (list_first (l));
   e = (edge_t *) list_value (list_next (list_first (l)));
@@ -503,14 +590,14 @@ int print_singlestack (FILE *fp, netlist_t *N, Layout *L, list_t *l)
     if (!list_next (list_next (list_next (li)))) {
       flags |= EDGE_FLAGS_RIGHT;
     }
-    xpos = emit_rectangle (fp, N, L, 0, xpos, 0, flags, prev, n, e, 1);
+    xpos = emit_rectangle (fp, N, L, 0, xpos, 0, flags, prev, n, e, 1, &b);
     prev = e;
 
     li = list_next (list_next (li));
   }
   Assert (li && !list_next (li), "Eh?");
   n = (node_t *) list_value (li);
-  return xpos;
+  return b;
 }
 
 static void dump_gateinfo (netlist_t *N, edge_t *e1, edge_t *e2)
@@ -616,6 +703,7 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
   char buf[32];
   int num = 0;
   FILE *fp;
+  BBox b;
   
   li = list_first (stacks);
   list_t *gplist = (list_t *) list_value (li);
@@ -628,11 +716,33 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
       /*--- process gp ---*/
       sprintf (buf, "stk_d%d", num++);
       fp = fopen (buf, "w");
-      print_dualstack (fp, N, L, gp);
+      b = print_dualstack (fp, N, L, gp);
+
+      /*-- now print nwells and pwells --*/
+      if (b.p.llx < b.p.urx && b.p.lly < b.p.ury) {
+	WellMat *well = Technology::T->well[EDGE_PFET][b.flavor];
+	if (well) {
+	  print_rectangle (fp, N, well->getName(), N->nsc,
+			   b.p.llx - well->getOverhang(),
+			   b.p.lly - well->getOverhang(),
+			   (b.p.urx - b.p.llx) + 2*well->getOverhang(),
+			   (b.p.ury - b.p.lly) + 2*well->getOverhang());
+	}
+      }
+      if (b.n.llx < b.n.urx && b.n.lly < b.n.ury) {
+	WellMat *well = Technology::T->well[EDGE_NFET][b.flavor];
+	if (well) {
+	  print_rectangle (fp, N, well->getName(), N->nsc,
+			   b.n.llx - well->getOverhang(),
+			   b.n.lly - well->getOverhang(),
+			   (b.n.urx - b.n.llx) + 2*well->getOverhang(),
+			   (b.n.ury - b.n.lly) + 2*well->getOverhang());
+	}
+      }
       fclose (fp);
 #if 0
       dump_pair (N, gp);
-#endif      
+#endif
     }
   }
 

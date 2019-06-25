@@ -145,6 +145,7 @@ protected:
 class WellMat : public Material {
  public:
   WellMat (char *s) { name = s; }
+  int getOverhang () { return overhang; }
 protected:
   int width;
   int *spacing;	      /* to other wells of the same type */
