@@ -31,7 +31,7 @@ SRCS=$(OBJS:.o=.cc)
 
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
-$(EXE): $(OBJS) $(ACT_HOME)/lib/$(LAYOUTLIB)
-	$(CXX) $(OBJS) -o $(EXE) -lactlayout $(LIBACTPASS)
+$(EXE): $(OBJS) $(ACT_HOME)/lib/$(LAYOUTLIB) $(ACTPASSDEPEND)
+	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) -lactlayout $(LIBACTPASS)
 
 -include Makefile.deps

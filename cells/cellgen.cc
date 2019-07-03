@@ -696,11 +696,11 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
 
 
 
-void geom_create_from_stack (netlist_t *N, list_t *stacks)
+void geom_create_from_stack (netlist_t *N, list_t *stacks, Process *p)
 {
   listitem_t *li;
   Layout *L = new Layout();
-  char buf[32];
+  char buf[1024];
   int num = 0;
   FILE *fp;
   BBox b;
@@ -714,7 +714,13 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
       struct gate_pairs *gp;
       gp = (struct gate_pairs *) list_value (si);
       /*--- process gp ---*/
-      sprintf (buf, "stk_d%d", num++);
+      sprintf (buf, "%s", p->getName());
+      if (buf[strlen (buf)-1] == '>') {
+	sprintf (buf+strlen (buf)-2, "_stk_d%d", num++);
+      }
+      else {
+	sprintf (buf+strlen (buf), "_stk_d%d", num++);
+      }
       fp = fopen (buf, "w");
       b = print_dualstack (fp, N, L, gp);
 
@@ -752,7 +758,14 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
     listitem_t *si;
     for (si = list_first (nstk); si; si = list_next (si)) {
       list_t *stack = (list_t *) list_value (si);
-      sprintf (buf, "stk_n%d", num++);
+
+      sprintf (buf, "%s", p->getName());
+      if (buf[strlen (buf)-1] == '>') {
+	sprintf (buf+strlen (buf)-2, "_stk_n%d", num++);
+      }
+      else {
+	sprintf (buf+strlen (buf), "_stk_n%d", num++);
+      }
       fp = fopen (buf, "w");
       b = print_singlestack (fp, N, L, stack);
 
@@ -777,7 +790,14 @@ void geom_create_from_stack (netlist_t *N, list_t *stacks)
     listitem_t *si;
     for (si = list_first (pstk); si; si = list_next (si)) {
       list_t *stack = (list_t *) list_value (si);
-      sprintf (buf, "stk_p%d", num++);
+
+      sprintf (buf, "%s", p->getName());
+      if (buf[strlen (buf)-1] == '>') {
+	sprintf (buf+strlen (buf)-2, "_stk_p%d", num++);
+      }
+      else {
+	sprintf (buf+strlen (buf), "_stk_p%d", num++);
+      }
       fp = fopen (buf, "w");
       b = print_singlestack (fp, N, L, stack);
       if (b.p.llx < b.p.urx && b.p.lly < b.p.ury) {

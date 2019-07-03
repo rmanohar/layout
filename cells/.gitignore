@@ -3,3 +3,4 @@ i386_*
 Makefile.deps
 *~
 *.i386_*
+*stk_*
