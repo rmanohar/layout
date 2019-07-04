@@ -69,7 +69,7 @@ struct gate_pairs {
 
 
 list_t *stacks_create (netlist_t *N);
-void geom_create_from_stack (netlist_t *N, list_t *stacks, Process *p);
+int geom_create_from_stack (Act *a, FILE *fplef, netlist_t *N, list_t *stacks);
 
 
 #endif /* __ACT_STACKS_H__ */

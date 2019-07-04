@@ -1,8 +1,22 @@
 #!/usr/bin/perl
 
+$count = 0;
+$start = 1;
+
 while (<>) {
-    next if /^#/;
+    if (/^#/) {
+       if ($start == 0) {
+          print "}\n";
+      }
+      $start = 1;
+      next;
+    }
     chop;
+    if ($start) {
+      print "proc p_${count} {} {\n"; 
+      $count++;
+      $start = 0;
+    }
     ($rect,$node,$mat,$llx,$lly,$urx,$ury) = split;
     print "box $llx $lly $urx $ury\n";
     print "paint $mat\n";

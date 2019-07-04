@@ -438,12 +438,16 @@ void Technology::Init (const char *s)
     mat->spacing = new RangeTable (config_get_table_size (buf),
 				   config_get_table_int (buf));
 
-#if 0    
     snprintf (buf+j, BUF_SZ-j-1, "pitch");
     if (config_exists (buf) && config_get_int (buf) < 1) {
       fatal_error ("%s: minimum pitch has to be at least 1", buf);
     }
-#endif
+    if (config_exists (buf)) {
+      mat->pitch = config_get_int (buf);
+    }
+    else {
+      mat->pitch = mat->width->min() + mat->spacing->min();
+    }
     
     snprintf (buf+j, BUF_SZ-j-1, "direction");
     mat->r.routex = 1;
@@ -588,6 +592,8 @@ void Technology::Init (const char *s)
       }
       found_contact++;
       cmat->sym_surround = config_get_int (buf);
+      snprintf (buf+k, BUF_SZ-k-1, "%s.sym.surround_up", contacts[i]);
+      cmat->sym_surround_up = config_get_int (buf);
     }
     else {
       cmat->sym_surround = -1;
@@ -599,12 +605,19 @@ void Technology::Init (const char *s)
 	fatal_error ("%s: has to be non-negative", buf);
       }
       cmat->asym_surround = config_get_int (buf);
+
+      snprintf (buf+k, BUF_SZ-k-1, "%s.asym.surround_up", contacts[i]);
+      cmat->asym_surround_up = config_get_int (buf);
+      
       snprintf (buf+k, BUF_SZ-k-1, "%s.asym.opp", contacts[i]);
       if (config_get_int (buf) < 0) {
 	fatal_error ("%s: has to be non-negative", buf);
       }
       cmat->asym_opp = config_get_int (buf);
       found_contact++;
+
+      snprintf (buf+k, BUF_SZ-k-1, "%s.asym.opp_up", contacts[i]);
+      cmat->asym_opp_up = config_get_int (buf);
     }
     else {
       cmat->asym_surround = -1;
@@ -639,13 +652,13 @@ int RangeTable::operator[](int idx)
 int DiffMat::viaSpaceEdge ()
 {
   Assert (viaup, "Hmm");
-  return via_edge + via_fet + viaup->width();
+  return via_edge + via_fet + viaup->getWidth();
 }
 
 int DiffMat::viaSpaceMid ()
 {
   Assert (viaup, "Hmm");
-  return 2*via_fet + viaup->width();
+  return 2*via_fet + viaup->getWidth();
 }
 
 int DiffMat::effOverhang (int w, int hasvia)

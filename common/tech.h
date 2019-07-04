@@ -37,6 +37,9 @@ class RangeTable {
   }
   int min() {
     if (minval >= 0) return minval;
+    if (sz == 1) {
+      minval = table[0];
+    }
     for (int i=1; i < sz; i += 2) {
       if (minval == -1) {
 	minval = table[i];
@@ -71,6 +74,7 @@ class Material {
     viaup = NULL;
     viadn = NULL;
     l = NULL;
+    pitch = 0;
   }
 
   const char *getName() { return name; }
@@ -79,12 +83,14 @@ protected:
   const char *name;		/* drawing name in magic */
   int gds[2];			/* gds ids */
 
-  RangeTable *width;		/* min width */
-  RangeTable *spacing;		/* min spacing */
+  RangeTable *width;		/* min width (indexed by length) */
+  RangeTable *spacing;		/* min spacing (indexed by width) */
 
   int minarea;			/* 0 means no constraint */
   int maxarea;			/* 0 means no constraint */
   int xgrid, ygrid;		/* 0,0 if not on a grid */
+
+  int pitch;
 
   Contact *viaup, *viadn;
 
@@ -105,6 +111,12 @@ struct RoutingRules {
 class RoutingMat : public Material {
 public:
   RoutingMat (char *s) { name = s; }
+  int minWidth () { return width->min(); }
+  int minArea() { return minarea; }
+  int minSpacing() { return spacing->min(); }
+  int getPitch() { return pitch; }
+  Contact *getUpC() { return viaup; }
+  
  protected:
   RoutingRules r;
 
@@ -168,6 +180,7 @@ class DiffMat : public Material {
   int getPolySpacing () { return polyspacing; }
   int getNotchSpacing () { return notchspacing; }
   int getOppDiffSpacing (int flavor) { return oppspacing[flavor]; }
+  int getSpacing (int flavor) { return spacing[flavor]; }
 protected:
   int width;
   int *spacing;
@@ -186,13 +199,29 @@ class Contact : public Material {
   Contact (char *s) {
     name = s;
   }
-  int width() { return width_int; }
+  int getWidth() { return width_int; }
+  int getSpacing() { return spacing; } 
+  int isSym() { return sym_surround >= 0 ? 1 : 0; }
+  int isAsym() { return asym_surround >= 0 ? 1 : 0; }
+  int getSym() { return sym_surround; }
+  int getSymUp() { return sym_surround_up; }
+  int getAsym() { return asym_surround; }
+  int getAsymOpp() { return asym_opp; }
+  int getAsymUp() { return asym_surround_up; }
+  int getAsymOppUp() { return asym_opp_up; }
+  
 protected:
   int width_int, spacing;
   Material *lower, *upper;
+
   int sym_surround;
+  int sym_surround_up;
+  
   int asym_surround;
   int asym_opp;
+  
+  int asym_surround_up;
+  int asym_opp_up;
 
   friend class Technology;
 };
@@ -222,10 +251,6 @@ class Technology {
   PolyMat *poly;
 
   RoutingMat **metal;
-
-  Contact *pc, **mc;		/* poly, metal contacts */
-  Contact **wc[2];		/* well */
-  Contact **dc[2];		/* diffusion */
 };
   
   
