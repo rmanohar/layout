@@ -715,8 +715,9 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
 
 
 
-int geom_create_from_stack (Act *a, FILE *fplef,
-			    netlist_t *N, list_t *stacks)
+void geom_create_from_stack (Act *a, FILE *fplef,
+			     netlist_t *N, list_t *stacks,
+			     int *sizex, int *sizey)
 {
   int i;
   listitem_t *li;
@@ -1008,8 +1009,22 @@ int geom_create_from_stack (Act *a, FILE *fplef,
     
     count += m2->getPitch()*stride;
   }
+
+  if (topedge > 2*m1->getPitch()) {
+    fprintf (fplef, "    OBS\n");
+    fprintf (fplef, "      LAYER %s ;\n", m1->getName());
+    fprintf (fplef, "         RECT %.6f %.6f %.6f %.6f ;\n",
+	     0.0, scale*(m1->getPitch()),
+	     scale*rhs, scale*(topedge - 2*m1->getPitch()));
+    fprintf (fplef, "    END\n");
+  }
   
   fprintf (fplef, "END %s\n", buf);
-
-  return topedge*rhs;
+  if (sizex) {
+    *sizex = rhs;
+  }
+  if (sizey) {
+    *sizey = topedge;
+  }
+  return;
 }

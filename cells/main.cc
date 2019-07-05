@@ -22,14 +22,166 @@
 #include <stdio.h>
 #include <list.h>
 #include <unistd.h>
+#include <math.h>
 #include <map>
+
 #include <act/passes.h>
 #include <act/passes/netlist.h>
 #include <act/layout/geom.h>
 #include <act/iter.h>
+
 #include "stacks.h"
 
 static Act *global_act;
+
+struct process_aux {
+
+  process_aux() {
+    p = NULL;
+    x = 0;
+    y = 0;
+    visited = 0;
+    n = NULL;
+    portmap = NULL;
+    nets = NULL;
+  }
+  
+  Process *p; 			/* sanity */
+  int x, y;			/* size of component */
+
+  netlist_t *n;
+
+  /*-- local nets --*/
+  int visited;
+  int nnets;
+  int *portmap;			/* maps ports to nets */
+
+  list_t **nets;
+  
+  /*-- port nets --*/
+  
+};
+
+#define MICRON_CONVERSION 2000
+#define TRACK_CONVERSION 12
+
+static std::map<Process *, process_aux *> *procmap = NULL;
+
+
+static std::map<Process *, netlist_t *> *netmap = NULL;
+
+
+void _collect_nets (Act *a, Process *p)
+{
+  process_aux *px;
+  Assert (p->isExpanded(), "What are we doing");
+
+  if (procmap->find (p) == procmap->end()) {
+    /* this is an instance with no circuits! */
+    px = new process_aux();
+    px->p = p;
+    (*procmap)[p] = px;
+  }
+  else {
+    px = procmap->find(p)->second;
+  }
+  if (px->visited) return;
+  px->visited = 1;
+
+  if (netmap->find(p) == netmap->end()) {
+    fatal_error ("Could not find netlist for `%s'", p->getName());
+  }
+  netlist_t *n = netmap->find (p)->second;
+  px->n = n;
+
+  if (A_LEN (n->bN->ports) > 0) {
+    MALLOC (px->portmap, int, A_LEN (n->bN->ports));
+    for (int i = 0; i < A_LEN (n->bN->ports); i++) {
+      px->portmap[i] = -1;
+    }
+  }
+
+  ActInstiter i(p->CurScope());
+
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (!TypeFactory::isProcessType (vx->t)) continue;
+    _collect_nets (a, dynamic_cast<Process *>(vx->t->BaseType ()));
+  }
+
+  int iport = 0;
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (!TypeFactory::isProcessType (vx->t)) continue;
+
+    process_aux *sub;
+    Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
+    int ports_exist;
+
+    if (procmap->find (instproc) == procmap->end()) {
+      fatal_error ("Error looking for instproc %s!\n", instproc->getName());
+    }
+
+    sub = procmap->find (instproc)->second;
+    Assert (sub->n, "What?");
+
+    ports_exist = 0;
+    for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
+      if (sub->n->bN->ports[i].omit == 0) {
+	ports_exist = 1;
+	break;
+      }
+    }
+
+    if (!ports_exist) continue;
+
+    if (vx->t->arrayInfo()) {
+      Arraystep *as = vx->t->arrayInfo()->stepper();
+      while (!as->isend()) {
+	for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
+	  if (sub->n->bN->ports[i].omit) continue;
+
+	  /* n->bN->instports[iport] has the canonical connection */
+	  
+	  iport++;
+	}
+	as->step();
+      }
+      delete as;
+    }
+    else {
+      for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
+	if (sub->n->bN->ports[i].omit) continue;
+	
+	/* n->bN->instports[iport] has the canonical connection */
+	
+	iport++;
+      }
+    }
+  }
+
+  Assert (iport == A_LEN (n->bN->instports), "What?!");
+  
+  return;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void print_procname (Act *a, Process *p, FILE *fp)
 {
@@ -54,11 +206,10 @@ void print_procname (Act *a, Process *p, FILE *fp)
   }
 }
 
-
 void usage (char *name)
 {
   fprintf (stderr, "Unknown options.\n");
-  fprintf (stderr, "Usage: %s -p procname [-o dirname] <file.act>\n", name);
+  fprintf (stderr, "Usage: %s -p procname -l lefname -d defname <file.act>\n", name);
   exit (1);
 }
 
@@ -70,7 +221,7 @@ static void lef_header (FILE *fp)
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "UNITS\n");
-  fprintf (fp, "    DATABASE MICRONS 2000 ;\n");
+  fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
   fprintf (fp, "END UNITS\n\n");
 
   fprintf (fp, "MANUFACTURINGGRID 0.000500 ; \n\n");
@@ -159,15 +310,27 @@ static void def_header (FILE *fp, const char *proc)
   else {
     fprintf (fp, "%s ;\n", proc);
   }
-  fprintf (fp, "\nUNITS DISTANCE MICRONS 2000 ;\n\n");
+  fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
 }
 
-static int total_instances = 0;
 
+static int total_instances = 0;
+static double total_area = 0.0;
+
+/*-- collect info per process --*/
 static void count_inst (void *x, ActId *prefix, Process *p)
 {
   if (p->getprs()) {
+    process_aux *px;
     total_instances++;
+    if (procmap->find (p) == procmap->end()) {
+      fatal_error ("Encountered instance of type `%s' that was not converted ot layout!", p->getName());
+    }
+    px = procmap->find (p)->second;
+    Assert (px && px->p == p, "Weird!");
+
+    /*-- collect area --*/
+    total_area += px->x*px->y;
   }
 }
 
@@ -184,40 +347,98 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   }
 }
 
-static void emit_def (Act *a, FILE *fp)
+static void dump_nets (void *x, ActId *prefix, Process *p)
 {
+  FILE *fp = (FILE *)x;
+  char buf[10240];
+
+  if (p->getprs()) {
+    prefix->sPrint (buf, 10240);
+    global_act->mfprintf (fp, "%s ", buf);
+    print_procname (global_act, p, fp);
+    fprintf (fp, " ;\n");
+  }
+}
+
+
+
+static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
+{
+  FILE *fp;
+  
+  fp = fopen (defname, "w");
+  if (!fp) {
+    fatal_error ("Could not open file `%s' for writing", defname);
+  }
+  def_header (fp, proc_name);
+  
   global_act = a;
+  
+  double unit_conv;
+
+  /* collect process info */
+  act_flat_apply_processes (a, fp, p, count_inst);
+
+  /* add white space */
+  total_area /= 0.60;
+
+  /* make it roughly square */
+  total_area = sqrt (total_area);
+
+  unit_conv = Technology::T->scale*MICRON_CONVERSION/1000.0;
+  
   /*--- DIE AREA ---*/
+  total_area = total_area*unit_conv;
 
-  /*
+  int pitchx, pitchy, track_gap;
+  int nx, ny;
 
-DIEAREA ( 83600 71820 ) ( 104400 91200 ) ;
+  pitchx = Technology::T->metal[1]->getPitch();
+  pitchy = Technology::T->metal[0]->getPitch();
 
-ROW CORE_ROW_0 CoreSite 83600 71820 N DO 52 BY 1 STEP 400 0
- ;
-ROW CORE_ROW_1 CoreSite 83600 75240 FS DO 52 BY 1 STEP 400 0
- ;
-ROW CORE_ROW_2 CoreSite 83600 78660 N DO 52 BY 1 STEP 400 0
- ;
-ROW CORE_ROW_3 CoreSite 83600 82080 FS DO 52 BY 1 STEP 400 0
- ;
-ROW CORE_ROW_4 CoreSite 83600 85500 N DO 52 BY 1 STEP 400 0
- ;
+  pitchx = pitchx*unit_conv;
+  pitchy = pitchy*unit_conv;
+  
+  track_gap = pitchy*TRACK_CONVERSION;
 
-TRACKS X 83800 DO 52 STEP 400 LAYER Metal9 ;
-TRACKS Y 72770 DO 25 STEP 760 LAYER Metal9 ;
-TRACKS Y 72580 DO 33 STEP 570 LAYER Metal8 ;
-TRACKS X 83800 DO 52 STEP 400 LAYER Metal8 ;
+  nx = (total_area + pitchx - 1)/pitchx;
+  ny = (total_area + track_gap - 1)/track_gap;
 
-  */
+  fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
+	   10*pitchx, track_gap,
+	   (10+nx)*pitchx, (1+ny)*track_gap);
 
-  act_flat_apply_processes (a, fp, count_inst);
+  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
+	   10*pitchx, pitchy, ny, track_gap);
 
+  /* routing tracks: metal1, metal2 */
+
+  for (int i=0; i < Technology::T->nmetals; i++) {
+    RoutingMat *mx = Technology::T->metal[i];
+    int pitchxy = mx->getPitch()*unit_conv;
+    int startxy = (mx->minWidth() + 2*mx->minSpacing())*unit_conv/2;
+    
+    int ntracksx = (pitchx*nx)/pitchxy;
+    int ntracksy = (track_gap*ny)/pitchxy;
+
+    /* vertical tracks */
+    fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
+	     10*pitchx + startxy, ntracksx, pitchxy, mx->getName());
+    /* horizontal tracks */
+    fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
+	     track_gap + startxy, ntracksy, pitchxy, mx->getName());
+
+    fprintf (fp, "\n");
+
+  }
+  
   /* -- instances  -- */
   fprintf (fp, "COMPONENTS %d ;\n", total_instances);
-  act_flat_apply_processes (a, fp, dump_inst);
-  /*
-    inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;
+  act_flat_apply_processes (a, fp, p, dump_inst);
+  /* FORMAT: 
+         inst2591 NAND4X2 ;
+
+         inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
   */
   fprintf (fp, "END COMPONENTS\n\n");
 
@@ -225,17 +446,31 @@ TRACKS X 83800 DO 52 STEP 400 LAYER Metal8 ;
   fprintf (fp, "PINS 0 ;\n");
   fprintf (fp, "END PINS\n\n");
 
+  /* -- emit net info -- */
+
+  unsigned long netcount = 0;
+  unsigned long pos = 0;
+
   /* -- nets -- */
-  fprintf (fp, "NETS 0; \n");
+  pos = ftell (fp);
+  fprintf (fp, "NETS %012lu ;\n", netcount);
   /*
 - net1237
   ( inst5638 A ) ( inst4678 Y )
  ;
   */
+
+  _collect_nets (a, p);
   
   fprintf (fp, "END NETS\n\n");
-
   fprintf (fp, "END DESIGN\n");
+  fclose (fp);
+
+
+  fp = fopen (defname, "r+");
+  fseek (fp, pos, SEEK_SET);
+  fprintf (fp, "NETS %12lu ;\n", netcount);
+  fclose (fp);
 }
 
 
@@ -252,6 +487,10 @@ int main (int argc, char **argv)
   
   Act::Init (&argc, &argv);
   Layout::Init();
+  
+  if (Technology::T->nmetals < 2) {
+    fatal_error ("Can't handle a process with fewer than two metal layers!");
+  }
 
   while ((ch = getopt (argc, argv, "p:l:d:o:")) != -1) {
     switch (ch) {
@@ -329,8 +568,7 @@ int main (int argc, char **argv)
   //a->Print (stdout);
   
   /*--- create stacks for all cells ---*/
-  std::map<Process *, netlist_t *> *netmap =
-    (std::map<Process *, netlist_t *> *) a->aux_find ("prs2net");
+  netmap = (std::map<Process *, netlist_t *> *) a->aux_find ("prs2net");
 
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
@@ -343,9 +581,15 @@ int main (int argc, char **argv)
   lef_header (fp);
 
   ActTypeiter it(cell_ns);
+
+  procmap = new std::map<Process *, process_aux *>();
+  total_area = 0.0;
+  
   for (it = it.begin(); it != it.end(); it++) {
     Type *u = (*it);
     Process *p = dynamic_cast<Process *>(u);
+    process_aux *px;
+    
     if (!p) continue;
     if (!p->isCell()) continue;
     if (!p->isExpanded()) continue;
@@ -354,19 +598,22 @@ int main (int argc, char **argv)
     Assert (N, "Hmm...");
 
     list_t *l = stacks_create (N);
-    geom_create_from_stack (a, fp, N, l);
+
+    px = new process_aux();
+    px->p = p;
+
+    (*procmap)[p] = px;
+    
+    geom_create_from_stack (a, fp, N, l, &px->x, &px->y);
     fprintf (fp, "\n");
   }
   fclose (fp);
 
+
   /*--- print out def file ---*/
-  fp = fopen (defname, "w");
-  if (!fp) {
-    fatal_error ("Could not open file `%s' for writing", defname);
-  }
-  def_header (fp, proc_name);
-  emit_def (a, fp);
-  fclose (fp);
+  emit_def (a, p, proc_name, defname);
+
+  delete procmap;
   
   return 0;
 }
