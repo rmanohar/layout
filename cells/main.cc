@@ -77,7 +77,7 @@ struct def_fmt_nets {
       fprintf (fp, " )");
       delete tmp;
     }
-    fprintf (fp, "\n");
+    fprintf (fp, "\n;\n");
   }
     
 
@@ -654,7 +654,7 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
   for (int i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mx = Technology::T->metal[i];
     int pitchxy = mx->getPitch()*unit_conv;
-    int startxy = (mx->minWidth() + 2*mx->minSpacing())*unit_conv/2;
+    int startxy = mx->minWidth()*unit_conv/2;
     
     int ntracksx = (pitchx*nx)/pitchxy;
     int ntracksy = (track_gap*ny)/pitchxy;

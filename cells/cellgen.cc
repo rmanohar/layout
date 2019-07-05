@@ -948,12 +948,12 @@ void geom_create_from_stack (Act *a, FILE *fplef,
 
   int stride = 1;
 
-  while ((count * stride * m2->getPitch()) <= rhs) {
+  while ((m2->getPitch() + count * stride * m2->getPitch()) <= rhs) {
     stride++;
   }
   stride--;
 
-  count = m2->minSpacing() + (stride/2)*m2->getPitch();
+  count = m2->getPitch();
   
   for (i=0; i < A_LEN (N->bN->ports); i++) {
     char tmp[1024];
