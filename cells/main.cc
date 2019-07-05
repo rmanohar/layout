@@ -29,10 +29,85 @@
 #include <act/passes/netlist.h>
 #include <act/layout/geom.h>
 #include <act/iter.h>
+#include <hash.h>
 
 #include "stacks.h"
 
 static Act *global_act;
+
+
+struct def_fmt_nets {
+  act_connection *netname;	/* the net itself */
+  list_t *pins; 		/* inst ; pin sequence */
+
+  void Print (Act *a, FILE *fp, ActId *prefix, int debug = 0) {
+    char buf[10240];
+
+    if (!pins || list_length (pins) < 4) return;
+    
+    fprintf (fp, "- ");
+
+    if (prefix) {
+      prefix->Print (fp);
+      fprintf (fp, ".");
+    }
+
+    ActId *tmp = netname->toid();
+    tmp->Print (fp);
+    delete tmp;
+
+    if (debug) { fprintf (fp, " [%d]", portid); }
+    
+    fprintf (fp, "\n  ");
+
+    listitem_t *li;
+    for (li = list_first (pins); li; li = list_next (li)) {
+      char *x = (char *)list_value (li);
+      fprintf (fp, " ( ");
+      if (prefix) {
+	prefix->sPrint (buf, 10240);
+	a->mfprintf (fp, "%s.", buf);
+      }
+      a->mfprintf (fp, "%s ", x);
+      li = list_next (li);
+      act_connection *c = (act_connection *) list_value (li);
+      tmp = c->toid();
+      tmp->sPrint (buf, 10240);
+      a->mfprintf (fp, "%s", buf);
+      fprintf (fp, " )");
+      delete tmp;
+    }
+    fprintf (fp, "\n");
+  }
+    
+
+  void addPin (const char *name /* inst name */,  act_connection *pin) {
+    if (!pins) {
+      pins = list_new ();
+    }
+    list_append (pins, name);
+    list_append (pins, pin);
+  }
+
+  void importPins (const char *name, def_fmt_nets *sub) {
+    listitem_t *li;
+    if (!sub->pins) return;
+    for (li = list_first (sub->pins); li; li = list_next (li)) {
+      char *tmp = (char *)list_value (li);
+
+      char *res;
+      MALLOC (res, char, strlen (name) + strlen (tmp) + 2);
+      snprintf (res, strlen (name) + strlen (tmp) + 2, "%s.%s", name, tmp);
+
+      li = list_next (li);
+      act_connection *pin = (act_connection *) list_value (li);
+
+      addPin (res,pin);
+    }
+  }
+  int portid;
+  int idx;
+}; 
 
 struct process_aux {
 
@@ -43,8 +118,43 @@ struct process_aux {
     visited = 0;
     n = NULL;
     portmap = NULL;
-    nets = NULL;
+    iH = NULL;
+    A_INIT (nets);
   }
+
+  int ismyport (act_connection *c) {
+    for (int i=0; i < A_LEN (n->bN->ports); i++) {
+      if (n->bN->ports[i].omit) continue;
+      if (c == n->bN->ports[i].c) return i;
+    }
+    return -1;
+  }
+
+  def_fmt_nets *addNet (act_connection *c) {
+    def_fmt_nets *r;
+    ihash_bucket_t *b;
+
+    if (!iH) {
+      iH = ihash_new (8);
+    }
+
+    b = ihash_lookup (iH, (long)c);
+    if (b) {
+      return &nets[b->i];
+    }
+    b = ihash_add (iH, (long)c);
+    A_NEW (nets, def_fmt_nets);
+    b->i = A_LEN (nets);
+    A_NEXT (nets).idx = b->i;
+    A_NEXT (nets).netname = c;
+    A_NEXT (nets).pins = NULL;
+    A_NEXT (nets).portid = ismyport (c);
+    r = &A_NEXT (nets);
+    A_INC (nets);
+    return r;
+  }
+
+  struct iHashtable *iH;
   
   Process *p; 			/* sanity */
   int x, y;			/* size of component */
@@ -56,7 +166,7 @@ struct process_aux {
   int nnets;
   int *portmap;			/* maps ports to nets */
 
-  list_t **nets;
+  A_DECL (def_fmt_nets, nets);	/* the nets */
   
   /*-- port nets --*/
   
@@ -141,8 +251,34 @@ void _collect_nets (Act *a, Process *p)
 	for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
 	  if (sub->n->bN->ports[i].omit) continue;
 
-	  /* n->bN->instports[iport] has the canonical connection */
-	  
+	  def_fmt_nets *d;
+	  char *tmp;
+	  char *tmp2;
+
+	  d = px->addNet (n->bN->instports[iport]);
+
+	  tmp2 = as->string();
+	  MALLOC (tmp, char, strlen (vx->getName()) + strlen (tmp2) + 1);
+	  sprintf (tmp, "%s%s", vx->getName(), tmp2);
+	  FREE (tmp2);
+
+	  if (sub->portmap[i] == -1) {
+	    /* there are no nets associated with this port in the type
+	       of this instance */
+	    /* this port is not connected to anything else; we just need
+	       a generic new net that looks like <inst>.<port> */
+	    d->addPin (tmp, sub->n->bN->ports[i].c);
+	  }
+	  else {
+	    /* we need to copy the net up, and update all the instance names! */
+	    d->importPins (tmp, &sub->nets[sub->portmap[i]]);
+	    FREE (tmp);
+	  }
+	  int pid = px->ismyport (n->bN->instports[iport]);
+	  if (pid != -1) {
+	    /* this is a port pin! */
+	    px->portmap[pid] = d->idx;
+	  }
 	  iport++;
 	}
 	as->step();
@@ -152,34 +288,136 @@ void _collect_nets (Act *a, Process *p)
     else {
       for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
 	if (sub->n->bN->ports[i].omit) continue;
-	
-	/* n->bN->instports[iport] has the canonical connection */
-	
+	def_fmt_nets *d;
+
+	d = px->addNet (n->bN->instports[iport]);
+
+	if (sub->portmap[i] == -1) {
+	  /* there are no nets associated with this port in the type
+	     of this instance */
+	  /* this port is not connected to anything else; we just need
+	     a generic new net that looks like <inst>.<port> */
+	  d->addPin (vx->getName(), sub->n->bN->ports[i].c);
+	}
+	else {
+	  /* we need to copy the net up, and update all the instance names! */
+	  d->importPins (vx->getName(), &sub->nets[sub->portmap[i]]);
+	}
+	int pid = px->ismyport (n->bN->instports[iport]);
+	if (pid != -1) {
+	  /* this is a port pin! */
+	  px->portmap[pid] = d->idx;
+	}
 	iport++;
       }
     }
   }
-
   Assert (iport == A_LEN (n->bN->instports), "What?!");
+  return;
+}
+
+void _dump_collection (Act *a, Process *p)
+{
+  process_aux *px;
+  netlist_t *n;
+  Assert (p->isExpanded(), "What are we doing");
+
+  px = procmap->find(p)->second;
+  if (!px->visited) return;
+  px->visited = 0;
+
+  printf ("Process %s\n", p->getName());
+  for (int i=0; i < A_LEN (px->nets); i++) {
+    px->nets[i].Print (a, stdout, NULL, 1);
+  }
+  printf ("\n");
+
+  ActInstiter i(p->CurScope());
+
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (!TypeFactory::isProcessType (vx->t)) continue;
+    _dump_collection (a, dynamic_cast<Process *>(vx->t->BaseType ()));
+  }
   
   return;
 }
 
 
 
+static unsigned long netcount = 0;
 
 
+void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
+{
+  process_aux *px;
+  Assert (p->isExpanded(), "What are we doing");
 
+  if (procmap->find (p) == procmap->end()) {
+    fatal_error ("Could not find netlist for `%s'", p->getName());
+  }
+  px = procmap->find(p)->second;
 
+  /* first, print my local nets */
+  for (int i=0; i < A_LEN (px->nets); i++) {
+    if (px->nets[i].portid == -1) {
+      px->nets[i].Print (a, fp, prefix);
+      netcount++;
+    }
+  }
 
+  ActInstiter i(p->CurScope());
 
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (!TypeFactory::isProcessType (vx->t)) continue;
 
+    ActId *newid;
+    ActId *cpy;
+    
+    process_aux *sub;
+    Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
+    int ports_exist;
 
+    if (procmap->find (instproc) == procmap->end()) {
+      fatal_error ("Error looking for instproc %s!\n", instproc->getName());
+    }
 
+    sub = procmap->find (instproc)->second;
+    Assert (sub->n, "What?");
 
+    newid = new ActId (vx->getName());
+    if (prefix) {
+      cpy = prefix->Clone ();
+      ActId *tmp = cpy;
+      while (tmp->Rest()) {
+	tmp = tmp->Rest();
+      }
+      tmp->Append (newid);
+    }
+    else {
+      cpy = newid;
+    }
 
-
-
+    if (vx->t->arrayInfo()) {
+      Arraystep *as = vx->t->arrayInfo()->stepper();
+      while (!as->isend()) {
+	Array *x = as->toArray();
+	newid->setArray (x);
+	_collect_emit_nets (a, cpy, instproc, fp);
+	delete x;
+	newid->setArray (NULL);
+	as->step();
+      }
+      delete as;
+    }
+    else {
+      _collect_emit_nets (a, cpy, instproc, fp);
+    }
+    delete cpy;
+  }
+  return;
+}
 
 
 
@@ -448,7 +686,7 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
 
   /* -- emit net info -- */
 
-  unsigned long netcount = 0;
+  netcount = 0;
   unsigned long pos = 0;
 
   /* -- nets -- */
@@ -461,6 +699,10 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
   */
 
   _collect_nets (a, p);
+
+  //_dump_collection (p);
+  
+  _collect_emit_nets (a, NULL, p, fp);
   
   fprintf (fp, "END NETS\n\n");
   fprintf (fp, "END DESIGN\n");
