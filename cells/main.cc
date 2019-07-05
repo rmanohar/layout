@@ -578,6 +578,7 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   char buf[10240];
 
   if (p->getprs()) {
+    fprintf (fp, "- ");
     prefix->sPrint (buf, 10240);
     global_act->mfprintf (fp, "%s ", buf);
     print_procname (global_act, p, fp);
