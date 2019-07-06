@@ -447,7 +447,7 @@ void print_procname (Act *a, Process *p, FILE *fp)
 void usage (char *name)
 {
   fprintf (stderr, "Unknown options.\n");
-  fprintf (stderr, "Usage: %s -p procname -l lefname -d defname <file.act>\n", name);
+  fprintf (stderr, "Usage: %s -p procname -l lefname -d defname [-s spicename] <file.act>\n", name);
   exit (1);
 }
 
@@ -723,7 +723,7 @@ int main (int argc, char **argv)
   Process *p;
   int ch;
   char *proc_name = NULL;
-  char *outdir = NULL;
+  char *spice = NULL;
   FILE *fp;
   char *lefname = NULL;
   char *defname = NULL;
@@ -735,7 +735,7 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "p:l:d:o:")) != -1) {
+  while ((ch = getopt (argc, argv, "p:l:d:s:")) != -1) {
     switch (ch) {
     case 'p':
       if (proc_name) {
@@ -758,11 +758,11 @@ int main (int argc, char **argv)
       lefname = Strdup (optarg);
       break;
 
-    case 'o':
-      if (outdir) {
-	FREE (outdir);
+    case 's':
+      if (spice) {
+	FREE (spice);
       }
-      outdir = Strdup (optarg);
+      spice = Strdup (optarg);
       break;
 
     case '?':
@@ -807,7 +807,12 @@ int main (int argc, char **argv)
   act_booleanize_netlist (a, p);
   act_prs_to_netlist (a, p);
 
-  //act_emit_netlist (a, p, stdout);
+  if (spice) {
+    FILE *sp = fopen (spice, "w");
+    if (!sp) { fatal_error ("Could not open file `%s'", spice); }
+    act_emit_netlist (a, p, sp);
+    fclose (sp);
+  }
   //a->Print (stdout);
   
   /*--- create stacks for all cells ---*/
