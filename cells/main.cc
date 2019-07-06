@@ -40,10 +40,10 @@ struct def_fmt_nets {
   act_connection *netname;	/* the net itself */
   list_t *pins; 		/* inst ; pin sequence */
 
-  void Print (Act *a, FILE *fp, ActId *prefix, int debug = 0) {
+  int Print (Act *a, FILE *fp, ActId *prefix, int debug = 0) {
     char buf[10240];
 
-    if (!pins || list_length (pins) < 4) return;
+    if (!pins || list_length (pins) < 4) return 0;
     
     fprintf (fp, "- ");
 
@@ -78,6 +78,7 @@ struct def_fmt_nets {
       delete tmp;
     }
     fprintf (fp, "\n;\n");
+    return 1;
   }
     
 
@@ -361,8 +362,9 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
   /* first, print my local nets */
   for (int i=0; i < A_LEN (px->nets); i++) {
     if (px->nets[i].portid == -1) {
-      px->nets[i].Print (a, fp, prefix);
-      netcount++;
+      if (px->nets[i].Print (a, fp, prefix)) {
+	netcount++;
+      }
     }
   }
 

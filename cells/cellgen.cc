@@ -936,24 +936,38 @@ void geom_create_from_stack (Act *a, FILE *fplef,
   fprintf (fplef, "    SITE CoreSite ;\n");
 
   /*-- pins --*/
-  int count = 0; 
+  int count = 0;
+  int cout = 0;
   for (i=0; i < A_LEN (N->bN->ports); i++) {
     if (N->bN->ports[i].omit) continue;
-    count++;
+    if (N->bN->ports[i].input) {
+      count++;
+    }
+    else {
+      cout++;
+    }
   }
 
-  if (count * m2->getPitch() > rhs) {
+  if (((count * m2->getPitch()) > rhs) || ((cout * m2->getPitch()) > rhs)) {
     warning ("Can't fit ports!");
   }
 
   int stride = 1;
+  int strideo = 1;
 
   while ((m2->getPitch() + count * stride * m2->getPitch()) <= rhs) {
     stride++;
   }
   stride--;
 
+  while ((m2->getPitch() + cout * strideo * m2->getPitch()) <= rhs) {
+    strideo++;
+  }
+  stride--;
+  
+  
   count = m2->getPitch();
+  cout = count;
   
   for (i=0; i < A_LEN (N->bN->ports); i++) {
     char tmp[1024];
@@ -996,25 +1010,33 @@ void geom_create_from_stack (Act *a, FILE *fplef,
 
     fprintf (fplef, "        PORT\n");
     fprintf (fplef, "        LAYER %s ;\n", m2->getName());
-    fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
-	     scale*count,
-	     scale*(topedge - m2->minWidth()),
-	     scale*(count + m2->minWidth()),
-	     scale*topedge);
+    if (N->bN->ports[i].input) {
+      fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
+	       scale*count,
+	       scale*(topedge - m2->minWidth()),
+	       scale*(count + m2->minWidth()),
+	       scale*topedge);
+      count += m2->getPitch()*stride;
+    }
+    else {
+      fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
+	       scale*cout, 0.0,
+	       scale*(cout + m2->minWidth()),
+	       scale*m2->minWidth());
+      cout += m2->getPitch()*stride;
+    }
     fprintf (fplef, "        END\n");
     fprintf (fplef, "    END ");
     a->mfprintf (fplef, "%s", tmp);
     fprintf (fplef, "\n");
     delete id;
-    
-    count += m2->getPitch()*stride;
   }
 
-  if (topedge > 2*m1->getPitch()) {
+  if (topedge > 4*m1->getPitch()) {
     fprintf (fplef, "    OBS\n");
     fprintf (fplef, "      LAYER %s ;\n", m1->getName());
     fprintf (fplef, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     0.0, scale*(m1->getPitch()),
+	     0.0, scale*(2*m1->getPitch()),
 	     scale*rhs, scale*(topedge - 2*m1->getPitch()));
     fprintf (fplef, "    END\n");
   }
