@@ -963,8 +963,13 @@ void geom_create_from_stack (Act *a, FILE *fplef,
   while ((m2->getPitch() + cout * strideo * m2->getPitch()) <= rhs) {
     strideo++;
   }
-  stride--;
-  
+  strideo--;
+
+#if 0
+  if (stride < 2 || strideo < 2) {
+    warning("Tight ports");
+  }
+#endif
   
   count = m2->getPitch();
   cout = count;
@@ -1011,19 +1016,41 @@ void geom_create_from_stack (Act *a, FILE *fplef,
     fprintf (fplef, "        PORT\n");
     fprintf (fplef, "        LAYER %s ;\n", m2->getName());
     if (N->bN->ports[i].input) {
+      int w;
+#if 0
+      if (stride > 1) {
+	w = m2->getPitch();
+      }
+      else {
+#endif
+	w = m2->minWidth();
+#if 0
+      }
+#endif
       fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
 	       scale*count,
-	       scale*(topedge - m2->minWidth()),
-	       scale*(count + m2->minWidth()),
+	       scale*(topedge - w),
+	       scale*(count + w),
 	       scale*topedge);
       count += m2->getPitch()*stride;
     }
     else {
+      int w;
+#if 0
+      if (strideo > 1) {
+	w = m2->getPitch();
+      }
+      else {
+#endif
+	w = m2->minWidth();
+#if 0
+      }
+#endif
       fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
 	       scale*cout, 0.0,
-	       scale*(cout + m2->minWidth()),
-	       scale*m2->minWidth());
-      cout += m2->getPitch()*stride;
+	       scale*(cout + w),
+	       scale*w);
+      cout += m2->getPitch()*strideo;
     }
     fprintf (fplef, "        END\n");
     fprintf (fplef, "    END ");

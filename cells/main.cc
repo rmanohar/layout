@@ -470,7 +470,7 @@ static void lef_header (FILE *fp)
 
   fprintf (fp, "SITE CoreSite\n");
   fprintf (fp, "    CLASS CORE ;\n");
-  fprintf (fp, "    SIZE 0.2 BY 1.2\n"); /* not used */
+  fprintf (fp, "    SIZE 0.2 BY 1.2 ;\n"); /* not used */
   fprintf (fp, "END CoreSite\n\n");
   
   int i;
@@ -488,7 +488,7 @@ static void lef_header (FILE *fp)
     }
     fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
     fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
-    fprintf (fp, "   PITCH %.6f %.6f;\n",
+    fprintf (fp, "   PITCH %.6f %.6f ;\n",
 	     mat->getPitch()*scale, mat->getPitch()*scale);
     fprintf (fp, "END %s\n\n", mat->getName());
 
@@ -545,7 +545,7 @@ static void def_header (FILE *fp, const char *proc)
       fputc (proc[i], fp);
       i++;
     }
-    fprintf (fp, "\n");
+    fprintf (fp, " ;\n");
   }
   else {
     fprintf (fp, "%s ;\n", proc);
@@ -856,6 +856,12 @@ int main (int argc, char **argv)
     
     geom_create_from_stack (a, fp, N, l, &px->x, &px->y);
     fprintf (fp, "\n");
+
+#if 0
+    /* tracks */
+    int ctracks = Technology::T->metal[0]->getPitch();
+    printf ("Cell height: %d tracks\n", px->y/ctracks);
+#endif
   }
   fclose (fp);
 
