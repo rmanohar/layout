@@ -1047,9 +1047,9 @@ void geom_create_from_stack (Act *a, FILE *fplef,
       }
 #endif
       fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
-	       scale*cout, 0.0,
+	       scale*cout, scale*m1->getPitch(),
 	       scale*(cout + w),
-	       scale*w);
+	       scale*(w + m1->getPitch()));
       cout += m2->getPitch()*strideo;
     }
     fprintf (fplef, "        END\n");
@@ -1059,12 +1059,12 @@ void geom_create_from_stack (Act *a, FILE *fplef,
     delete id;
   }
 
-  if (topedge > 4*m1->getPitch()) {
+  if (topedge > 6*m1->getPitch()) {
     fprintf (fplef, "    OBS\n");
     fprintf (fplef, "      LAYER %s ;\n", m1->getName());
     fprintf (fplef, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     0.0, scale*(2*m1->getPitch()),
-	     scale*rhs, scale*(topedge - 2*m1->getPitch()));
+	     0.0, scale*(3*m1->getPitch()),
+	     scale*rhs, scale*(topedge - 3*m1->getPitch()));
     fprintf (fplef, "    END\n");
   }
   
