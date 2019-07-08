@@ -739,6 +739,8 @@ list_t *stacks_create (netlist_t *N)
 	    }
 
 	    p->share = MIN(e1->nfolds, e2->nfolds);
+	    p->n_start = 0;
+	    p->p_start = 0;
 	    if (!(p->share & 1)) {
 	      /* even, make it odd since otherwise you can have a
 		 disconnection chance */
@@ -808,6 +810,8 @@ list_t *stacks_create (netlist_t *N)
     -*/
     if (gp->basepair) {
       Assert (gp->share > 0, "What?");
+      gp->n_start = gp->u.e.n->visited;
+      gp->p_start = gp->u.e.p->visited;
       gp->u.e.n->visited += gp->share;
       gp->u.e.p->visited += gp->share;
     }
@@ -816,6 +820,8 @@ list_t *stacks_create (netlist_t *N)
 	struct gate_pairs *tmp;
 	tmp = (struct gate_pairs *) list_value (li);
 	Assert (tmp->basepair, "hmm");
+	tmp->n_start = tmp->u.e.n->visited;
+	tmp->p_start = tmp->u.e.p->visited;
 	tmp->u.e.n->visited += tmp->share;
 	tmp->u.e.p->visited += tmp->share;
       }

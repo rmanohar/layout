@@ -623,8 +623,8 @@ static void dump_gateinfo (netlist_t *N, edge_t *e1, edge_t *e2)
     printf ("<%d,%d>", e1->w, e1->l);
     if (e2->g != e1->g) {
       printf (":");
-      printf ("<%d,%d>", e2->w, e2->l);
       dump_node (stdout, N, e2->g);
+      printf ("<%d,%d>", e2->w, e2->l);
     }
   }
   else if (e1) {
@@ -635,8 +635,8 @@ static void dump_gateinfo (netlist_t *N, edge_t *e1, edge_t *e2)
   else {
     Assert (e2, "Eh?");
     printf (":");
-    printf ("<%d,%d>", e2->w, e2->l);
     dump_node (stdout, N, e2->g);
+    printf ("<%d,%d>", e2->w, e2->l);
   }
 }
 
@@ -665,6 +665,8 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
     e2 = p->u.e.p;
     printf (" e: ");
     dump_gateinfo (N, e1, e2);
+    if (e1) { printf (" ns=%d", p->n_start); }
+    if (e2) { printf (" ps=%d", p->p_start); }
     printf ("\n");
     return;
   }
@@ -686,6 +688,8 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
     printf ("[");
 
     dump_gateinfo (N, e1, e2);
+    if (e1) { printf (" ns=%d", tmp->n_start); }
+    if (e2) { printf (" ps=%d", tmp->p_start); }
     
     printf("] -> ");
 

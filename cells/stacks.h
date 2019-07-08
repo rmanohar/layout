@@ -63,6 +63,7 @@ struct gate_pairs {
   unsigned int basepair:1;   // 1 if it is a basepair
   unsigned int visited:1;    // 1 if visited
   short share;		     // # of shared gates
+  short n_start, p_start;    // start id of edges
   int nodeshare;	     // shared vertical nodes + bonus
                              // points for supply on ends of the stack
 };
