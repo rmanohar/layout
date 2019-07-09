@@ -270,6 +270,8 @@ static int available_mark (struct gate_pairs *gp)
 {
   if (gp->basepair) {
     if (available_basepair (gp)) {
+      gp->n_start = gp->u.e.n->visited;
+      gp->p_start = gp->u.e.p->visited;
       gp->u.e.n->visited += gp->share;
       gp->u.e.p->visited += gp->share;
       gp->visited = 1;
@@ -287,6 +289,8 @@ static int available_mark (struct gate_pairs *gp)
     for (li = list_first (gp->u.gp); li; li = list_next (li)) {
       struct gate_pairs *tmp;
       tmp = (struct gate_pairs *) list_value (li);
+      tmp->n_start = tmp->u.e.n->visited;
+      tmp->p_start = tmp->u.e.p->visited;
       tmp->u.e.n->visited += tmp->share;
       tmp->u.e.p->visited += tmp->share;
       tmp->visited = 1;
@@ -329,22 +333,12 @@ static void extend_gatepair (netlist_t *N, struct gate_pairs **gpp,
 	/* candidate edge! */
 	if (en->a == n) {
 	  sn = en;
-	  if ((en->nfolds - en->visited) & 1) {
-	    other.n = en->b;
-	  }
-	  else {
-	    other.n = en->a;
-	  }
+	  other.n = en->b;
 	  update = 1;
 	}
 	else if (en->b == n) {
 	  sn = en;
-	  if ((en->nfolds - en->visited) & 1) {
-	    other.n = en->a;
-	  }
-	  else {
-	    other.n = en->b;
-	  }
+	  other.n = en->a;
 	  update = 1;
 	}
 	else {
@@ -375,22 +369,12 @@ static void extend_gatepair (netlist_t *N, struct gate_pairs **gpp,
 	/* candidate edge! */
 	if (ep->a == n) {
 	  sp = ep;
-	  if ((ep->nfolds - ep->visited) & 1) {
-	    other.p = ep->b;
-	  }
-	  else {
-	    other.p = ep->a;
-	  }
+	  other.p = ep->b;
 	  update = 1;
 	}
 	else if (ep->b == n) {
 	  sp = ep;
-	  if ((ep->nfolds - ep->visited) & 1) {
-	    other.p = ep->a;
-	  }
-	  else {
-	    other.p = ep->b;
-	  }
+	  other.p = ep->a;
 	  update = 1;
 	}
 	else {
@@ -422,32 +406,35 @@ static void extend_gatepair (netlist_t *N, struct gate_pairs **gpp,
     tmp->u.e.p = sp;
     tmp->l = gp->l;
     tmp->r = gp->r;
+    tmp->share = 1; // not really share 
 
     if (other.n) {
       if (dir) {
-	tmp->l = gp->r;
+	tmp->l.n = gp->r.n;
 	gp->r.n = other.n;
-	tmp->r = gp->r;
+	tmp->r.n = gp->r.n;
       }
       else {
-	tmp->r = gp->l;
+	tmp->r.n = gp->l.n;
 	gp->l.n = other.n;
-	tmp->l = gp->l;
+	tmp->l.n = gp->l.n;
       }
-      sn->visited = sn->nfolds;
+      tmp->n_start = sn->visited;
+      sn->visited++;
     }
     if (other.p) {
       if (dir) {
-	tmp->l = gp->r;
+	tmp->l.p = gp->r.p;
 	gp->r.p = other.p;
-	tmp->r = gp->r;
+	tmp->r.p = gp->r.p;
       }
       else {
-	tmp->r = gp->l;
+	tmp->r.p = gp->l.p;
 	gp->l.p = other.p;
-	tmp->l = gp->l;
+	tmp->l.p = gp->l.p;
       }
-      sp->visited = sp->nfolds;
+      tmp->p_start = sp->visited;
+      sp->visited++;
     }
 
 
@@ -595,8 +582,9 @@ list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
     onestk = list_new ();
     list_append (onestk, n);
     while ((e = pick_candidate_edge (n->e, n, type, &other))) {
-      e->visited = e->nfolds;
       list_append (onestk, e);
+      list_append (onestk, (void*)e->visited);
+      e->visited = e->nfolds;
       list_append (onestk, other);
 #if 0
       printf ("\t edge: ");
@@ -745,6 +733,7 @@ list_t *stacks_create (netlist_t *N)
 	      /* even, make it odd since otherwise you can have a
 		 disconnection chance */
 	      p->share--;
+	      // add another gate pair, singleton
 	      NEW (p2, struct gate_pairs);
 	      *p2 = *p;
 	      p2->share = 1;
@@ -810,8 +799,6 @@ list_t *stacks_create (netlist_t *N)
     -*/
     if (gp->basepair) {
       Assert (gp->share > 0, "What?");
-      gp->n_start = gp->u.e.n->visited;
-      gp->p_start = gp->u.e.p->visited;
       gp->u.e.n->visited += gp->share;
       gp->u.e.p->visited += gp->share;
     }
@@ -820,8 +807,6 @@ list_t *stacks_create (netlist_t *N)
 	struct gate_pairs *tmp;
 	tmp = (struct gate_pairs *) list_value (li);
 	Assert (tmp->basepair, "hmm");
-	tmp->n_start = tmp->u.e.n->visited;
-	tmp->p_start = tmp->u.e.p->visited;
 	tmp->u.e.n->visited += tmp->share;
 	tmp->u.e.p->visited += tmp->share;
       }

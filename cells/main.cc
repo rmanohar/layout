@@ -30,6 +30,7 @@
 #include <act/layout/geom.h>
 #include <act/iter.h>
 #include <hash.h>
+#include <config.h>
 
 #include "stacks.h"
 
@@ -621,7 +622,8 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
   act_flat_apply_processes (a, fp, p, count_inst);
 
   /* add white space */
-  total_area /= 0.60;
+  //total_area /= 0.60;
+  total_area *= 3.0;
 
   /* make it roughly square */
   total_area = sqrt (total_area);
@@ -731,6 +733,7 @@ int main (int argc, char **argv)
   char *defname = NULL;
   
   Act::Init (&argc, &argv);
+  config_read ("prs2net.conf");
   Layout::Init();
   
   if (Technology::T->nmetals < 2) {

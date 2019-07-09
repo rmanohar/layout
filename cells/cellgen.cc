@@ -4,6 +4,7 @@
 #include <act/passes/netlist.h>
 #include <act/layout/geom.h>
 #include <act/layout/tech.h>
+#include <config.h>
 #include "stacks.h"
 
 static void dump_node (FILE *fp, netlist_t *N, node_t *n)
@@ -65,14 +66,37 @@ struct BBox {
   } p, n;
 };
 
+
+static int fold_n_width, fold_p_width, min_width;
+
+static int getwidth (int idx, edge_t *e)
+{
+  if (e->type == EDGE_NFET) {
+    if (fold_n_width != 0) {
+      return EDGE_WIDTH (e,idx,fold_n_width,min_width);
+    }
+    else {
+      return e->w;
+    }
+  }
+  else {
+    if (fold_p_width != 0) {
+      return EDGE_WIDTH (e,idx,fold_p_width,min_width);
+    }
+    else {
+      return e->w;
+    }
+  }
+}
+
 /*
   emits rectangles needed upto the FET.
   If it is right edge, also emits the final diffusion of the right edge.
 */
 static int locate_fetedge (Layout *L, int dx,
 			   unsigned int flags,
-			   edge_t *prev,
-			   node_t *left, edge_t *e)
+			   edge_t *prev, int previdx,
+			   node_t *left, edge_t *e, int eidx)
 {
   DiffMat *d;
   FetMat *f;
@@ -80,6 +104,8 @@ static int locate_fetedge (Layout *L, int dx,
   int rect;
   int fet_type; /* -1 = downward notch, +1 = upward notch, 0 = same
 		   width */
+
+  int e_w = getwidth (0, e);
 
   /* XXX: THIS CODE IS COPIED FROM emit_rectangle!!!!! */
 
@@ -91,30 +117,31 @@ static int locate_fetedge (Layout *L, int dx,
   if (flags & EDGE_FLAGS_LEFT) {
     fet_type = 0;
     /* actual overhang rule */
-    rect = d->effOverhang (e->w, left->contact);
+    rect = d->effOverhang (e_w, left->contact);
   }
   else {
     Assert (prev, "Hmm");
+    int prev_w = getwidth (previdx, prev);
 
-    if (prev->w == e->w) {
+    if (prev_w == e_w) {
       fet_type = 0;
-      rect = f->getSpacing (e->w);
+      rect = f->getSpacing (e_w);
       if (left->contact) {
 	rect = MAX (rect, d->viaSpaceMid());
       }
     }
-    else if (prev->w < e->w) {
+    else if (prev_w < e_w) {
       /* upward notch */
       fet_type = 1;
       rect = d->getNotchSpacing();
       if (left->contact &&
-	  (rect + d->effOverhang (e->w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e->w);
+	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
+	rect = d->viaSpaceMid() - d->effOverhang (e_w);
       }
     }
     else {
       fet_type = -1;
-      rect = d->effOverhang (e->w);
+      rect = d->effOverhang (e_w);
     }
   }
 
@@ -127,17 +154,16 @@ static int locate_fetedge (Layout *L, int dx,
       /* down notch */
       rect = d->getNotchSpacing();
       if (left->contact &&
-	  (rect + d->effOverhang (e->w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e->w);
+	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
+	rect = d->viaSpaceMid() - d->effOverhang (e_w);
       }
     }
     else {
       /* up notch */
-      rect = d->effOverhang (e->w);
+      rect = d->effOverhang (e_w);
     } 
     dx += rect;
   }
-
 
   return dx;
 }
@@ -215,8 +241,8 @@ static int emit_rectangle (FILE *fp,
 			   int pad,
 			   int dx, int dy,
 			   unsigned int flags,
-			   edge_t *prev,
-			   node_t *left, edge_t *e, int yup,
+			   edge_t *prev, int previdx,
+			   node_t *left, edge_t *e, int eidx, int yup,
 			   BBox *ret)
 {
   DiffMat *d;
@@ -228,6 +254,8 @@ static int emit_rectangle (FILE *fp,
 
   BBox b;
 
+  int e_w = getwidth (eidx, e);
+  
   if (ret) {
     b = *ret;
   }
@@ -258,34 +286,37 @@ static int emit_rectangle (FILE *fp,
   p = L->getPoly ();
   b.flavor = e->flavor;
 
+  int prev_w = 0;
+
   rect = 0;
   if (flags & EDGE_FLAGS_LEFT) {
     fet_type = 0;
     /* actual overhang rule */
-    rect = d->effOverhang (e->w, left->contact);
+    rect = d->effOverhang (e_w, left->contact);
   }
   else {
     Assert (prev, "Hmm");
-
-    if (prev->w == e->w) {
+    prev_w = getwidth (previdx, prev);
+    
+    if (prev_w == e_w) {
       fet_type = 0;
-      rect = f->getSpacing (e->w);
+      rect = f->getSpacing (e_w);
       if (left->contact) {
 	rect = MAX (rect, d->viaSpaceMid());
       }
     }
-    else if (prev->w < e->w) {
+    else if (prev_w < e_w) {
       /* upward notch */
       fet_type = 1;
       rect = d->getNotchSpacing();
       if (left->contact &&
-	  (rect + d->effOverhang (e->w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e->w);
+	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
+	rect = d->viaSpaceMid() - d->effOverhang (e_w);
       }
     }
     else {
       fet_type = -1;
-      rect = d->effOverhang (e->w);
+      rect = d->effOverhang (e_w);
     }
   }
 
@@ -298,13 +329,13 @@ static int emit_rectangle (FILE *fp,
 
   if (fet_type == 0) {
     print_rectangle (fp, N, d->getName(), left->contact ? left : NULL,
-		     dx, dy, rect, yup*e->w);
-    RECT_UPDATE(e->type, dx, dy, dx+rect, dy + yup*e->w);
+		     dx, dy, rect, yup*e_w);
+    RECT_UPDATE(e->type, dx, dy, dx+rect, dy + yup*e_w);
   }
   else {
     print_rectangle (fp, N, d->getName(), left->contact ? left : NULL,
-		     dx, dy, rect, yup*prev->w);
-    RECT_UPDATE(e->type, dx,dy,dx+rect, dy + yup*prev->w);
+		     dx, dy, rect, yup*prev_w);
+    RECT_UPDATE(e->type, dx,dy,dx+rect, dy + yup*prev_w);
   }
   dx += rect;
 
@@ -313,23 +344,23 @@ static int emit_rectangle (FILE *fp,
       /* down notch */
       rect = d->getNotchSpacing();
       if (left->contact &&
-	  (rect + d->effOverhang (e->w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e->w);
+	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
+	rect = d->viaSpaceMid() - d->effOverhang (e_w);
       }
     }
     else {
       /* up notch */
-      rect = d->effOverhang (e->w);
+      rect = d->effOverhang (e_w);
     }
     rect += pad;
     pad = 0;
-    print_rectangle (fp, N, d->getName(), NULL, dx, dy, rect, yup*e->w);
-    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e->w);
+    print_rectangle (fp, N, d->getName(), NULL, dx, dy, rect, yup*e_w);
+    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e_w);
     dx += rect;
   }
 
   /* now print fet */
-  print_rectangle (fp, N, f->getName(), NULL, dx, dy, e->l, yup*e->w);
+  print_rectangle (fp, N, f->getName(), NULL, dx, dy, e->l, yup*e_w);
 
   int poverhang = p->getOverhang (e->l);
   int uoverhang = poverhang;
@@ -342,7 +373,7 @@ static int emit_rectangle (FILE *fp,
   print_rectangle (fp, N, p->getName(), e->g,
 		   dx, dy - yup*poverhang, e->l, yup*poverhang);
 
-  print_rectangle (fp, N, p->getName(), NULL, dx, dy + yup*e->w,
+  print_rectangle (fp, N, p->getName(), NULL, dx, dy + yup*e_w,
 		   e->l, yup*uoverhang);
 
   dx += e->l;
@@ -356,9 +387,9 @@ static int emit_rectangle (FILE *fp,
     else {
       right = e->a;
     }
-    rect = d->effOverhang (e->w, right->contact);
-    print_rectangle (fp, N, d->getName(), right, dx, dy, rect, yup*e->w);
-    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e->w);
+    rect = d->effOverhang (e_w, right->contact);
+    print_rectangle (fp, N, d->getName(), right, dx, dy, rect, yup*e_w);
+    RECT_UPDATE (e->type, dx,dy,dx+rect,dy+yup*e_w);
     dx += rect;
   }
 
@@ -419,9 +450,9 @@ BBox print_dualstack (int dx, int dy,
   
   if (gp->basepair) {
     fposn = locate_fetedge (L, xpos, EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			    NULL, gp->l.n, gp->u.e.n);
+			    NULL, 0, gp->l.n, gp->u.e.n, gp->n_start);
     fposp = locate_fetedge (L, xpos, EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			    NULL, gp->l.p, gp->u.e.p);
+			    NULL, 0, gp->l.p, gp->u.e.p, gp->p_start);
     
     if (fposn > fposp) {
       padp = fposn - fposp;
@@ -434,18 +465,19 @@ BBox print_dualstack (int dx, int dy,
 
     xpos = emit_rectangle (fp, N, L, padn, xpos, yn,
 			   EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			   NULL,
-			   gp->l.n, gp->u.e.n, -1, &b);
+			   NULL, 0,
+			   gp->l.n, gp->u.e.n, gp->n_start, -1, &b);
     
     xpos_p = emit_rectangle (fp, N, L, padp, xpos_p, yp,
 			     EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			     NULL,
-			     gp->l.p, gp->u.e.p, 1, &b);
+			     NULL, 0,
+			     gp->l.p, gp->u.e.p, gp->p_start, 1, &b);
   }
   else {
     listitem_t *li;
     int firstp = 1, firstn = 1;
     edge_t *prevp = NULL, *prevn = NULL;
+    int prevpidx = 0, prevnidx = 0;
     node_t *leftp, *leftn;
 
     xpos = 0;
@@ -519,9 +551,11 @@ BBox print_dualstack (int dx, int dy,
       padp = 0;
       if (tmp->u.e.n && tmp->u.e.p) {
 	fposn = locate_fetedge (L, xpos, flagsn,
-				prevn, leftn, tmp->u.e.n);
+				prevn, prevnidx, leftn, tmp->u.e.n,
+				tmp->n_start);
 	fposp = locate_fetedge (L, xpos_p, flagsp,
-				prevp, leftp, tmp->u.e.p);
+				prevp, prevpidx, leftp, tmp->u.e.p,
+				tmp->p_start);
 	if (fposn > fposp) {
 	  padp = padp + fposn - fposp;
 	}
@@ -532,8 +566,10 @@ BBox print_dualstack (int dx, int dy,
       
       if (tmp->u.e.n) {
 	xpos = emit_rectangle (fp, N, L, padn, xpos, yn, flagsn,
-			       prevn, leftn, tmp->u.e.n, -1, &b);
+			       prevn, prevnidx, leftn, tmp->u.e.n,
+			       tmp->n_start, -1, &b);
 	prevn = tmp->u.e.n;
+	prevnidx = tmp->n_start;
 	if (!tmp->u.e.p) {
 	  xpos_p = xpos;
 	}
@@ -541,9 +577,11 @@ BBox print_dualstack (int dx, int dy,
       
       if (tmp->u.e.p) {
 	xpos_p = emit_rectangle (fp, N, L, padp, xpos_p, yp, flagsp,
-				 prevp, leftp, tmp->u.e.p, 1, &b);
+				 prevp, prevpidx, leftp, tmp->u.e.p,
+				 tmp->p_start, 1, &b);
 
 	prevp = tmp->u.e.p;
+	prevpidx = tmp->p_start;
 	if (!tmp->u.e.n) {
 	  xpos = xpos_p;
 	}
@@ -565,6 +603,8 @@ BBox print_singlestack (int dx, int dy,
   int xpos = dx;
   int ypos = dy;
   BBox b;
+  int idx = 0;
+  int previdx = 0;
 
   b.p.llx = 0;
   b.p.lly = 0;
@@ -572,11 +612,12 @@ BBox print_singlestack (int dx, int dy,
   b.p.ury = 0;
   b.n = b.p;
 
-  if (list_length (l) < 3) return b;
+  if (list_length (l) < 4) return b;
 
   n = (node_t *) list_value (list_first (l));
   e = (edge_t *) list_value (list_next (list_first (l)));
-
+  idx = (long) list_value (list_next (list_next (list_first (l))));
+  
   flavor = e->flavor;
   type = e->type;
   
@@ -591,6 +632,7 @@ BBox print_singlestack (int dx, int dy,
   listitem_t *li;
 
   prev = NULL;
+  previdx = 0;
   li = list_first (l);
   while (li && list_next (li)) {
     unsigned int flags = 0;
@@ -598,7 +640,8 @@ BBox print_singlestack (int dx, int dy,
 
     n = (node_t *) list_value (li);
     e = (edge_t *) list_value (list_next (li));
-    m = (node_t *) list_value (list_next (list_next (li)));
+    idx = (long) list_value (list_next (list_next (li)));
+    m = (node_t *) list_value (list_next (list_next (list_next (li))));
 
     if (li == list_first (l)) {
       flags |= EDGE_FLAGS_LEFT;
@@ -606,8 +649,10 @@ BBox print_singlestack (int dx, int dy,
     if (!list_next (list_next (list_next (li)))) {
       flags |= EDGE_FLAGS_RIGHT;
     }
-    xpos = emit_rectangle (fp, N, L, 0, xpos, ypos, flags, prev, n, e, 1, &b);
+    xpos = emit_rectangle (fp, N, L, 0, xpos, ypos, flags, prev, previdx, 
+			   n, e, idx, 1, &b);
     prev = e;
+    previdx = idx;
 
     li = list_next (list_next (li));
   }
@@ -663,7 +708,7 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
   if (p->basepair) {
     e1 = p->u.e.n;
     e2 = p->u.e.p;
-    printf (" e: ");
+    printf (" e%d: ", p->share);
     dump_gateinfo (N, e1, e2);
     if (e1) { printf (" ns=%d", p->n_start); }
     if (e2) { printf (" ps=%d", p->p_start); }
@@ -682,7 +727,7 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
     e1 = tmp->u.e.n;
     e2 = tmp->u.e.p;
 
-    printf ("\n\t e: ");
+    printf ("\n\t e%d: ", tmp->share);
 
     dump_nodepair (N, &prev);
     printf ("[");
@@ -738,6 +783,10 @@ void geom_create_from_stack (Act *a, FILE *fplef,
   int well_pad = 0;
 
   Assert (p, "Hmm");
+
+  min_width = config_get_int ("net.min_width");
+  fold_n_width = config_get_int ("net.fold_nfet_width");
+  fold_p_width = config_get_int ("net.fold_pfet_width");
 
   proc_name = p->getName();
   len = strlen (proc_name);
