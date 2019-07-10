@@ -96,6 +96,7 @@ struct def_fmt_nets {
     int len = 0;
 
     if (skip || !pins || list_length (pins) < 4) return 0;
+    if (!ckt) return 0;
     
     if (prefix) {
       prefix->sPrint (buf, 10240);
@@ -563,6 +564,7 @@ static void lef_header (FILE *fp, circuit_t *ckt)
   fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
 
 #ifdef INTEGRATED_PLACER
+  if (ckt)
   ckt->lef_database_microns = MICRON_CONVERSION;
 #endif  
   
@@ -607,6 +609,7 @@ static void lef_header (FILE *fp, circuit_t *ckt)
   }
 
 #ifdef INTEGRATED_PLACER
+  if (ckt)
   ckt->m2_pitch = Technology::T->metal[1]->getPitch()*scale;
 #endif
 
@@ -652,6 +655,7 @@ static void def_header (FILE *fp, circuit_t *ckt, Process *p)
   
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
 #ifdef INTEGRATED_PLACER
+  if (ckt)
   ckt->def_distance_microns = MICRON_CONVERSION;
 #endif  
 }
@@ -748,7 +752,7 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   act_flat_apply_processes (a, fp, p, count_inst);
 
   /* add white space */
-  total_area *= 1.7;
+  total_area *= 2.0; // 1.7;
 
   /* make it roughly square */
   total_area = sqrt (total_area);
@@ -778,11 +782,13 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
 
   /*-- variables in units of pitch --*/
 #ifdef INTEGRATED_PLACER
+  if (ckt) {
   ckt->def_left = 10;
   ckt->def_bottom = track_gap/pitchy;
 
   ckt->def_right = (10+nx);
   ckt->def_top = (1+ny)*track_gap/pitchy;
+  }
 #endif
   
   fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
@@ -815,6 +821,7 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
 
 #ifdef INTEGRATED_PLACER
   /* create circuit instances */
+  if (ckt) 
   act_flat_apply_processes (a, ckt, p, dump_inst_to_ckt);
 #endif  
   
@@ -867,6 +874,7 @@ int main (int argc, char **argv)
   FILE *fp;
   char *lefname = NULL;
   char *defname = NULL;
+  int do_place = 0;
   
   Act::Init (&argc, &argv);
   config_read ("prs2net.conf");
@@ -876,8 +884,12 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "p:l:d:s:")) != -1) {
+  while ((ch = getopt (argc, argv, "p:l:d:s:P")) != -1) {
     switch (ch) {
+    case 'P':
+      do_place = 1;
+      break;
+
     case 'p':
       if (proc_name) {
 	FREE (proc_name);
@@ -972,8 +984,13 @@ int main (int argc, char **argv)
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", lefname);
   }
-#ifdef INTEGRATED_PLACER  
-  lef_header (fp, &ckt);
+#ifdef INTEGRATED_PLACER
+  if (do_place) {
+    lef_header (fp, &ckt);
+  }
+  else {
+    lef_header (fp, NULL);
+  }
 #else  
   lef_header (fp, NULL);
 #endif  
@@ -1003,7 +1020,12 @@ int main (int argc, char **argv)
     (*procmap)[p] = px;
     
 #ifdef INTEGRATED_PLACER
-    geom_create_from_stack (a, fp, &ckt, N, l, &px->x, &px->y);
+    if (do_place) {
+      geom_create_from_stack (a, fp, &ckt, N, l, &px->x, &px->y);
+    }
+    else {
+      geom_create_from_stack (a, fp, NULL, N, l, &px->x, &px->y);
+    }      
 #else
     geom_create_from_stack (a, fp, NULL, N, l, &px->x, &px->y);
 #endif
@@ -1020,7 +1042,12 @@ int main (int argc, char **argv)
 
   /*--- print out def file ---*/
 #ifdef INTEGRATED_PLACER
-  emit_def (a, p, &ckt, proc_name, defname);
+  if (do_place) {
+    emit_def (a, p, &ckt, proc_name, defname);
+  }
+  else {
+    emit_def (a, p, NULL, proc_name, defname);
+  }
 #else  
   emit_def (a, p, NULL, proc_name, defname);
 #endif  
@@ -1028,6 +1055,10 @@ int main (int argc, char **argv)
   delete procmap;
 
   // run placement!
+
+  if (!do_place) {
+    return 0;
+  }
   
 #ifdef INTEGRATED_PLACER
   placer_t *placer = new placer_al_t;

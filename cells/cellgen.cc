@@ -978,7 +978,9 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 
 #ifdef INTEGRATED_PLACER  
   std::string cktblock(buf);
-  ckt->add_block_type (cktblock, rhs/m2->getPitch(), topedge/m1->getPitch());
+  if (ckt) {
+     ckt->add_block_type (cktblock, rhs/m2->getPitch(), topedge/m1->getPitch());
+  }
 #endif  
 
   fprintf (fplef, "    SYMMETRY X Y ;\n");
@@ -1080,6 +1082,7 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 
       /*-- pin location should be upper left corner --*/
 #ifdef INTEGRATED_PLACER      
+      if (ckt)
       ckt->add_pin_to_block (cktblock, pinname, count/m2->getPitch(),
 			     topedge/m1->getPitch());
 #endif      
@@ -1096,6 +1099,7 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 
 #ifdef INTEGRATED_PLACER
       /*-- pin location should be ll corner --*/
+      if (ckt)
       ckt->add_pin_to_block (cktblock, pinname, cout/m2->getPitch(), 1);
 #endif      
       
