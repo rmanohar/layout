@@ -22,6 +22,11 @@
 #ifndef __ACT_STACKS_H__
 #define __ACT_STACKS_H__
 
+#ifdef INTEGRATED_PLACER
+#include "placer.h"
+#else
+class circuit_t;
+#endif
 
 struct node_pair {
   node_t *n, *p;
@@ -70,7 +75,9 @@ struct gate_pairs {
 
 
 list_t *stacks_create (netlist_t *N);
-void geom_create_from_stack (Act *a, FILE *fplef, netlist_t *N, list_t *stacks,
+void geom_create_from_stack (Act *a, FILE *fplef,
+			     circuit_t *ckt,
+			     netlist_t *N, list_t *stacks,
 			     int *sizex, int *sizey);
 
 

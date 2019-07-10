@@ -34,17 +34,24 @@
 
 #include "stacks.h"
 
+#ifdef INTEGRATED_PLACER
+#include "placer.h"
+#include "placeral.h"
+#include "placerdla.h"
+#endif
+
 static Act *global_act;
 
 
 struct def_fmt_nets {
   act_connection *netname;	/* the net itself */
   list_t *pins; 		/* inst ; pin sequence */
+  int skip;
 
   int Print (Act *a, FILE *fp, ActId *prefix, int debug = 0) {
     char buf[10240];
 
-    if (!pins || list_length (pins) < 4) return 0;
+    if (skip || !pins || list_length (pins) < 4) return 0;
     
     fprintf (fp, "- ");
 
@@ -81,7 +88,71 @@ struct def_fmt_nets {
     fprintf (fp, "\n;\n");
     return 1;
   }
+
+#ifdef INTEGRATED_PLACER
+  int AddCkt (Act *a, circuit_t *ckt, ActId *prefix) {
+    char buf[10240];
+    char mbuf[10240];
+    int len = 0;
+
+    if (skip || !pins || list_length (pins) < 4) return 0;
     
+    if (prefix) {
+      prefix->sPrint (buf, 10240);
+      strcat (buf, ".");
+    }
+    else {
+      buf[0] = '\0';
+    }
+
+    len = strlen (buf);
+
+    ActId *tmp = netname->toid();
+    tmp->sPrint (buf+len, 1024-len);
+    delete tmp;
+    len += strlen (buf+len);
+
+    std::string netstr(buf);
+
+    if (netname->isglobal()) {
+      // globals are cheap!
+      ckt->create_blank_net (netstr, 1e-6);
+    }
+    else {
+      ckt->create_blank_net (netstr, 1.0); // WEIGHT GOES HERE!
+    }
+
+    listitem_t *li;
+    for (li = list_first (pins); li; li = list_next (li)) {
+      char *x = (char *)list_value (li);
+      // block name is:
+      //    prefix + x
+
+      if (prefix) {
+	prefix->sPrint (buf, 10240);
+	a->msnprintf (mbuf, 10240, "%s.%s", buf, x);
+      }
+      else {
+	a->msnprintf (mbuf, 10240, "%s", x);
+      }
+
+      std::string blkname(mbuf);
+
+      li = list_next (li);
+      act_connection *c = (act_connection *) list_value (li);
+      tmp = c->toid();
+      tmp->sPrint (buf, 10240);
+      a->msnprintf (mbuf, 10240, "%s", buf);
+      delete tmp;
+
+      std::string pinname(mbuf);
+
+      ckt->add_pin_to_net (netstr, blkname, pinname);
+    }
+    return 1;
+  }
+#endif  
+  
 
   void addPin (const char *name /* inst name */,  act_connection *pin) {
     if (!pins) {
@@ -122,6 +193,7 @@ struct process_aux {
     portmap = NULL;
     iH = NULL;
     A_INIT (nets);
+    A_INIT (global_nets);
   }
 
   int ismyport (act_connection *c) {
@@ -132,6 +204,7 @@ struct process_aux {
     return -1;
   }
 
+  /* create a new net, based on this connection pointer */
   def_fmt_nets *addNet (act_connection *c) {
     def_fmt_nets *r;
     ihash_bucket_t *b;
@@ -150,7 +223,13 @@ struct process_aux {
     A_NEXT (nets).idx = b->i;
     A_NEXT (nets).netname = c;
     A_NEXT (nets).pins = NULL;
+    A_NEXT (nets).skip = 0;
     A_NEXT (nets).portid = ismyport (c);
+    if (c->isglobal()) {
+      A_NEWM (global_nets, int);
+      A_NEXT (global_nets) = b->i;
+      A_INC (global_nets);
+    }
     r = &A_NEXT (nets);
     A_INC (nets);
     return r;
@@ -169,8 +248,9 @@ struct process_aux {
   int *portmap;			/* maps ports to nets */
 
   A_DECL (def_fmt_nets, nets);	/* the nets */
-  
-  /*-- port nets --*/
+
+  /*-- global nets --*/
+  A_DECL (int, global_nets);
   
 };
 
@@ -250,12 +330,13 @@ void _collect_nets (Act *a, Process *p)
     if (vx->t->arrayInfo()) {
       Arraystep *as = vx->t->arrayInfo()->stepper();
       while (!as->isend()) {
+	def_fmt_nets *d;
+	char *tmp;
+	char *tmp2;
+	
 	for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
 	  if (sub->n->bN->ports[i].omit) continue;
 
-	  def_fmt_nets *d;
-	  char *tmp;
-	  char *tmp2;
 
 	  d = px->addNet (n->bN->instports[iport]);
 
@@ -283,14 +364,31 @@ void _collect_nets (Act *a, Process *p)
 	  }
 	  iport++;
 	}
+
+	/*-- global nets are like an implicit pin --*/
+	for (int i=0; i < A_LEN (sub->global_nets); i++) {
+	  if (sub->global_nets[i] != -1) {
+	    d = px->addNet (sub->nets[sub->global_nets[i]].netname);
+	    tmp2 = as->string();
+	    MALLOC (tmp, char, strlen (vx->getName()) + strlen (tmp2) + 1);
+	    sprintf (tmp, "%s%s", vx->getName(), tmp2);
+	    FREE (tmp2);
+
+	    d->importPins (tmp, &sub->nets[sub->global_nets[i]]);
+	    sub->nets[sub->global_nets[i]].skip = 1;
+	    FREE (tmp);
+	  }
+	}
+	
 	as->step();
       }
       delete as;
     }
     else {
+      def_fmt_nets *d;
+      
       for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
 	if (sub->n->bN->ports[i].omit) continue;
-	def_fmt_nets *d;
 
 	d = px->addNet (n->bN->instports[iport]);
 
@@ -312,9 +410,29 @@ void _collect_nets (Act *a, Process *p)
 	}
 	iport++;
       }
+
+      for (int i=0; i < A_LEN (sub->global_nets); i++) {
+	if (sub->global_nets[i] != -1) {
+	  d = px->addNet (sub->nets[sub->global_nets[i]].netname);
+	  d->importPins (vx->getName(), &sub->nets[sub->global_nets[i]]);
+	  sub->nets[sub->global_nets[i]].skip = 1;
+	}
+      }
     }
   }
   Assert (iport == A_LEN (n->bN->instports), "What?!");
+
+  /* if a global net is also a port, then get rid of it from the
+     global net list */
+  for (int i=0; i < A_LEN (px->global_nets); i++) {
+    for (int j=0; j < A_LEN (px->n->bN->ports); j++) {
+      if (px->n->bN->ports[j].omit) continue;
+      if (px->portmap[j] == px->global_nets[i]) {
+	px->global_nets[i] = -1;
+      }
+    }
+  }
+  
   return;
 }
 
@@ -350,7 +468,8 @@ void _dump_collection (Act *a, Process *p)
 static unsigned long netcount = 0;
 
 
-void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
+void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
+			 circuit_t *ckt)
 {
   process_aux *px;
   Assert (p->isExpanded(), "What are we doing");
@@ -366,6 +485,9 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
       if (px->nets[i].Print (a, fp, prefix)) {
 	netcount++;
       }
+#ifdef INTEGRATED_PLACER
+      px->nets[i].AddCkt (a, ckt, prefix);
+#endif      
     }
   }
 
@@ -407,7 +529,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
       while (!as->isend()) {
 	Array *x = as->toArray();
 	newid->setArray (x);
-	_collect_emit_nets (a, cpy, instproc, fp);
+	_collect_emit_nets (a, cpy, instproc, fp, ckt);
 	delete x;
 	newid->setArray (NULL);
 	as->step();
@@ -415,36 +537,11 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
       delete as;
     }
     else {
-      _collect_emit_nets (a, cpy, instproc, fp);
+      _collect_emit_nets (a, cpy, instproc, fp, ckt);
     }
     delete cpy;
   }
   return;
-}
-
-
-
-void print_procname (Act *a, Process *p, FILE *fp)
-{
-  char buf[1024];
-  
-  if (p->getns() && p->getns() != ActNamespace::Global()) {
-    char *s = p->getns()->Name();
-    a->mfprintf (fp, "%s::", s);
-    FREE (s);
-  }
-  const char *proc_name = p->getName();
-  int len = strlen (proc_name);
-  if (len > 2 && proc_name[len-1] == '>' && proc_name[len-2] == '<') {
-    int i = 0;
-    while (proc_name[i] != '<') {
-      fputc (proc_name[i], fp);
-      i++;
-    }
-  }
-  else {
-    a->mfprintf (fp, "%s", proc_name);
-  }
 }
 
 void usage (char *name)
@@ -455,14 +552,20 @@ void usage (char *name)
 }
 
 
-static void lef_header (FILE *fp)
+static void lef_header (FILE *fp, circuit_t *ckt)
 {
   /* -- lef header -- */
   fprintf (fp, "VERSION 5.8 ;\n\n");
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "UNITS\n");
+  
   fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
+
+#ifdef INTEGRATED_PLACER
+  ckt->lef_database_microns = MICRON_CONVERSION;
+#endif  
+  
   fprintf (fp, "END UNITS\n\n");
 
   fprintf (fp, "MANUFACTURINGGRID 0.000500 ; \n\n");
@@ -475,9 +578,9 @@ static void lef_header (FILE *fp)
   fprintf (fp, "END CoreSite\n\n");
   
   int i;
+  double scale = Technology::T->scale/1000.0;
   for (i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mat = Technology::T->metal[i];
-    double scale = Technology::T->scale/1000.0;
     fprintf (fp, "LAYER %s\n", mat->getName());
     fprintf (fp, "   TYPE ROUTING ;\n");
 
@@ -502,6 +605,10 @@ static void lef_header (FILE *fp)
       fprintf (fp, "END %s\n\n", mat->getUpC()->getName());
     }
   }
+
+#ifdef INTEGRATED_PLACER
+  ckt->m2_pitch = Technology::T->metal[1]->getPitch()*scale;
+#endif
 
   fprintf (fp, "\n");
 
@@ -530,7 +637,7 @@ static void lef_header (FILE *fp)
 }
 
 
-static void def_header (FILE *fp, const char *proc)
+static void def_header (FILE *fp, circuit_t *ckt, Process *p)
 {
   int i;
   
@@ -539,19 +646,14 @@ static void def_header (FILE *fp, const char *proc)
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "DESIGN ");
-  i = strlen (proc);
-  if (i > 2 && proc[i-1] == '>' && proc[i-2] == '<') {
-    i = 0;
-    while (proc[i] && proc[i] != '<') {
-      fputc (proc[i], fp);
-      i++;
-    }
-    fprintf (fp, " ;\n");
-  }
-  else {
-    fprintf (fp, "%s ;\n", proc);
-  }
+
+  global_act->mfprintfproc (fp, p);
+  fprintf (fp, " ;\n");
+  
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
+#ifdef INTEGRATED_PLACER
+  ckt->def_distance_microns = MICRON_CONVERSION;
+#endif  
 }
 
 
@@ -581,13 +683,36 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   char buf[10240];
 
   if (p->getprs()) {
+    /* FORMAT: 
+         - inst2591 NAND4X2 ;
+         - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
+    */
     fprintf (fp, "- ");
     prefix->sPrint (buf, 10240);
     global_act->mfprintf (fp, "%s ", buf);
-    print_procname (global_act, p, fp);
+    global_act->mfprintfproc (fp, p);
     fprintf (fp, " ;\n");
   }
 }
+
+#ifdef INTEGRATED_PLACER
+static void dump_inst_to_ckt (void *x, ActId *prefix, Process *p)
+{
+  circuit_t *ckt = (circuit_t *)x;
+  char buf[10240];
+  char mbuf[10240];
+
+  if (p->getprs()) {
+    prefix->sPrint (buf, 10240);
+    global_act->msnprintf (mbuf, 10240, "%s", buf);
+    std::string nm(mbuf);
+    
+    global_act->msnprintfproc (mbuf, 10240, p);
+    std::string btype(mbuf);
+    ckt->add_new_block (nm, btype);
+  }
+}
+#endif
 
 static void dump_nets (void *x, ActId *prefix, Process *p)
 {
@@ -597,24 +722,25 @@ static void dump_nets (void *x, ActId *prefix, Process *p)
   if (p->getprs()) {
     prefix->sPrint (buf, 10240);
     global_act->mfprintf (fp, "%s ", buf);
-    print_procname (global_act, p, fp);
+    global_act->mfprintfproc (fp, p);
     fprintf (fp, " ;\n");
   }
 }
 
 
 
-static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
+static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char *defname)
 {
   FILE *fp;
+
+  global_act = a;
   
   fp = fopen (defname, "w");
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", defname);
   }
-  def_header (fp, proc_name);
+  def_header (fp, ckt, p);
   
-  global_act = a;
   
   double unit_conv;
 
@@ -622,8 +748,7 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
   act_flat_apply_processes (a, fp, p, count_inst);
 
   /* add white space */
-  //total_area /= 0.60;
-  total_area *= 3.0;
+  total_area *= 1.7;
 
   /* make it roughly square */
   total_area = sqrt (total_area);
@@ -651,6 +776,15 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
 	   10*pitchx, track_gap,
 	   (10+nx)*pitchx, (1+ny)*track_gap);
 
+  /*-- variables in units of pitch --*/
+#ifdef INTEGRATED_PLACER
+  ckt->def_left = 10;
+  ckt->def_bottom = track_gap/pitchy;
+
+  ckt->def_right = (10+nx);
+  ckt->def_top = (1+ny)*track_gap/pitchy;
+#endif
+  
   fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
 	   10*pitchx, pitchy, ny, track_gap);
 
@@ -678,11 +812,12 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
   /* -- instances  -- */
   fprintf (fp, "COMPONENTS %d ;\n", total_instances);
   act_flat_apply_processes (a, fp, p, dump_inst);
-  /* FORMAT: 
-         inst2591 NAND4X2 ;
 
-         inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
-  */
+#ifdef INTEGRATED_PLACER
+  /* create circuit instances */
+  act_flat_apply_processes (a, ckt, p, dump_inst_to_ckt);
+#endif  
+  
   fprintf (fp, "END COMPONENTS\n\n");
 
   /* -- no I/O constraints -- */
@@ -707,7 +842,8 @@ static void emit_def (Act *a, Process *p, char *proc_name, char *defname)
 
   //_dump_collection (p);
   
-  _collect_emit_nets (a, NULL, p, fp);
+  _collect_emit_nets (a, NULL, p, fp, ckt);
+
   
   fprintf (fp, "END NETS\n\n");
   fprintf (fp, "END DESIGN\n");
@@ -827,11 +963,20 @@ int main (int argc, char **argv)
   Assert (cell_ns, "No cell namespace? No circuits?!");
 
   /*--- print out lef file, plus rectangles ---*/
+
+#ifdef INTEGRATED_PLACER
+  circuit_t ckt;
+#endif  
+  
   fp = fopen (lefname, "w");
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", lefname);
   }
-  lef_header (fp);
+#ifdef INTEGRATED_PLACER  
+  lef_header (fp, &ckt);
+#else  
+  lef_header (fp, NULL);
+#endif  
 
   ActTypeiter it(cell_ns);
 
@@ -857,9 +1002,14 @@ int main (int argc, char **argv)
 
     (*procmap)[p] = px;
     
-    geom_create_from_stack (a, fp, N, l, &px->x, &px->y);
+#ifdef INTEGRATED_PLACER
+    geom_create_from_stack (a, fp, &ckt, N, l, &px->x, &px->y);
+#else
+    geom_create_from_stack (a, fp, NULL, N, l, &px->x, &px->y);
+#endif
     fprintf (fp, "\n");
 
+    
 #if 0
     /* tracks */
     int ctracks = Technology::T->metal[0]->getPitch();
@@ -868,11 +1018,30 @@ int main (int argc, char **argv)
   }
   fclose (fp);
 
-
   /*--- print out def file ---*/
-  emit_def (a, p, proc_name, defname);
+#ifdef INTEGRATED_PLACER
+  emit_def (a, p, &ckt, proc_name, defname);
+#else  
+  emit_def (a, p, NULL, proc_name, defname);
+#endif  
 
   delete procmap;
+
+  // run placement!
+  
+#ifdef INTEGRATED_PLACER
+  placer_t *placer = new placer_al_t;
+  placer->set_input_circuit (&ckt);
+  placer->set_boundary(ckt.def_left, ckt.def_right, ckt.def_bottom,ckt.def_top);
+  placer->start_placement ();
+  placer->report_placement_result ();
+
+  std::string defs(defname);
+  std::string defsp = defs + ".p";
+  ckt.save_DEF (defsp,defname);
+
+  delete placer;
+#endif  
   
   return 0;
 }

@@ -6,6 +6,11 @@
 #include <act/layout/tech.h>
 #include <config.h>
 #include "stacks.h"
+#include <string>
+
+#ifdef INTEGRATED_PLACER
+#include "placer.h"
+#endif
 
 static void dump_node (FILE *fp, netlist_t *N, node_t *n)
 {
@@ -416,7 +421,13 @@ BBox print_dualstack (int dx, int dy,
   else {
     struct gate_pairs *tmp;
     tmp = (struct gate_pairs *) list_value (list_first (gp->u.gp));
-    flavor = tmp->u.e.n->flavor;
+    if (tmp->u.e.n) {
+      flavor = tmp->u.e.n->flavor;
+    }
+    else {
+      Assert (tmp->u.e.p, "Hmm");
+      flavor = tmp->u.e.p->flavor;
+    }
   }
 
   DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
@@ -634,7 +645,7 @@ BBox print_singlestack (int dx, int dy,
   prev = NULL;
   previdx = 0;
   li = list_first (l);
-  while (li && list_next (li)) {
+  while (li && list_next (li) && list_next (list_next (li))) {
     unsigned int flags = 0;
     node_t *m;
 
@@ -654,7 +665,7 @@ BBox print_singlestack (int dx, int dy,
     prev = e;
     previdx = idx;
 
-    li = list_next (list_next (li));
+    li = list_next (list_next (list_next (li)));
   }
   Assert (li && !list_next (li), "Eh?");
   n = (node_t *) list_value (li);
@@ -764,7 +775,7 @@ static void dump_pair (netlist_t *N, struct gate_pairs *p)
 
 
 
-void geom_create_from_stack (Act *a, FILE *fplef,
+void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 			     netlist_t *N, list_t *stacks,
 			     int *sizex, int *sizey)
 {
@@ -936,27 +947,7 @@ void geom_create_from_stack (Act *a, FILE *fplef,
   fclose (fp);
 
   /*--- process gp ---*/
-  if (p->getns() && p->getns() != ActNamespace::Global()) {
-    char *s = p->getns()->Name();
-    a->msnprintf (buf, 1024, "%s::", s);
-    FREE (s);
-  }
-  else {
-    buf[0] = '\0';
-  }
-
-  len = strlen (buf);
-  if (flag) {
-    i = 0;
-    while (proc_name[i] != '<') {
-      buf[len++] = proc_name[i++];
-    }
-    buf[len] = '\0';
-  }
-  else {
-    a->msnprintf (buf+len, 1024-len, "%s", proc_name);
-  }
-  
+  a->msnprintfproc (buf, 1024, p);
   fprintf (fplef, "MACRO %s\n", buf);
 
   /*-- boilerplate --*/
@@ -984,6 +975,11 @@ void geom_create_from_stack (Act *a, FILE *fplef,
   double scale = Technology::T->scale/1000.0;
 
   fprintf (fplef, "    SIZE %.6f BY %.6f ;\n", rhs*scale, topedge*scale);
+
+#ifdef INTEGRATED_PLACER  
+  std::string cktblock(buf);
+  ckt->add_block_type (cktblock, rhs/m2->getPitch(), topedge/m1->getPitch());
+#endif  
 
   fprintf (fplef, "    SYMMETRY X Y ;\n");
   fprintf (fplef, "    SITE CoreSite ;\n");
@@ -1037,6 +1033,11 @@ void geom_create_from_stack (Act *a, FILE *fplef,
     fprintf (fplef, "    PIN ");
     id->sPrint (tmp, 1024);
     a->mfprintf (fplef, "%s", tmp);
+
+    char tmp2[1024];
+    a->msnprintf (tmp2, 1024, "%s", tmp);
+    std::string pinname(tmp2);
+    
     fprintf (fplef, "\n");
     fprintf (fplef, "        DIRECTION %s ;\n",
 	     N->bN->ports[i].input ? "INPUT" : "OUTPUT");
@@ -1070,39 +1071,34 @@ void geom_create_from_stack (Act *a, FILE *fplef,
     fprintf (fplef, "        LAYER %s ;\n", m2->getName());
     if (N->bN->ports[i].input) {
       int w;
-#if 0
-      if (stride > 1) {
-	w = m2->getPitch();
-      }
-      else {
-#endif
-	w = m2->minWidth();
-#if 0
-      }
-#endif
+      w = m2->minWidth();
       fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
 	       scale*count,
 	       scale*(topedge - w),
 	       scale*(count + w),
 	       scale*topedge);
+
+      /*-- pin location should be upper left corner --*/
+#ifdef INTEGRATED_PLACER      
+      ckt->add_pin_to_block (cktblock, pinname, count/m2->getPitch(),
+			     topedge/m1->getPitch());
+#endif      
+      
       count += m2->getPitch()*stride;
     }
     else {
       int w;
-#if 0
-      if (strideo > 1) {
-	w = m2->getPitch();
-      }
-      else {
-#endif
-	w = m2->minWidth();
-#if 0
-      }
-#endif
+      w = m2->minWidth();
       fprintf (fplef, "        RECT %.6f %.6f %.6f %.6f ;\n",
 	       scale*cout, scale*m1->getPitch(),
 	       scale*(cout + w),
 	       scale*(w + m1->getPitch()));
+
+#ifdef INTEGRATED_PLACER
+      /*-- pin location should be ll corner --*/
+      ckt->add_pin_to_block (cktblock, pinname, cout/m2->getPitch(), 1);
+#endif      
+      
       cout += m2->getPitch()*strideo;
     }
     fprintf (fplef, "        END\n");
@@ -1116,8 +1112,8 @@ void geom_create_from_stack (Act *a, FILE *fplef,
     fprintf (fplef, "    OBS\n");
     fprintf (fplef, "      LAYER %s ;\n", m1->getName());
     fprintf (fplef, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     0.0, scale*(3*m1->getPitch()),
-	     scale*rhs, scale*(topedge - 3*m1->getPitch()));
+	     scale*m2->getPitch(), scale*(3*m1->getPitch()),
+	     scale*(rhs - m2->getPitch()), scale*(topedge - 3*m1->getPitch()));
     fprintf (fplef, "    END\n");
   }
   

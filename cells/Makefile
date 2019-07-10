@@ -29,7 +29,12 @@ OBJS=stacks.o cellgen.o main.o
 
 SRCS=$(OBJS:.o=.cc)
 
+
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
+
+# CFLAGS +=-std=c++11 -DINTEGRATED_PLACER
+# $(EXE): $(OBJS) $(ACT_HOME)/lib/$(LAYOUTLIB) $(ACTPASSDEPEND)
+# 	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) -L. -lplacer -lactlayout $(LIBACTPASS)
 
 $(EXE): $(OBJS) $(ACT_HOME)/lib/$(LAYOUTLIB) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) -lactlayout $(LIBACTPASS)
