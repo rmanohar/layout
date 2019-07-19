@@ -34,3 +34,6 @@ while (<>) {
 	print "label \"$node\"\n";
     }
 }
+if ($start == 0) {
+   print "}\n";
+}

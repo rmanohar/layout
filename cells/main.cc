@@ -256,7 +256,7 @@ struct process_aux {
 };
 
 #define MICRON_CONVERSION 2000
-#define TRACK_CONVERSION 12
+#define TRACK_CONVERSION 18
 
 static std::map<Process *, process_aux *> *procmap = NULL;
 

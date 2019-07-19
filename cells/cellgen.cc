@@ -12,6 +12,8 @@
 #include "placer.h"
 #endif
 
+#define MIN_TRACKS 18
+
 static void dump_node (FILE *fp, netlist_t *N, node_t *n)
 {
   if (n->v) {
@@ -491,8 +493,6 @@ BBox print_dualstack (int dx, int dy,
     int prevpidx = 0, prevnidx = 0;
     node_t *leftp, *leftn;
 
-    xpos = 0;
-    xpos_p = 0;
     leftp = NULL;
     leftn = NULL;
 
@@ -844,10 +844,20 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
       struct gate_pairs *gp;
       gp = (struct gate_pairs *) list_value (si);
 
-      //dump_pair (N, gp);
+#if 0
+      dump_pair (N, gp);
+#endif
 
       /*--- process gp ---*/
       b = print_dualstack (xpos, 0, fp, N, L, gp);
+
+#if 0      
+      printf ("[xpos=%d] BBOX: p (%d,%d) -> (%d,%d); n (%d,%d) -> (%d,%d)\n", 
+	      xpos,
+	      b.p.llx, b.p.lly, b.p.urx, b.p.ury,
+	      b.n.llx, b.n.lly, b.n.urx, b.n.ury);
+      printf ("---\n");
+#endif
 
       /*-- now print nwells and pwells --*/
       if (b.p.llx < b.p.urx && b.p.lly < b.p.ury) {
@@ -964,6 +974,8 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
   
+  topedge = MAX(topedge, MIN_TRACKS*m1->getPitch());
+
   if ((rhs % m2->getPitch()) != 0) {
     rhs = rhs + m2->getPitch() - (rhs % m2->getPitch());
   }
