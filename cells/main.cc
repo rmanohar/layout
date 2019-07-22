@@ -25,7 +25,7 @@
 #include <math.h>
 #include <map>
 
-#include <act/passes.h>
+#include <act/passes/cells.h>
 #include <act/passes/netlist.h>
 #include <act/layout/geom.h>
 #include <act/iter.h>
@@ -259,9 +259,7 @@ struct process_aux {
 #define TRACK_CONVERSION 18
 
 static std::map<Process *, process_aux *> *procmap = NULL;
-
-
-static std::map<Process *, netlist_t *> *netmap = NULL;
+static ActNetlistPass *netinfo = NULL;
 
 
 void _collect_nets (Act *a, Process *p)
@@ -281,10 +279,10 @@ void _collect_nets (Act *a, Process *p)
   if (px->visited) return;
   px->visited = 1;
 
-  if (netmap->find(p) == netmap->end()) {
+  netlist_t *n = netinfo->getNL (p);
+  if (!n) {
     fatal_error ("Could not find netlist for `%s'", p->getName());
   }
-  netlist_t *n = netmap->find (p)->second;
   px->n = n;
 
   if (A_LEN (n->bN->ports) > 0) {
@@ -731,7 +729,7 @@ static void dump_nets (void *x, ActId *prefix, Process *p)
   }
 }
 
-
+ActApplyPass *gapply = NULL;
 
 static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char *defname)
 {
@@ -749,7 +747,10 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   double unit_conv;
 
   /* collect process info */
-  act_flat_apply_processes (a, fp, p, count_inst);
+  gapply->setCookie (fp);
+  gapply->setInstFn (count_inst);
+  gapply->run (p);
+  //act_flat_apply_processes (a, fp, p, count_inst);
 
   /* add white space */
   total_area *= 2.0; // 1.7;
@@ -783,11 +784,11 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   /*-- variables in units of pitch --*/
 #ifdef INTEGRATED_PLACER
   if (ckt) {
-  ckt->def_left = 10;
-  ckt->def_bottom = track_gap/pitchy;
+    ckt->def_left = 10;
+    ckt->def_bottom = track_gap/pitchy;
 
-  ckt->def_right = (10+nx);
-  ckt->def_top = (1+ny)*track_gap/pitchy;
+    ckt->def_right = (10+nx);
+    ckt->def_top = (1+ny)*track_gap/pitchy;
   }
 #endif
   
@@ -817,12 +818,19 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   
   /* -- instances  -- */
   fprintf (fp, "COMPONENTS %d ;\n", total_instances);
-  act_flat_apply_processes (a, fp, p, dump_inst);
+  gapply->setCookie (fp);
+  gapply->setInstFn (dump_inst);
+  gapply->run (p);
+  //act_flat_apply_processes (a, fp, p, dump_inst);
 
 #ifdef INTEGRATED_PLACER
   /* create circuit instances */
-  if (ckt) 
-  act_flat_apply_processes (a, ckt, p, dump_inst_to_ckt);
+  if (ckt)  {
+    //act_flat_apply_processes (a, ckt, p, dump_inst_to_ckt);
+    gapply->setCookie (ckt);
+    gapply->setInstFn (dump_inst_to_ckt);
+    gapply->run (p);
+  }
 #endif  
   
   fprintf (fp, "END COMPONENTS\n\n");
@@ -948,6 +956,8 @@ int main (int argc, char **argv)
   a = new Act (argv[optind]);
   a->Expand();
 
+  gapply = new ActApplyPass (a);
+
   /*--- find top level process ---*/
   p = a->findProcess (proc_name);
   if (!p) {
@@ -956,21 +966,19 @@ int main (int argc, char **argv)
   }
 
   /*--- core passes ---*/
-  act_prs_to_cells (a, p, 0);
-  act_booleanize_netlist (a, p);
-  act_prs_to_netlist (a, p);
+  ActCellPass *cp = new ActCellPass (a);
+  cp->run (p);
+  netinfo = new ActNetlistPass (a);
+  netinfo->run (p);
 
   if (spice) {
     FILE *sp = fopen (spice, "w");
     if (!sp) { fatal_error ("Could not open file `%s'", spice); }
-    act_emit_netlist (a, p, sp);
+    netinfo->Print (sp, p);
     fclose (sp);
   }
   //a->Print (stdout);
   
-  /*--- create stacks for all cells ---*/
-  netmap = (std::map<Process *, netlist_t *> *) a->aux_find ("prs2net");
-
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
 
@@ -1008,8 +1016,7 @@ int main (int argc, char **argv)
     if (!p) continue;
     if (!p->isCell()) continue;
     if (!p->isExpanded()) continue;
-    if (netmap->find (p) == netmap->end()) continue;
-    netlist_t *N = netmap->find (p)->second;
+    netlist_t *N = netinfo->getNL (p);
     Assert (N, "Hmm...");
 
     list_t *l = stacks_create (N);

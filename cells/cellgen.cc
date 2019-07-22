@@ -1059,9 +1059,9 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 
     b = ihash_lookup (N->bN->cH, (long)N->bN->ports[i].c);
     if (b) {
-      struct act_varinfo *av;
+      struct act_nl_varinfo *av;
       v = (act_booleanized_var_t *) b->v;
-      av = (struct act_varinfo *)v->extra;
+      av = (struct act_nl_varinfo *)v->extra;
       if (av) {
 	if (av->n == N->Vdd) {
 	  fprintf (fplef, "POWER ;\n");
