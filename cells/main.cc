@@ -260,6 +260,7 @@ struct process_aux {
 
 static std::map<Process *, process_aux *> *procmap = NULL;
 static ActNetlistPass *netinfo = NULL;
+static ActBooleanizePass *boolinfo = NULL;
 
 
 void _collect_nets (Act *a, Process *p)
@@ -478,6 +479,9 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
   }
   px = procmap->find(p)->second;
 
+  act_boolean_netlist_t *n = boolinfo->getBNL (p);
+  Assert (n, "What!");
+
   /* first, print my local nets */
   for (int i=0; i < A_LEN (px->nets); i++) {
     if (px->nets[i].portid == -1) {
@@ -489,6 +493,40 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
 #endif      
     }
   }
+
+#if 0
+  /* debugging! */
+  fprintf (fp, "## nets = %d\n", A_LEN (n->nets));
+  for (int i=0; i < A_LEN (n->nets); i++) {
+    if (n->nets[i].port) continue;
+    if (n->nets[i].skip) continue;
+    if (A_LEN (n->nets[i].pins) < 2) continue;
+    /* print! */
+    ActId *tmp = n->nets[i].net->toid();
+    fprintf (fp, "## ");
+    if (prefix) {
+      prefix->Print (fp);
+      fprintf (fp, ".");
+    }
+    tmp->Print (fp);
+    delete tmp;
+    fprintf (fp, " ::");
+    for (int j=0; j < A_LEN (n->nets[i].pins); j++) {
+      fprintf (fp, " (");
+      if (prefix) {
+	prefix->Print (fp);
+	fprintf (fp, ".");
+      }
+      n->nets[i].pins[j].inst->Print (fp);
+      fprintf (fp, " ");
+      tmp = n->nets[i].pins[j].pin->toid();
+      tmp->Print (fp);
+      delete tmp;
+      fprintf (fp, ")");
+    }
+    fprintf (fp, "\n");
+  }
+#endif  
 
   ActInstiter i(p->CurScope());
 
@@ -968,6 +1006,7 @@ int main (int argc, char **argv)
   /*--- core passes ---*/
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
+  boolinfo = new ActBooleanizePass (a);
   netinfo = new ActNetlistPass (a);
   netinfo->run (p);
 
@@ -1046,6 +1085,8 @@ int main (int argc, char **argv)
 #endif
   }
   fclose (fp);
+
+  boolinfo->createNets (p);
 
   /*--- print out def file ---*/
 #ifdef INTEGRATED_PLACER

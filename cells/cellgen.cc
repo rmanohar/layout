@@ -974,7 +974,7 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
   
-  topedge = MAX(topedge, MIN_TRACKS*m1->getPitch());
+//topedge = MAX(topedge, MIN_TRACKS*m1->getPitch());
 
   if ((rhs % m2->getPitch()) != 0) {
     rhs = rhs + m2->getPitch() - (rhs % m2->getPitch());
