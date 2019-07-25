@@ -43,145 +43,110 @@
 static Act *global_act;
 
 
-struct def_fmt_nets {
-  act_connection *netname;	/* the net itself */
-  list_t *pins; 		/* inst ; pin sequence */
-  int skip;
+static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
+{
+  Assert (net, "Why are you calling this function?");
+  if (net->skip) return 0;
+  if (net->port) return 0;
 
-  int Print (Act *a, FILE *fp, ActId *prefix, int debug = 0) {
-    char buf[10240];
+  if (A_LEN (net->pins) < 2) return 0;
 
-    if (skip || !pins || list_length (pins) < 4) return 0;
-    
-    fprintf (fp, "- ");
-
-    if (prefix) {
-      prefix->Print (fp);
-      fprintf (fp, ".");
-    }
-
-    ActId *tmp = netname->toid();
-    tmp->Print (fp);
-    delete tmp;
-
-    if (debug) { fprintf (fp, " [%d]", portid); }
-    
-    fprintf (fp, "\n  ");
-
-    listitem_t *li;
-    for (li = list_first (pins); li; li = list_next (li)) {
-      char *x = (char *)list_value (li);
-      fprintf (fp, " ( ");
-      if (prefix) {
-	prefix->sPrint (buf, 10240);
-	a->mfprintf (fp, "%s.", buf);
-      }
-      a->mfprintf (fp, "%s ", x);
-      li = list_next (li);
-      act_connection *c = (act_connection *) list_value (li);
-      tmp = c->toid();
-      tmp->sPrint (buf, 10240);
-      a->mfprintf (fp, "%s", buf);
-      fprintf (fp, " )");
-      delete tmp;
-    }
-    fprintf (fp, "\n;\n");
-    return 1;
+  fprintf (fp, "- ");
+  if (prefix) {
+    prefix->Print (fp);
+    fprintf (fp, ".");
   }
+  ActId *tmp = net->net->toid();
+  tmp->Print (fp);
+  delete tmp;
 
-#ifdef INTEGRATED_PLACER
-  int AddCkt (Act *a, circuit_t *ckt, ActId *prefix) {
-    char buf[10240];
-    char mbuf[10240];
-    int len = 0;
+  fprintf (fp, "\n  ");
 
-    if (skip || !pins || list_length (pins) < 4) return 0;
-    if (!ckt) return 0;
-    
+  char buf[10240];
+
+  for (int i=0; i < A_LEN (net->pins); i++) {
+    fprintf (fp, " ( ");
     if (prefix) {
       prefix->sPrint (buf, 10240);
-      strcat (buf, ".");
+      a->mfprintf (fp, "%s.", buf);
     }
-    else {
-      buf[0] = '\0';
-    }
+    net->pins[i].inst->sPrint (buf, 10240);
+    a->mfprintf (fp, "%s ", buf);
 
-    len = strlen (buf);
-
-    ActId *tmp = netname->toid();
-    tmp->sPrint (buf+len, 1024-len);
+    tmp = net->pins[i].pin->toid();
+    tmp->sPrint (buf, 10240);
     delete tmp;
-    len += strlen (buf+len);
+    a->mfprintf (fp, "%s ", buf);
+    fprintf (fp, ")");
+  }
+  fprintf (fp, "\n;\n");
 
-    std::string netstr(buf);
+  return 1;
+}
 
-    if (netname->isglobal()) {
-      // globals are cheap!
-      ckt->create_blank_net (netstr, 1e-6);
-    }
-    else {
-      ckt->create_blank_net (netstr, 1.0); // WEIGHT GOES HERE!
-    }
+void add_ckt (Act *a, circuit_t *ckt, ActId *prefix, act_local_net_t *net)
+{
+  char buf[10240];
+  char mbuf[10240];
+  int len = 0;
 
-    listitem_t *li;
-    for (li = list_first (pins); li; li = list_next (li)) {
-      char *x = (char *)list_value (li);
-      // block name is:
-      //    prefix + x
+  if (net->skip || net->port || A_LEN (net->pins) < 2) return;
+  if (!ckt) return;
+    
+  if (prefix) {
+    prefix->sPrint (buf, 10240);
+    strcat (buf, ".");
+  }
+  else {
+    buf[0] = '\0';
+  }
 
-      if (prefix) {
-	prefix->sPrint (buf, 10240);
-	a->msnprintf (mbuf, 10240, "%s.%s", buf, x);
+  len = strlen (buf);
+
+  ActId *tmp = net->net->toid();
+  tmp->sPrint (buf+len, 1024-len);
+  delete tmp;
+  len += strlen (buf+len);
+
+  std::string netstr(buf);
+
+  if (net->net->isglobal()) {
+    // globals are cheap!
+    ckt->create_blank_net (netstr, 1e-6);
+  }
+  else {
+    ckt->create_blank_net (netstr, 1.0); // WEIGHT GOES HERE!
+  }
+
+  for (int i=0; i < A_LEN (net->pins); i++) {
+    len = 0;
+    buf[0] = '\0';
+    if (prefix) {
+      prefix->sPrint (buf, 10240);
+      len = strlen (buf);
+      if (len < 10200) {
+	buf[len++] = '.';
+	buf[len] = '\0';
       }
       else {
-	a->msnprintf (mbuf, 10240, "%s", x);
+	warning ("Fix buffer size!");
       }
-
-      std::string blkname(mbuf);
-
-      li = list_next (li);
-      act_connection *c = (act_connection *) list_value (li);
-      tmp = c->toid();
-      tmp->sPrint (buf, 10240);
-      a->msnprintf (mbuf, 10240, "%s", buf);
-      delete tmp;
-
-      std::string pinname(mbuf);
-
-      ckt->add_pin_to_net (netstr, blkname, pinname);
     }
-    return 1;
+    net->pins[i].inst->sPrint (buf+len, 10240-len);
+    a->msnprintf (mbuf, 10240, "%s", buf);
+
+    std::string blkname(mbuf);
+
+    tmp = net->pins[i].pin->toid();
+    tmp->sPrint (buf, 10240);
+    a->msnprintf (mbuf, 10240, "%s", buf);
+    delete tmp;
+
+    std::string pinname(mbuf);
+
+    ckt->add_pin_to_net (netstr, blkname, pinname);
   }
-#endif  
-  
-
-  void addPin (const char *name /* inst name */,  act_connection *pin) {
-    if (!pins) {
-      pins = list_new ();
-    }
-    list_append (pins, name);
-    list_append (pins, pin);
-  }
-
-  void importPins (const char *name, def_fmt_nets *sub) {
-    listitem_t *li;
-    if (!sub->pins) return;
-    for (li = list_first (sub->pins); li; li = list_next (li)) {
-      char *tmp = (char *)list_value (li);
-
-      char *res;
-      MALLOC (res, char, strlen (name) + strlen (tmp) + 2);
-      snprintf (res, strlen (name) + strlen (tmp) + 2, "%s.%s", name, tmp);
-
-      li = list_next (li);
-      act_connection *pin = (act_connection *) list_value (li);
-
-      addPin (res,pin);
-    }
-  }
-  int portid;
-  int idx;
-}; 
+}
 
 struct process_aux {
 
@@ -191,53 +156,8 @@ struct process_aux {
     y = 0;
     visited = 0;
     n = NULL;
-    portmap = NULL;
-    iH = NULL;
-    A_INIT (nets);
-    A_INIT (global_nets);
   }
 
-  int ismyport (act_connection *c) {
-    for (int i=0; i < A_LEN (n->bN->ports); i++) {
-      if (n->bN->ports[i].omit) continue;
-      if (c == n->bN->ports[i].c) return i;
-    }
-    return -1;
-  }
-
-  /* create a new net, based on this connection pointer */
-  def_fmt_nets *addNet (act_connection *c) {
-    def_fmt_nets *r;
-    ihash_bucket_t *b;
-
-    if (!iH) {
-      iH = ihash_new (8);
-    }
-
-    b = ihash_lookup (iH, (long)c);
-    if (b) {
-      return &nets[b->i];
-    }
-    b = ihash_add (iH, (long)c);
-    A_NEW (nets, def_fmt_nets);
-    b->i = A_LEN (nets);
-    A_NEXT (nets).idx = b->i;
-    A_NEXT (nets).netname = c;
-    A_NEXT (nets).pins = NULL;
-    A_NEXT (nets).skip = 0;
-    A_NEXT (nets).portid = ismyport (c);
-    if (c->isglobal()) {
-      A_NEWM (global_nets, int);
-      A_NEXT (global_nets) = b->i;
-      A_INC (global_nets);
-    }
-    r = &A_NEXT (nets);
-    A_INC (nets);
-    return r;
-  }
-
-  struct iHashtable *iH;
-  
   Process *p; 			/* sanity */
   int x, y;			/* size of component */
 
@@ -245,14 +165,6 @@ struct process_aux {
 
   /*-- local nets --*/
   int visited;
-  int nnets;
-  int *portmap;			/* maps ports to nets */
-
-  A_DECL (def_fmt_nets, nets);	/* the nets */
-
-  /*-- global nets --*/
-  A_DECL (int, global_nets);
-  
 };
 
 #define MICRON_CONVERSION 2000
@@ -262,271 +174,25 @@ static std::map<Process *, process_aux *> *procmap = NULL;
 static ActNetlistPass *netinfo = NULL;
 static ActBooleanizePass *boolinfo = NULL;
 
-
-void _collect_nets (Act *a, Process *p)
-{
-  process_aux *px;
-  Assert (p->isExpanded(), "What are we doing");
-
-  if (procmap->find (p) == procmap->end()) {
-    /* this is an instance with no circuits! */
-    px = new process_aux();
-    px->p = p;
-    (*procmap)[p] = px;
-  }
-  else {
-    px = procmap->find(p)->second;
-  }
-  if (px->visited) return;
-  px->visited = 1;
-
-  netlist_t *n = netinfo->getNL (p);
-  if (!n) {
-    fatal_error ("Could not find netlist for `%s'", p->getName());
-  }
-  px->n = n;
-
-  if (A_LEN (n->bN->ports) > 0) {
-    MALLOC (px->portmap, int, A_LEN (n->bN->ports));
-    for (int i = 0; i < A_LEN (n->bN->ports); i++) {
-      px->portmap[i] = -1;
-    }
-  }
-
-  ActInstiter i(p->CurScope());
-
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (!TypeFactory::isProcessType (vx->t)) continue;
-    _collect_nets (a, dynamic_cast<Process *>(vx->t->BaseType ()));
-  }
-
-  int iport = 0;
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (!TypeFactory::isProcessType (vx->t)) continue;
-
-    process_aux *sub;
-    Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
-    int ports_exist;
-
-    if (procmap->find (instproc) == procmap->end()) {
-      fatal_error ("Error looking for instproc %s!\n", instproc->getName());
-    }
-
-    sub = procmap->find (instproc)->second;
-    Assert (sub->n, "What?");
-
-    ports_exist = 0;
-    for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
-      if (sub->n->bN->ports[i].omit == 0) {
-	ports_exist = 1;
-	break;
-      }
-    }
-
-    if (!ports_exist) continue;
-
-    if (vx->t->arrayInfo()) {
-      Arraystep *as = vx->t->arrayInfo()->stepper();
-      while (!as->isend()) {
-	def_fmt_nets *d;
-	char *tmp;
-	char *tmp2;
-	
-	for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
-	  if (sub->n->bN->ports[i].omit) continue;
-
-
-	  d = px->addNet (n->bN->instports[iport]);
-
-	  tmp2 = as->string();
-	  MALLOC (tmp, char, strlen (vx->getName()) + strlen (tmp2) + 1);
-	  sprintf (tmp, "%s%s", vx->getName(), tmp2);
-	  FREE (tmp2);
-
-	  if (sub->portmap[i] == -1) {
-	    /* there are no nets associated with this port in the type
-	       of this instance */
-	    /* this port is not connected to anything else; we just need
-	       a generic new net that looks like <inst>.<port> */
-	    d->addPin (tmp, sub->n->bN->ports[i].c);
-	  }
-	  else {
-	    /* we need to copy the net up, and update all the instance names! */
-	    d->importPins (tmp, &sub->nets[sub->portmap[i]]);
-	    FREE (tmp);
-	  }
-	  int pid = px->ismyport (n->bN->instports[iport]);
-	  if (pid != -1) {
-	    /* this is a port pin! */
-	    px->portmap[pid] = d->idx;
-	  }
-	  iport++;
-	}
-
-	/*-- global nets are like an implicit pin --*/
-	for (int i=0; i < A_LEN (sub->global_nets); i++) {
-	  if (sub->global_nets[i] != -1) {
-	    d = px->addNet (sub->nets[sub->global_nets[i]].netname);
-	    tmp2 = as->string();
-	    MALLOC (tmp, char, strlen (vx->getName()) + strlen (tmp2) + 1);
-	    sprintf (tmp, "%s%s", vx->getName(), tmp2);
-	    FREE (tmp2);
-
-	    d->importPins (tmp, &sub->nets[sub->global_nets[i]]);
-	    sub->nets[sub->global_nets[i]].skip = 1;
-	    FREE (tmp);
-	  }
-	}
-	
-	as->step();
-      }
-      delete as;
-    }
-    else {
-      def_fmt_nets *d;
-      
-      for (int i=0; i < A_LEN (sub->n->bN->ports); i++) {
-	if (sub->n->bN->ports[i].omit) continue;
-
-	d = px->addNet (n->bN->instports[iport]);
-
-	if (sub->portmap[i] == -1) {
-	  /* there are no nets associated with this port in the type
-	     of this instance */
-	  /* this port is not connected to anything else; we just need
-	     a generic new net that looks like <inst>.<port> */
-	  d->addPin (vx->getName(), sub->n->bN->ports[i].c);
-	}
-	else {
-	  /* we need to copy the net up, and update all the instance names! */
-	  d->importPins (vx->getName(), &sub->nets[sub->portmap[i]]);
-	}
-	int pid = px->ismyport (n->bN->instports[iport]);
-	if (pid != -1) {
-	  /* this is a port pin! */
-	  px->portmap[pid] = d->idx;
-	}
-	iport++;
-      }
-
-      for (int i=0; i < A_LEN (sub->global_nets); i++) {
-	if (sub->global_nets[i] != -1) {
-	  d = px->addNet (sub->nets[sub->global_nets[i]].netname);
-	  d->importPins (vx->getName(), &sub->nets[sub->global_nets[i]]);
-	  sub->nets[sub->global_nets[i]].skip = 1;
-	}
-      }
-    }
-  }
-  Assert (iport == A_LEN (n->bN->instports), "What?!");
-
-  /* if a global net is also a port, then get rid of it from the
-     global net list */
-  for (int i=0; i < A_LEN (px->global_nets); i++) {
-    for (int j=0; j < A_LEN (px->n->bN->ports); j++) {
-      if (px->n->bN->ports[j].omit) continue;
-      if (px->portmap[j] == px->global_nets[i]) {
-	px->global_nets[i] = -1;
-      }
-    }
-  }
-  
-  return;
-}
-
-void _dump_collection (Act *a, Process *p)
-{
-  process_aux *px;
-  netlist_t *n;
-  Assert (p->isExpanded(), "What are we doing");
-
-  px = procmap->find(p)->second;
-  if (!px->visited) return;
-  px->visited = 0;
-
-  printf ("Process %s\n", p->getName());
-  for (int i=0; i < A_LEN (px->nets); i++) {
-    px->nets[i].Print (a, stdout, NULL, 1);
-  }
-  printf ("\n");
-
-  ActInstiter i(p->CurScope());
-
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (!TypeFactory::isProcessType (vx->t)) continue;
-    _dump_collection (a, dynamic_cast<Process *>(vx->t->BaseType ()));
-  }
-  
-  return;
-}
-
-
-
 static unsigned long netcount = 0;
-
 
 void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
 			 circuit_t *ckt)
 {
-  process_aux *px;
   Assert (p->isExpanded(), "What are we doing");
-
-  if (procmap->find (p) == procmap->end()) {
-    fatal_error ("Could not find netlist for `%s'", p->getName());
-  }
-  px = procmap->find(p)->second;
 
   act_boolean_netlist_t *n = boolinfo->getBNL (p);
   Assert (n, "What!");
 
   /* first, print my local nets */
-  for (int i=0; i < A_LEN (px->nets); i++) {
-    if (px->nets[i].portid == -1) {
-      if (px->nets[i].Print (a, fp, prefix)) {
-	netcount++;
-      }
+  for (int i=0; i < A_LEN (n->nets); i++) {
+    if (print_net (a, fp, prefix, &n->nets[i])) {
+      netcount++;
 #ifdef INTEGRATED_PLACER
-      px->nets[i].AddCkt (a, ckt, prefix);
+      add_ckt (a, ckt, prefix, &n->nets[i]);
 #endif      
     }
   }
-
-#if 0
-  /* debugging! */
-  fprintf (fp, "## nets = %d\n", A_LEN (n->nets));
-  for (int i=0; i < A_LEN (n->nets); i++) {
-    if (n->nets[i].port) continue;
-    if (n->nets[i].skip) continue;
-    if (A_LEN (n->nets[i].pins) < 2) continue;
-    /* print! */
-    ActId *tmp = n->nets[i].net->toid();
-    fprintf (fp, "## ");
-    if (prefix) {
-      prefix->Print (fp);
-      fprintf (fp, ".");
-    }
-    tmp->Print (fp);
-    delete tmp;
-    fprintf (fp, " ::");
-    for (int j=0; j < A_LEN (n->nets[i].pins); j++) {
-      fprintf (fp, " (");
-      if (prefix) {
-	prefix->Print (fp);
-	fprintf (fp, ".");
-      }
-      n->nets[i].pins[j].inst->Print (fp);
-      fprintf (fp, " ");
-      tmp = n->nets[i].pins[j].pin->toid();
-      tmp->Print (fp);
-      delete tmp;
-      fprintf (fp, ")");
-    }
-    fprintf (fp, "\n");
-  }
-#endif  
 
   ActInstiter i(p->CurScope());
 
@@ -537,16 +203,8 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
     ActId *newid;
     ActId *cpy;
     
-    process_aux *sub;
     Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
     int ports_exist;
-
-    if (procmap->find (instproc) == procmap->end()) {
-      fatal_error ("Error looking for instproc %s!\n", instproc->getName());
-    }
-
-    sub = procmap->find (instproc)->second;
-    Assert (sub->n, "What?");
 
     newid = new ActId (vx->getName());
     if (prefix) {
@@ -788,7 +446,6 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   gapply->setCookie (fp);
   gapply->setInstFn (count_inst);
   gapply->run (p);
-  //act_flat_apply_processes (a, fp, p, count_inst);
 
   /* add white space */
   total_area *= 2.0; // 1.7;
@@ -891,10 +548,6 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
  ;
   */
 
-  _collect_nets (a, p);
-
-  //_dump_collection (p);
-  
   _collect_emit_nets (a, NULL, p, fp, ckt);
 
   
