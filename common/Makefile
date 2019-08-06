@@ -23,13 +23,13 @@ LIB=libactlayout_$(EXT).a
 
 TARGETLIBS=$(LIB)
 
-TARGETINCS=geom.h tech.h
+TARGETINCS=geom.h 
 TARGETINCSUBDIR=act/layout
 
 TARGETCONF=layout.conf
 
 
-OBJS=geom.o tech.o
+OBJS=geom.o
 
 SRCS=$(OBJS:.o=.cc)
 
