@@ -24,8 +24,6 @@ TARGETS=$(EXE)
 
 TARGETCONF=layout.conf
 
-LAYOUTLIB=libactlayout.a
-
 OBJS=stk_pass.o cellgen.o main.o geom.o
 
 SRCS=$(OBJS:.o=.cc)
@@ -35,7 +33,7 @@ include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
 DEPEND_FLAGS += -DINTEGRATED_PLACER
 CFLAGS +=-std=c++11 -DINTEGRATED_PLACER
-$(EXE): $(OBJS) $(ACT_HOME)/lib/$(LAYOUTLIB) $(ACTPASSDEPEND)
+$(EXE): $(OBJS) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) -L. -lplacer $(LIBACTPASS)
 
 simple2: stacks.o cellgen.o simple2.o
