@@ -1,5 +1,0 @@
-i386_*
-*.o
-Makefile.deps
-*~
-libactlayout_*
