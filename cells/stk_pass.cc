@@ -500,7 +500,7 @@ static list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
     list_append (onestk, n);
     while ((e = pick_candidate_edge (n->e, n, type, &other))) {
       list_append (onestk, e);
-      list_append (onestk, (void*)e->visited);
+      list_append (onestk, (void*)(long)e->visited);
       e->visited = e->nfolds;
       list_append (onestk, other);
 #if 0
@@ -1013,4 +1013,22 @@ list_t *ActStackPass::getStacks(Process *p)
     return NULL;
   }
   return (*stkmap)[p];
+}
+
+
+int ActStackPass::isEmpty (list_t *stk)
+{
+  if (!stk) return 1;
+  
+  list_t *dual, *n, *p;
+  
+  dual = (list_t *) list_value (list_first (stk));
+  n = (list_t *) list_value (list_next (list_first (stk)));
+  p = (list_t *) list_value (list_next (list_next (list_first (stk))));
+
+  if (list_length (dual) > 0) return 0;
+  if (n && list_length (n) > 0) return 0;
+  if (p && list_length (p) > 0) return 0;
+  
+  return 1;
 }

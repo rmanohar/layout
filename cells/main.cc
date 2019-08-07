@@ -32,7 +32,6 @@
 #include <config.h>
 
 #include "stk_pass.h"
-//#include "stacks.h"
 #include "geom.h"
 
 #ifdef INTEGRATED_PLACER
@@ -722,7 +721,6 @@ int main (int argc, char **argv)
     netlist_t *N = netinfo->getNL (p);
     Assert (N, "Hmm...");
 
-    //list_t *l = stacks_create (N);
     list_t *l = stkp->getStacks (p);
 
     px = new process_aux();
