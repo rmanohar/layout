@@ -2,10 +2,10 @@
 #include <string.h>
 #include <list.h>
 #include <act/passes/netlist.h>
-#include <act/layout/geom.h>
-#include <act/layout/tech.h>
+#include <tech.h>
 #include <config.h>
 #include "stacks.h"
+#include "geom.h"
 #include <string>
 
 #ifdef INTEGRATED_PLACER

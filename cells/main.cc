@@ -27,12 +27,13 @@
 
 #include <act/passes/cells.h>
 #include <act/passes/netlist.h>
-#include <act/layout/geom.h>
 #include <act/iter.h>
 #include <hash.h>
 #include <config.h>
 
-#include "stacks.h"
+#include "stk_pass.h"
+//#include "stacks.h"
+#include "geom.h"
 
 #ifdef INTEGRATED_PLACER
 #include "placer.h"
@@ -41,6 +42,12 @@
 #endif
 
 static Act *global_act;
+
+void geom_create_from_stack (Act *a, FILE *fplef,
+			     circuit_t *ckt,
+			     netlist_t *N, list_t *stacks,
+			     int *sizex, int *sizey);
+
 
 
 static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
@@ -663,6 +670,8 @@ int main (int argc, char **argv)
   netinfo = new ActNetlistPass (a);
   netinfo->run (p);
 
+  ActStackPass *stkp = new ActStackPass (a);
+
   if (spice) {
     FILE *sp = fopen (spice, "w");
     if (!sp) { fatal_error ("Could not open file `%s'", spice); }
@@ -670,6 +679,8 @@ int main (int argc, char **argv)
     fclose (sp);
   }
   //a->Print (stdout);
+
+  stkp->run (p);
   
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
@@ -711,7 +722,8 @@ int main (int argc, char **argv)
     netlist_t *N = netinfo->getNL (p);
     Assert (N, "Hmm...");
 
-    list_t *l = stacks_create (N);
+    //list_t *l = stacks_create (N);
+    list_t *l = stkp->getStacks (p);
 
     px = new process_aux();
     px->p = p;

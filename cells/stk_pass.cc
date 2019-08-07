@@ -20,14 +20,12 @@
  **************************************************************************
  */
 #include <stdio.h>
-#include <list.h>
 #include <heap.h>
-#include <map>
-#include <act/passes.h>
+#include <act/act.h>
+#include <act/iter.h>
 #include <act/passes/netlist.h>
-#include <act/layout/tech.h>
-#include <act/layout/geom.h>
-#include "stacks.h"
+#include "stk_pass.h"
+
 
 #ifndef MIN
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
@@ -37,6 +35,43 @@
 
 #define COST(p)  ((p)->share*WEIGHT_SHARING + (p)->nodeshare)
 
+
+ActStackPass::ActStackPass(Act *a) : ActPass (a, "net2stk")
+{
+  stkmap = NULL;
+
+  if (!a->pass_find ("prs2net")) {
+    nl = new ActNetlistPass (a);
+  }
+  AddDependency ("prs2net");
+
+  ActPass *pass = a->pass_find ("prs2net");
+  Assert (pass, "Hmm...");
+  nl = dynamic_cast<ActNetlistPass *>(pass);
+  Assert (nl, "Hmm too...");
+}
+
+void ActStackPass::cleanup()
+{
+  if (stkmap) {
+    std::map<Process *, list_t *>::iterator it;
+    for (it = (*stkmap).begin(); it != (*stkmap).end(); it++) {
+      list_free (it->second);
+    }
+    delete stkmap;
+  }
+}
+
+
+ActStackPass::~ActStackPass()
+{
+  cleanup();
+}
+
+/*
+  Compute the # of pfets and # of nfets attached to a node
+  Assumes that both pcnt, ncnt are non-NULL pointers
+*/
 static void node_degree (node_t *n, int *pcnt, int *ncnt)
 {
   listitem_t *mi;
@@ -60,140 +95,10 @@ static void node_degree (node_t *n, int *pcnt, int *ncnt)
   }
 }
 
-static void dump_node (netlist_t *N, node_t *n)
-{
-  if (n->v) {
-    ActId *tmp = n->v->v->id->toid();
-    tmp->Print (stdout);
-    delete tmp;
-  }
-  else {
-    if (n == N->Vdd) {
-      printf ("Vdd");
-    }
-    else if (n == N->GND) {
-      printf ("GND");
-    }
-    else {
-      printf ("#%d", n->i);
-    }
-  }
-}
 
-static void dump_edge (netlist_t *N, edge_t *e)
-{
-  printf ("{");
-  if (e->type == EDGE_NFET) {
-    printf ("n%d:", e->flavor);
-  }
-  else {
-    printf ("p%d:", e->flavor);
-  }
-  printf ("[f:%d]", e->nfolds);
-  printf ("<%d,%d>", e->w, e->l);
-  printf (" g:");
-  dump_node (N, e->g);
-  printf (" ");
-  dump_node (N, e->a);
-  printf (" ");
-  dump_node (N, e->b);
-  printf ("}");
-}
-
-static void dump_nodepair (netlist_t *N, struct node_pair *p)
-{
-  printf ("(");
-  dump_node (N, p->n);
-  printf (",");
-  dump_node (N, p->p);
-  printf (")");
-}
-
-static void dump_gateinfo (netlist_t *N, edge_t *e1, edge_t *e2)
-{
-  if (e1 && e2) {
-    dump_node (N, e1->g);
-    if (e2->g != e1->g) {
-      printf (":");
-      dump_node (N, e2->g);
-    }
-  }
-  else if (e1) {
-    dump_node (N, e1->g);
-    printf (":");
-  }
-  else {
-    Assert (e2, "Eh?");
-    printf (":");
-    dump_node (N, e2->g);
-  }
-}
-
-static void dump_pair (netlist_t *N, struct gate_pairs *p)
-{
-  listitem_t *li;
-  edge_t *e1, *e2;
-
-  printf ("dual_stack [%d:n=%d]: ", COST(p), p->nodeshare);
-  dump_nodepair (N, &p->l);
-  printf (" ");
-  dump_nodepair (N, &p->r);
-  printf (" ");
-
-  if (p->basepair) {
-    e1 = p->u.e.n;
-    e2 = p->u.e.p;
-    printf (" e: ");
-    dump_gateinfo (N, e1, e2);
-    printf ("\n");
-    return;
-  }
-
-  struct node_pair prev;
-  
-  prev = p->l;
-  for (li = list_first (p->u.gp); li; li = list_next (li)) {
-    struct gate_pairs *tmp;
-
-    tmp = (struct gate_pairs *) list_value (li);
-    Assert (tmp->basepair, "Hmm");
-    e1 = tmp->u.e.n;
-    e2 = tmp->u.e.p;
-
-    printf ("\n\t e: ");
-
-    dump_nodepair (N, &prev);
-    printf ("[");
-
-    dump_gateinfo (N, e1, e2);
-    
-    printf("] -> ");
-
-    if (e1) {
-      if (prev.n == e1->a) {
-	prev.n = e1->b;
-      }
-      else {
-	Assert (prev.n == e1->b, "Hmm");
-	prev.n = e1->a;
-      }
-    }
-
-    if (e2) {
-      if (prev.p == e2->a) {
-	prev.p = e2->b;
-      }
-      else {
-	Assert (prev.p == e2->b, "Hmm");
-	prev.p = e2->a;
-      }
-    }
-    dump_nodepair (N, &prev);
-  }
-  printf("\n");
-}
-
-
+/*
+ * Search for gate pair to see if it is already in the heap
+ */
 static int find_pairs (Heap *h, struct gate_pairs *p)
 {
   struct gate_pairs *x;
@@ -241,6 +146,10 @@ static int find_pairs (Heap *h, struct gate_pairs *p)
   return 0;
 }
 
+
+/*
+ * release storage for gate pair
+ */
 static void delete_pair (struct gate_pairs *p)
 {
   if (!p->basepair)  {
@@ -254,6 +163,9 @@ static int available_edge (edge_t *e)
   return (e->nfolds - e->visited);
 }
 
+/*
+ * check to see if the gate pair is available
+ */
 static int available_basepair (struct gate_pairs *gp)
 {
   Assert (gp->basepair, "Hmm");
@@ -266,6 +178,9 @@ static int available_basepair (struct gate_pairs *gp)
   }
 }
 
+/*
+ * check if it is available, and if so mark it
+ */
 static int available_mark (struct gate_pairs *gp)
 {
   if (gp->basepair) {
@@ -298,6 +213,7 @@ static int available_mark (struct gate_pairs *gp)
     return 1;
   }
 }
+
 
 
 /* dir = 0, add to front; dir = 1, add to end */
@@ -556,7 +472,8 @@ static edge_t *pick_candidate_edge (list_t *l, node_t *n, int type, node_t **oth
   return eopt;
 }
 
-list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
+
+static list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
 {
   node_t *n;
   list_t *stks;
@@ -603,13 +520,19 @@ list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
   return stks;
 }
 
-/* for a given netlist, we need to build all the stacks */
-list_t *stacks_create (netlist_t *N)
+
+void ActStackPass::_createstacks (Process *p)
 {
+  netlist_t *N = nl->getNL (p);
+  Assert (N, "What?");
+
   node_t *n;
   list_t *pnodes, *nnodes;
   listitem_t *li, *mi;
   int maxedges;
+
+  /* check we have already handled this process */
+  if ((*stkmap)[p]) return;
 
   /* nodes to be processed */
   pnodes = list_new ();
@@ -1011,19 +934,83 @@ list_t *stacks_create (netlist_t *N)
   pnodes = tmplist;
 
   list_t *stk_n = NULL, *stk_p = NULL;
-  if (list_length (nnodes) == 0 && list_length (pnodes) == 0) {
-    list_free (nnodes);
-    list_free (pnodes);
-    /* we're done! */
-  }
-  else {
+  if (list_length (nnodes) > 0) {
     stk_n = compute_raw_stacks (N, nnodes, EDGE_NFET);
+  }
+  list_free (nnodes);
+  if (list_length (pnodes) > 0) {
     stk_p = compute_raw_stacks (N, pnodes, EDGE_PFET);
   }
+  list_free (pnodes);
+  
   list_t *retlist;
   retlist = list_new ();
   list_append (retlist, stks);
   list_append (retlist, stk_n);
   list_append (retlist, stk_p);
-  return retlist;
+
+  (*stkmap)[p] = retlist;
+
+  /* now create stacks for components */
+  ActInstiter i(p->CurScope());
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (TypeFactory::isProcessType (vx->t)) {
+      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
+      if (x->isExpanded()) {
+	_createstacks (x);
+      }
+    }
+  }
+}
+
+int ActStackPass::run (Process *p)
+{
+  init ();
+
+  if (!rundeps (p)) {
+    return 0;
+  }
+
+  if (!p) {
+    ActNamespace *g = ActNamespace::Global();
+    ActInstiter i(g->CurScope());
+
+    for (i = i.begin(); i != i.end(); i++) {
+      ValueIdx *vx = (*i);
+      if (TypeFactory::isProcessType (vx->t)) {
+	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
+	if (x->isExpanded()) {
+	  _createstacks (x);
+	}
+      }
+    }
+  }
+  else {
+    _createstacks (p);
+  }
+
+  _finished = 2;
+  return 1;
+}
+
+int ActStackPass::init ()
+{
+  cleanup();
+
+  stkmap = new std::map<Process *, list_t *>();
+
+  _finished = 1;
+  return 1;
+}
+
+
+list_t *ActStackPass::getStacks(Process *p)
+{
+  Assert (p->isExpanded(), "What?");
+  if (!completed()) {
+    warning ("ActStackPass: has not been run yet!");
+    return NULL;
+  }
+  return (*stkmap)[p];
 }
