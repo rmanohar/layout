@@ -788,7 +788,6 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
   int xpos = 0;
   BBox all;
   Process *p = N->bN->p;
-  const char *proc_name;
   int flag;
   int len;
   int well_pad = 0;
@@ -799,24 +798,9 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
   fold_n_width = config_get_int ("net.fold_nfet_width");
   fold_p_width = config_get_int ("net.fold_pfet_width");
 
-  proc_name = p->getName();
-  len = strlen (proc_name);
-  if (len > 2 && proc_name[len-1] == '>' && proc_name[len-2] == '<') {
-    flag = 1;
-  }
-  else {
-    flag = 0;
-  }
-  
   /*--- process gp ---*/
-  if (flag) {
-    sprintf (buf, "%s", proc_name);
-    sprintf (buf+len-2, "_stks");
-  }
-  else {
-    a->msnprintf (buf, 1024, "%s", proc_name);
-    sprintf (buf+strlen(buf), "_stks");
-  }
+  a->msnprintfproc (buf, 1024, p);
+  sprintf (buf+strlen(buf), "_stks");
   
   fp = fopen (buf, "w");
   if (!fp) {

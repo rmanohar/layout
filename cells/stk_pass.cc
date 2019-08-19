@@ -24,7 +24,7 @@
 #include <act/act.h>
 #include <act/iter.h>
 #include <act/passes/netlist.h>
-#include "stk_pass.h"
+#include <act/layout/stk_pass.h>
 
 
 #ifndef MIN
@@ -35,6 +35,75 @@
 
 #define COST(p)  ((p)->share*WEIGHT_SHARING + (p)->nodeshare)
 
+int node_pair::endpoint (netlist_t *N)
+{
+  int cost = 0;
+
+  if (n == p) {
+    cost++;
+  }
+  if (n == N->GND) {
+    cost += 2;
+  }
+  if (p == N->Vdd) {
+    cost += 2;
+  }
+  return cost;
+}
+
+int gate_pairs::available_basepair ()
+{
+  Assert (basepair, "Hmm");
+  if (u.e.n->visited + share <= u.e.n->nfolds &&
+      u.e.p->visited + share <= u.e.p->nfolds) {
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
+int gate_pairs::available()
+{
+  if (basepair) { return available_basepair(); }
+
+  listitem_t *li;
+  for (li = list_first (u.gp); li; li = list_next (li)) {
+    struct gate_pairs *tmp;
+    tmp = (struct gate_pairs *) list_value (li);
+    if (!tmp->available_basepair ()) return 0;
+  }
+  return 1;
+}
+
+int gate_pairs::available_mark()
+{
+  if (basepair) {
+    if (available_basepair()) {
+      n_start = u.e.n->visited;
+      p_start = u.e.p->visited;
+      u.e.n->visited += share;
+      u.e.p->visited += share;
+      visited = 1;
+      return 1;
+    }
+    return 0;
+  }
+  else {
+    if (available ()) {
+      listitem_t *li;
+      for (li = list_first (u.gp); li; li = list_next (li)) {
+	struct gate_pairs *tmp;
+	tmp = (struct gate_pairs *) list_value (li);
+	Assert (tmp->available_mark(), "Hmm");
+      }
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+}
 
 ActStackPass::ActStackPass(Act *a) : ActPass (a, "net2stk")
 {
@@ -162,58 +231,6 @@ static int available_edge (edge_t *e)
 {
   return (e->nfolds - e->visited);
 }
-
-/*
- * check to see if the gate pair is available
- */
-static int available_basepair (struct gate_pairs *gp)
-{
-  Assert (gp->basepair, "Hmm");
-  if ((gp->u.e.n->visited + gp->share <= gp->u.e.n->nfolds) &&
-      (gp->u.e.p->visited + gp->share <= gp->u.e.p->nfolds)) {
-    return 1;
-  }
-  else {
-    return 0;
-  }
-}
-
-/*
- * check if it is available, and if so mark it
- */
-static int available_mark (struct gate_pairs *gp)
-{
-  if (gp->basepair) {
-    if (available_basepair (gp)) {
-      gp->n_start = gp->u.e.n->visited;
-      gp->p_start = gp->u.e.p->visited;
-      gp->u.e.n->visited += gp->share;
-      gp->u.e.p->visited += gp->share;
-      gp->visited = 1;
-      return 1;
-    }
-    return 0;
-  }
-  else {
-    listitem_t *li;
-    for (li = list_first (gp->u.gp); li; li = list_next (li)) {
-      struct gate_pairs *tmp;
-      tmp = (struct gate_pairs *) list_value (li);
-      if (!available_basepair (tmp)) return 0;
-    }
-    for (li = list_first (gp->u.gp); li; li = list_next (li)) {
-      struct gate_pairs *tmp;
-      tmp = (struct gate_pairs *) list_value (li);
-      tmp->n_start = tmp->u.e.n->visited;
-      tmp->p_start = tmp->u.e.p->visited;
-      tmp->u.e.n->visited += tmp->share;
-      tmp->u.e.p->visited += tmp->share;
-      tmp->visited = 1;
-    }
-    return 1;
-  }
-}
-
 
 
 /* dir = 0, add to front; dir = 1, add to end */
@@ -740,7 +757,7 @@ void ActStackPass::_createstacks (Process *p)
       edge_t *e;
 
       gtmp = (struct gate_pairs *) list_value (li);
-      if (available_basepair (gtmp)) {
+      if (gtmp->available_basepair ()) {
 	/*-- this pair is still available --*/
 	if ((gtmp->l == gp->l) || (gtmp->l == gp->r) ||
 	    (gtmp->r == gp->l) || (gtmp->r == gp->r)) {
@@ -851,10 +868,10 @@ void ActStackPass::_createstacks (Process *p)
     gp = (struct gate_pairs *) heap_remove_min (final);
 
 #if 0
-      dump_pair (N, gp);
+    dump_pair (N, gp);
 #endif      
 
-    if (available_mark (gp)) {
+    if (gp->available_mark ()) {
       list_append (stks, gp);
     }
     else {

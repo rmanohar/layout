@@ -22,16 +22,54 @@
 #ifndef __ACT_GEOM_H__
 #define __ACT_GEOM_H__
 
-#include "tech.h"
+#include <tech.h>
+
+#define MIN_VALUE (signed)(1UL << (8*sizeof(long)-1))
+#define MAX_VALUE ((1UL << (8*sizeof(long)-1))-1)
+
+
+/* 
+   off field in the macro below 
+*/
+#define FET_OFFSET 0
+#define DIFF_OFFSET 1
+
+#define NUM_MINOR_OFFSET 2 // the # of offset values
+
+#define OFFSET_ONE_FLAVOR(type,off) ((type) + NUM_MINOR_OFFSET*(off))
+
+/* 
+   flavor = transistor flavor 
+   type = EDGE_NFET or EDGE_PFET
+   off = offsets defined above: FET/DIFF
+
+Order:
+
+     n/p + 2*(fet/diff) + 4*(flavor)
+
+  [ nfet pfet ndiff pdiff ] flavor0
+  [ nfet pfet ndiff pdiff ] flavor1
+  ...
+*/
+#define TOTAL_OFFSET(flavor,type,off) (2*NUM_MINOR_OFFSET*(flavor)+OFFSET_ONE_FLAVOR(type,off))
+
+
+#define TILE_ATTR_ISROUTE(x) ((x) == 0)
+#define TILE_ATTR_NONPOLY(x) ((x) - 1)
+#define TILE_ATTR_ISFET(x)   ((TILE_ATTR_NONPOLY(x) % (2*NUM_MINOR_OFFSET)) < 2)
+#define TILE_ATTR_ISDIFF(x)  !TILE_ATTR_ISFET(x)
+
+
+/* FET, DIFF */
+
+
 
 class Tile {
  private:
   struct {
     Tile *x, *y;
   } ll, ur;
-  
-  long llx, lly;
-  unsigned long xsz, ysz;
+  long llx, lly;		// lower left corner
   Tile *up, *down;
   unsigned int space:1;		/* 1 if this is a space tile */
   unsigned int virt:1;		// virtual tile: used to *add* spacing
@@ -46,35 +84,51 @@ class Tile {
 				 */
 
   void *net;			// the net associated with this tile,
-				// if it is not a space tile
+				// if it is not a space tile. NULL = no net
+
+  Tile *find (long x, long y);
+  Tile *splitX (long x);
+  Tile *splitY (long y);
+  list_t *collectRect (long _llx, long _lly,
+		       unsigned long wx, unsigned long wy);
+
+  int xmatch (long x) { return (llx <= x) && (!ur.x || (x < ur.x->llx)); }
+  int ymatch (long y) { return (lly <= y) && (!ur.y || (y < ur.y->lly)); }
+  long nextx() { return ur.x ? ur.x->llx : MAX_VALUE; }
+  long nexty() { return ur.y ? ur.y->lly : MAX_VALUE; }
+
+  long urx() { return nextx()-1; }
+  long ury() { return nexty()-1; }
+
+  void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
+		   void *cookie, void (*f) (void *, Tile *));
 				   
  public:
   Tile ();
   ~Tile ();
 
+  /*
+    Cuts tiles and returns a tile with this precise shape
+    If it would involve two different tiles of different types, then
+    it will flag it as an error.
+  */
+  Tile *addRect (long _llx, long _lly,
+		 unsigned long wx, unsigned long wy,
+		 bool force = false);
+
   friend class Layer;
 };
 
 
-/* 
-   type uses EDGE_PFET/NFET 
-*/
-#define FET_OFFSET 0
-#define DIFF_OFFSET 1
-#define NUM_MINOR_OFFSET 2
-
-#define OFFSET_ONE_FLAVOR(type,off) ((type) + NUM_MINOR_OFFSET*(off))
-#define TOTAL_OFFSET(flavor,type,off) (2*NUM_MINOR_OFFSET*(flavor)+OFFSET_ONE_FLAVOR(type,off))
 
 class Layer {
 protected:
   Material *mat;		/* technology-specific
 				   information. routing material for
 				   the layer. */
-  Tile *hint, *origin;		/* tile containing 0,0 / last lookup
-				   */
+  Tile *hint;			/* tile containing 0,0 / last lookup */
 
-  Tile *vhint, *vorigin;	// tile layer containing vias to the
+  Tile *vhint;			// tile layer containing vias to the
 				// next (upper) layer
   
   Layer *up, *down;		/* layer above and below */
@@ -89,9 +143,11 @@ protected:
   void setOther (int idx, Material *m);
   void setDownLink (Layer *x);
 
-  int Draw (int llx, int lly, int urx, int ury, void *net, int type = 0);
-  int Draw (int llx, int lly, int urx, int ury, int type = 0);
-
+  int Draw (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
+  int Draw (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
+  int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
+  int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
+  
   void BBox (int *llx, int *lly, int *urx, int *ury, int type = 0);
 
   friend class Layout;
@@ -105,9 +161,25 @@ public:
      The base layer is special as this is where the transistors are
      drawn. It includes poly, fets, diffusion, and virtual diffusion.
   */
-  Layer *base;
   Layout ();
   ~Layout();
+
+  int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy);
+  int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+  int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+  int DrawDiffBBox (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+
+  /* 0 = metal1, etc. */
+  int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy );
+
+  /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
+  int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);
+
+  Layer *getLayerPoly () { return base; }
+  Layer *getLayerDiff () { return base; }
+  Layer *getLayerWell () { return base; }
+  Layer *getLayerFet ()  { return base; }
+  
 
   PolyMat *getPoly ();
   FetMat *getFet (int type, int flavor = 0); // type == EDGE_NFET or EDGE_PFET
@@ -115,6 +187,12 @@ public:
   WellMat *getWell (int type, int flavor = 0);
   // NOTE: WELL TYPE is NOT THE TYPE OF THE WELL MATERIAL, BUT THE TYPE OF
   // THE FET THAT NEEDS THE WELL.
+
+private:
+  Layer *base;
+  Layer **metals;
+  int nflavors;
+  int nmetals;
   
 };
 

@@ -21,10 +21,11 @@
 EXE=stk.$(EXT)
 
 TARGETS=$(EXE)
-
 TARGETCONF=layout.conf
+TARGETINCS=stk_pass.h stk_layout.h geom.h
+TARGETINCSUBDIR=act/layout
 
-OBJS=stk_pass.o cellgen.o main.o geom.o
+OBJS=stk_pass.o cellgen.o main.o geom.o stk_layout.o
 
 SRCS=$(OBJS:.o=.cc)
 

@@ -23,6 +23,7 @@
 #define __ACT_STK_PASS_H__
 
 #include <act/act.h>
+#include <act/passes/netlist.h>
 #include <map>
 #include <hash.h>
 
@@ -31,28 +32,9 @@
 
 struct node_pair {
   node_t *n, *p;
-  bool operator==(const node_pair &x) {
-    return n == x.n && p == x.p;
-  }
-  int endpoint (netlist_t*N) 
-  {
-    int cost = 0;
-
-   if (n == p) {
-     cost++;
-   }
-   if (n == N->GND) {
-     cost += 2;
-   }
-   if (p == N->Vdd) {
-     cost += 2;
-   }
-   return cost;
-  }
-  int midpoint (netlist_t *N)
-  {
-    if (n == p) { return 1; } else { return 0; }
-  }
+  bool operator==(const node_pair &x) { return n == x.n && p == x.p; }
+  int endpoint (netlist_t*N);
+  int midpoint (netlist_t *N) { if (n == p) { return 1; } else { return 0; } }
 };
 
 struct gate_pairs {
@@ -73,6 +55,17 @@ struct gate_pairs {
   short n_fold, p_fold;	     // folding threshold
   int nodeshare;	     // shared vertical nodes + bonus
                              // points for supply on ends of the stack
+
+  /* check if a base pair is available */
+  int available_basepair();
+
+  /* check if the gate pair elements are available */
+  int available();
+
+  /*
+   * check if it is available, and if so mark it
+   */
+  int available_mark ();
 };
 
 
