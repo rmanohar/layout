@@ -47,6 +47,7 @@ Tile::Tile ()
   space = 1;
   virt = 0;
   attr = 0;
+  net = NULL;
 }
 
 Tile::~Tile()
@@ -63,6 +64,7 @@ Tile::~Tile()
   space = 1;
   virt = 0;
   attr = 0;
+  net = NULL;
 }
   
 
@@ -241,7 +243,7 @@ void Tile::print (FILE *fp)
       (getury() == MAX_VALUE-1 ? (WINDOW)/2 : getury());
 
     fprintf (fp, "<rect x=%d y=%d width=%d height=%d stroke=green stroke-width=1 fill=white />\n",
-	     OFFSET/2 + SCALE*mllx, OFFSET/2 + SCALE*(WINDOW - mury), SCALE*(murx - mllx + 1), SCALE*(mury - mlly + 1));
+	     OFFSET/2 + SCALE*mllx, OFFSET/2 + SCALE*(WINDOW - mury), SCALE*(murx - mllx), SCALE*(mury - mlly));
 
 #if 0    
     fprintf (fp, "<text x=%d y=%d font-size=50%%>(#%d, #%d)</text>\n",
@@ -260,7 +262,7 @@ void Tile::print (FILE *fp)
 
   }
   
-  printf ("[#%d] (", this->idx);
+  printf ("[#%d|a=%d,sp=%d] (", this->idx, this->attr, this->space);
   if (getllx() == MIN_VALUE) {
     printf ("-inf");
   }
@@ -295,11 +297,11 @@ void Tile::print (FILE *fp)
 	  ur.y ? ur.y->idx : -1);
 }
 
-static int in_apply;
-
 Tile *Tile::find (long x, long y)
 {
+#if 0
   printf ("find: (%ld, %ld)\n", x, y);
+#endif
   
   Tile *t = this;
   do {
@@ -344,14 +346,14 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
   list_t *frontier;
   long _urx, _ury;
 
-  _urx = _llx + wx - 1;
-  _ury = _lly + wy - 1;
+  _urx = _llx + (signed long)wx - 1;
+  _ury = _lly + (signed long)wy - 1;
 
-  in_apply = 1;
+#if 0
+  printf (" search: (%ld,%ld) -> (%ld,%ld)\n", _llx, _lly, _urx, _ury);
+#endif  
 
   t = find (_llx, _lly);
-
-  in_apply = 0;
 
   frontier = list_new ();
   list_append (frontier, t);
@@ -369,15 +371,22 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
                  edge is handled.
       
    */
+
   while (!list_isempty (frontier)) {
     Tile *tmp;
     t = (Tile *) list_delete_tail (frontier);
-    /* invariant: t's ll corner is in the region */
+
+#if 0
+    printf ("  :: "); t->print();
+#endif    
+    
     tmp = t->ur.x;
+    /* right edge downward traversal */
     while (tmp) {
-      if (tmp->getury() < t->lly) break;
+      if (tmp->getury() < _lly) break;
       if (_llx <= tmp->llx && tmp->llx <= _urx &&
-	  _lly <= tmp->lly && tmp->lly <= _ury) {
+	  /* _lly <= tmp->lly && tmp->lly <= _ury */
+	  !(tmp->getury() < _lly || tmp->lly > _ury)) {
 	list_append_head (frontier, tmp);
       }
       else {
@@ -387,8 +396,9 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
     }
     tmp = t->ur.y;
     while (tmp) {
-      if (tmp->geturx() < t->llx) break;
-      if (_llx <= tmp->llx && tmp->llx <= _urx &&
+      if (tmp->geturx() < _llx) break;
+      if (!(_llx > tmp->geturx() || tmp->llx > _urx) &&
+	  /*_llx <= tmp->llx && tmp->llx <= _urx*/
 	  _lly <= tmp->lly && tmp->lly <= _ury) {
 	list_append_head (frontier, tmp);
       }
@@ -417,8 +427,7 @@ list_t *Tile::collectRect (long _llx, long _lly,
   list_t *l;
 
   l = list_new ();
-
-  applyTiles (_llx, _lly, _llx + wx - 1, _lly + wy - 1, l, append_tile);
+  applyTiles (_llx, _lly, wx, wy, l, append_tile);
   
   return l;
 }
@@ -429,7 +438,7 @@ void Tile::printall ()
 {
   list_t *l;
 
-#if 1
+#if 0
   char buf[100];
   sprintf (buf, "debug.%d.html", pall++);
   FILE *fp = fopen (buf, "w");
@@ -443,7 +452,9 @@ void Tile::printall ()
   while (!list_isempty (l)) {
     Tile *tmp = (Tile *) stack_pop (l);
     if (!tmp) continue;
+#if 0    
     tmp->print (fp);
+#endif    
     if (tmp->ll.x && !tmp->ll.x->virt) {
       tmp->ll.x->virt = 1;
       list_append (l, tmp->ll.x);
@@ -485,7 +496,7 @@ void Tile::printall ()
   }
   list_free (l);
 
-#if 1
+#if 0
   fprintf (fp, "</svg>\n");
   fprintf (fp, "</body>\n</html>\n");
   fclose (fp);
@@ -495,8 +506,8 @@ void Tile::printall ()
 Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		     bool force)
 {
-#if 1
-  printf ("addrect: (%ld, %ld) -> (%ld, %ld)\n", _llx, _lly,
+#if 0
+  printf ("addrect @ %d: (%ld, %ld) -> (%ld, %ld)\n", pall, _llx, _lly,
 	  _llx + wx - 1, _lly + wy - 1);
   printall();
   fflush (stdout);
@@ -515,7 +526,16 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
   }
 
   Tile *t = (Tile *) list_value (list_first (l));
-  void *tnet = t->net;
+  void *tnet = NULL;
+
+#if 0
+  printf ("   Region has %d tiles\n", list_length (l));
+  for (li = list_first (l); li; li = list_next (li)) {
+    Tile *tmp = (Tile *) list_value (li);
+    printf ("  -> "); tmp->print ();
+  }
+  fflush (stdout);
+#endif  
 
   /* 
      check that all the tile types match
@@ -559,30 +579,61 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
      walk through all the tiles with overlap, and prune them so that
      we have created a region that is the specified rectangle 
   */
+  
   while (!list_isempty (l)) {
     t = (Tile *) list_delete_tail (l);
 
+#if 0
+    printf ("   Tile: "); t->print();
+#endif
+    
     if (t->llx < _llx) {
-      t = t->splitX (_llx);	/* left edge prune */
-    }
+      t = t->splitX (_llx);	/* left edge prune */ 
+#if 0
+      printf ("   splitX -> ");
+      t->print ();
+#endif      
+   }
     if (t->lly < _lly) {
       t = t->splitY (_lly);	/* bottom edge prune */
+#if 0
+      printf ("   splitY -> ");
+      t->print();
+#endif      
     }
 
     if (t->nextx() > _llx + (signed long)wx) {
-      t->splitX (_llx+(signed long)wx);	/* right edge prune */
+      Tile *tmp;
+      tmp = t->splitX (_llx+(signed long)wx);	/* right edge prune */
+#if 0
+      printf ("   splitX => ");
+      tmp->print ();
+#endif      
     }
     if (t->nexty() > _lly + (signed long)wy) {
-      t->splitY (_lly + (signed long)wy);	/* top edge prune */
+      Tile *tmp;
+      tmp = t->splitY (_lly + (signed long)wy);	/* top edge prune */
+#if 0
+      printf ("   splitY => ");
+      tmp->print();
+#endif      
     }
+
+#if 0
+    printf ("   final chunk: "); t->print();
+    fflush (stdout);
+#endif    
     list_append (ml, t);
   }
 
-#if 1
-  printf ("--- intermediate: collected region + split rects ---\n");
+#if 0
+  printf ("--- %d intermediate: collected region + split rects ---\n", pall);
   printall ();
   printf ("---- end split\n");
-#endif  
+  fflush (stdout);
+#endif
+
+  int flag = 0;
 
   while (!list_isempty (ml)) {
     /* repair stitches */
@@ -592,12 +643,14 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
       /* ll corner tile; import stitches */
       rt->ll.x = tmp->ll.x;
       rt->ll.y = tmp->ll.y;
+      flag |= 1;
     }
 
-    if ((tmp->nextx() == _llx + (signed long)wx) && (tmp->nexty() == _lly + (signed long)wy)) {
+    if ((tmp->geturx() == _llx + (signed long)wx - 1) && (tmp->getury() == _lly + (signed long)wy-1)) {
       /* ur corner; import stitches */
       rt->ur.x = tmp->ur.x;
       rt->ur.y = tmp->ur.y;
+      flag |= 2;
     }
 
     /* left edge */
@@ -643,7 +696,11 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
   }
   list_free (ml);
 
-#if 1
+  if (flag != 3) {
+    warning ("new tile link error: ll = %d ; ur = %d", flag & 1, (flag >> 1));
+    rt->print();
+  }
+#if 0
   printf ("-- new tile: ");
   rt->print ();
   printf ("-- all below --\n");
@@ -654,18 +711,19 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
   
   for (li = list_first (l); li; li = list_next (li)) {
     Tile *tmp = (Tile *) list_value (li);
-#if 1    
+#if 0
     printf ("delete #%d\n", tmp->idx);
-#endif    
+    fflush (stdout);
+#endif
     delete tmp;
   }
   list_free (l);
 
-#if 1  
+#if 0
   printf ("--- after ----\n");
   printall();
-  fflush (stdout);
   printf ("\n");
+  fflush (stdout);
 #endif  
 
   return rt;
@@ -694,6 +752,7 @@ Tile *Tile::splitX (long x)
   t->attr = attr;
   t->up = up;
   t->down = down;
+  t->net = net;
 
   t->llx = x;
   t->lly = lly;
@@ -772,6 +831,7 @@ Tile *Tile::splitY (long y)
   t->attr = attr;
   t->up = up;
   t->down = down;
+  t->net = net;
 
   t->llx = llx;
   t->lly = y;
