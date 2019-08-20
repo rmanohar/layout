@@ -404,7 +404,8 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 	  list_append_head (frontier, tmp);
       }
       else {
-	break;
+	if (!(_llx <= tmp->llx && tmp->llx <= _urx))
+	  break;
       }
 
       if (tmp->getlly() > t->getlly()) {
@@ -1088,7 +1089,7 @@ void Layer::PrintRect (FILE *fp)
     }
     fprintf (fp, " %ld %ld %ld %ld\n",
 	     tmp->getllx(), tmp->getlly(),
-	     tmp->geturx(), tmp->getury());
+	     tmp->geturx()+1, tmp->getury()+1);
   }    
   list_free (l);
 }
