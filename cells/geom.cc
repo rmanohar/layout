@@ -68,9 +68,10 @@ Tile::~Tile()
 }
   
 
-Layer::Layer (Material *m)
+Layer::Layer (Material *m, netlist_t *_n)
 {
   mat = m;
+  N = _n;
 
   up = NULL;
   down = NULL;
@@ -127,15 +128,17 @@ void Layout::Init()
   Technology::Init ("layout.conf");
 }
 
-Layout::Layout()
+Layout::Layout(netlist_t *_n)
 {
   Layout::Init();
   
   /*-- create all the layers --*/
   Assert (Technology::T, "Initialization error");
 
+  N = _n;
+
   /* 1. base layer for diff, well, fets */
-  base = new Layer (Technology::T->poly);
+  base = new Layer (Technology::T->poly, _n);
 
   /* 2. Also has #flavors*6 materials! */
   int sz = config_get_table_size ("act.dev_flavors");
@@ -163,7 +166,7 @@ Layout::Layout()
 
   /* create metal layers */
   for (int i=0; i < Technology::T->nmetals; i++) {
-    metals[i] = new Layer (Technology::T->metal[i]);
+    metals[i] = new Layer (Technology::T->metal[i], _n);
     metals[i]->setDownLink (prev);
     prev = metals[i];
   }
@@ -335,6 +338,7 @@ Tile *Tile::find (long x, long y)
 }
 
 
+static int debug_apply = 0;
 /*
   Returns a list of all the tiles that overlap with the specified region
 */
@@ -349,8 +353,10 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
   _urx = _llx + (signed long)wx - 1;
   _ury = _lly + (signed long)wy - 1;
 
-#if 0
-  printf (" search: (%ld,%ld) -> (%ld,%ld)\n", _llx, _lly, _urx, _ury);
+#if 1
+  if (debug_apply) {
+    printf (" search: (%ld,%ld) -> (%ld,%ld)\n", _llx, _lly, _urx, _ury);
+  }
 #endif  
 
   t = find (_llx, _lly);
@@ -358,54 +364,55 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
   frontier = list_new ();
   list_append (frontier, t);
 
-  /*  double-check which tiles get added.
-
-      ~~~~~~~~ 
-     |        |
-      ~~~~~~~~ 
-
-      invariant: everything to the left and below is handled.
-                 everything to the right that is below my bottom line
-                 is handled.
-		 everything to the top that is to the left of my left
-                 edge is handled.
-      
-   */
-
+  /* 1. create vertical wavefront */
+  while (t->getury() < _ury) {
+    t = t->find (_llx, t->getury() + 1);
+    list_append (frontier, t);
+  }
+  
   while (!list_isempty (frontier)) {
     Tile *tmp;
     t = (Tile *) list_delete_tail (frontier);
 
-#if 0
-    printf ("  :: "); t->print();
+#if 1
+    if (debug_apply) {
+      printf ("  :: "); t->print();
+    }
 #endif    
-    
+    /* traverse right edge downward. 
+       if this tile might be added by someone else on the frontier,
+       done.
+       
+    */
     tmp = t->ur.x;
     /* right edge downward traversal */
     while (tmp) {
-      if (tmp->getury() < _lly) break;
       if (_llx <= tmp->llx && tmp->llx <= _urx &&
-	  /* _lly <= tmp->lly && tmp->lly <= _ury */
 	  !(tmp->getury() < _lly || tmp->lly > _ury)) {
-	list_append_head (frontier, tmp);
+#if 1
+	/* another tile might add this one if:
+	   1. it goes below t->lly
+	   2. t->lly is not at the bottom limit
+	*/
+	if (tmp->getlly() < t->lly && t->lly > _lly)
+	  break;
+	
+	if (debug_apply) {
+	  printf ("     -> add: "); tmp->print();
+	}
+#endif
+	  list_append_head (frontier, tmp);
       }
       else {
 	break;
       }
-      tmp = tmp->ll.y;
-    }
-    tmp = t->ur.y;
-    while (tmp) {
-      if (tmp->geturx() < _llx) break;
-      if (!(_llx > tmp->geturx() || tmp->llx > _urx) &&
-	  /*_llx <= tmp->llx && tmp->llx <= _urx*/
-	  _lly <= tmp->lly && tmp->lly <= _ury) {
-	list_append_head (frontier, tmp);
+
+      if (tmp->getlly() > t->getlly()) {
+	tmp = tmp->ll.y;
       }
       else {
-	break;
+	tmp = NULL;
       }
-      tmp = tmp->ll.x;
     }
     (*f) (cookie, t); 		/* apply function */
   }
@@ -438,7 +445,7 @@ void Tile::printall ()
 {
   list_t *l;
 
-#if 0
+#if 1
   char buf[100];
   sprintf (buf, "debug.%d.html", pall++);
   FILE *fp = fopen (buf, "w");
@@ -452,9 +459,11 @@ void Tile::printall ()
   while (!list_isempty (l)) {
     Tile *tmp = (Tile *) stack_pop (l);
     if (!tmp) continue;
-#if 0    
+#if 1
+    //tmp->print();
     tmp->print (fp);
-#endif    
+#endif
+    
     if (tmp->ll.x && !tmp->ll.x->virt) {
       tmp->ll.x->virt = 1;
       list_append (l, tmp->ll.x);
@@ -496,7 +505,7 @@ void Tile::printall ()
   }
   list_free (l);
 
-#if 0
+#if 1
   fprintf (fp, "</svg>\n");
   fprintf (fp, "</body>\n</html>\n");
   fclose (fp);
@@ -506,10 +515,10 @@ void Tile::printall ()
 Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		     bool force)
 {
-#if 0
+#if 1
   printf ("addrect @ %d: (%ld, %ld) -> (%ld, %ld)\n", pall, _llx, _lly,
 	  _llx + wx - 1, _lly + wy - 1);
-  printall();
+  //printall();
   fflush (stdout);
 #endif  
   
@@ -517,7 +526,7 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
     we first collect all the tiles within the region.
   */
   list_t *l = collectRect (_llx, _lly, wx, wy);
-  
+
   list_t *ml;
   listitem_t *li;
 
@@ -1003,4 +1012,83 @@ int Layout::DrawVia (int num, long llx, long lly, unsigned long wx, unsigned lon
   else {
     return metals[num-1]->drawVia (llx, lly, wx, wy, 0);
   }
+}
+
+
+void Layout::PrintRect (FILE *fp)
+{
+  base->PrintRect (fp);
+  for (int i=0; i < nmetals; i++) {
+    metals[i]->PrintRect (fp);
+  }
+}
+
+
+static void append_nonspacetile (void *cookie, Tile *t)
+{
+  list_t *l = (list_t *) cookie;
+
+  if (!t->isSpace()) {
+    list_append (l, t);
+  }
+}
+
+static void dump_node (FILE *fp, netlist_t *N, node_t *n)
+{
+  if (n->v) {
+    ActId *tmp = n->v->v->id->toid();
+    tmp->Print (fp);
+    delete tmp;
+  }
+  else {
+    if (n == N->Vdd) {
+      fprintf (fp, "Vdd");
+    }
+    else if (n == N->GND) {
+      fprintf (fp, "GND");
+    }
+    else {
+      fprintf (fp, "#%d", n->i);
+    }
+  }
+}
+
+void Layer::PrintRect (FILE *fp)
+{
+  list_t *l;
+
+  l = list_new ();
+
+  debug_apply = 0;
+  
+  hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
+		    (unsigned long)MAX_VALUE - (MIN_VALUE + 2), (unsigned long)MAX_VALUE - (MIN_VALUE + 2),
+		    l, append_nonspacetile);
+
+  //hint->printall();
+  
+  debug_apply = 0;
+
+
+  while (!list_isempty (l)) {
+    Tile *tmp = (Tile *) list_delete_tail (l);
+    fprintf (fp, "rect ");
+    if (tmp->net) {
+      dump_node (fp, N, (node_t *)tmp->net);
+    }
+    else {
+      fprintf (fp, "#");
+    }
+    
+    if (TILE_ATTR_ISROUTE(tmp->getAttr())) {
+      fprintf (fp, " %s", mat->getName());
+    }
+    else {
+      fprintf (fp, " %s", other[TILE_ATTR_NONPOLY(tmp->getAttr())]->getName());
+    }
+    fprintf (fp, " %ld %ld %ld %ld\n",
+	     tmp->getllx(), tmp->getlly(),
+	     tmp->geturx(), tmp->getury());
+  }    
+  list_free (l);
 }

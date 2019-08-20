@@ -781,7 +781,7 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
 {
   int i;
   listitem_t *li;
-  Layout *L = new Layout();
+  Layout *L = new Layout(N);
   char buf[1024];
   FILE *fp;
   BBox b;

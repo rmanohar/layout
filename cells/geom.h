@@ -103,10 +103,11 @@ class Tile {
   void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		   void *cookie, void (*f) (void *, Tile *));
 
-  void print (FILE *fp = NULL);
-  void printall ();
 
  public:
+  void print (FILE *fp = NULL);
+  void printall ();
+  
   Tile ();
   ~Tile ();
 
@@ -123,6 +124,10 @@ class Tile {
   long getury() { return nexty()-1; }
   long getllx() { return llx; }
   long getlly() { return lly; }
+  int isSpace() { return space; }
+  unsigned int getAttr() { return attr; }
+  unsigned int isVirt() { return virt; }
+  
   
   friend class Layer;
 };
@@ -144,8 +149,10 @@ protected:
   Material **other;	       // for the base layer, fet + diff
   int nother;
 
+  netlist_t *N;
+
  public:
-  Layer (Material *);
+  Layer (Material *, netlist_t *);
   ~Layer ();
 
   void allocOther (int sz);
@@ -160,6 +167,8 @@ protected:
   /* type = -1 : all! */
   void BBox (int *llx, int *lly, int *urx, int *ury, int type = -1);
 
+  void PrintRect (FILE *fp);
+
   friend class Layout;
 };
 
@@ -173,7 +182,7 @@ public:
      The base layer is special as this is where the transistors are
      drawn. It includes poly, fets, diffusion, and virtual diffusion.
   */
-  Layout ();
+  Layout (netlist_t *);
   ~Layout();
 
   int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy, void *net);
@@ -202,11 +211,14 @@ public:
 
   void getBBox (long *llx, long *lly, long *urx, long *ury);
 
+  void PrintRect (FILE *fp);
+
 private:
   Layer *base;
   Layer **metals;
   int nflavors;
   int nmetals;
+  netlist_t *N;
 };
 
 

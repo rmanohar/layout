@@ -537,6 +537,10 @@ static list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
   return stks;
 }
 
+netlist_t *ActStackPass::getNL (Process *p)
+{
+  return nl->getNL (p);
+}
 
 void ActStackPass::_createstacks (Process *p)
 {

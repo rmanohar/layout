@@ -636,7 +636,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
     for (si = list_first (gplist); si; si = list_next (si)) {
       struct gate_pairs *gp;
-      Layout *l = new Layout();
+      Layout *l = new Layout(stk->getNL (p));
       gp = (struct gate_pairs *) list_value (si);
 
       /*--- process gp ---*/
@@ -646,8 +646,10 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       printf ("BBOX: p (%d,%d) -> (%d,%d); n (%d,%d) -> (%d,%d)\n", 
 	      b.p.llx, b.p.lly, b.p.urx, b.p.ury,
 	      b.n.llx, b.n.lly, b.n.urx, b.n.ury);
+      l->PrintRect (stdout);
       printf ("---\n");
 #endif
+      
     }
   }
 
@@ -661,6 +663,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     fatal_error ("Could not open file `%s' for writing!", buf);
   }
 #endif
+  
+  (*layoutmap)[p] = NULL;
   
 }
 
@@ -728,4 +732,3 @@ int ActStackLayoutPass::init ()
   _finished = 1;
   return 1;
 }
-

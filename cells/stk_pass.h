@@ -76,6 +76,7 @@ class ActStackPass : public ActPass {
 
   int run (Process *p = NULL);
 
+  netlist_t *getNL (Process *p = NULL);
   list_t *getStacks (Process *p = NULL);
   int isEmpty (list_t *stk); 
 
