@@ -248,18 +248,6 @@ void Tile::print (FILE *fp)
     fprintf (fp, "<rect x=%d y=%d width=%d height=%d stroke=green stroke-width=1 fill=white />\n",
 	     OFFSET/2 + SCALE*mllx, OFFSET/2 + SCALE*(WINDOW - mury), SCALE*(murx - mllx), SCALE*(mury - mlly));
 
-#if 0    
-    fprintf (fp, "<text x=%d y=%d font-size=50%%>(#%d, #%d)</text>\n",
-	     OFFSET/2 + SCALE*(mllx+1), OFFSET/2 + SCALE*(WINDOW-mlly-1),
-	     (ll.x ? ll.x->idx : -1),
-	     (ll.y ? ll.y->idx : -1));
-
-    fprintf (fp, "<text x=%d y=%d text-anchor=end font-size=50%%>(#%d, #%d)</text>\n",
-	     OFFSET/2 + SCALE*(murx-1),
-	     6 + OFFSET/2 + SCALE*(WINDOW - mury + 1), (ur.x ? ur.x->idx : -1),
-	     (ur.y ? ur.y->idx : -1));
-#endif    
-
     fprintf (fp, "<text x=%d y=%d font-size=50%% text-anchor=middle> %d </text>\n",
 	     OFFSET/2 + SCALE*(mllx + murx)/2, OFFSET/2 + SCALE*(WINDOW-(mlly+mury)/2), idx);
 
