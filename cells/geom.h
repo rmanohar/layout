@@ -24,8 +24,8 @@
 
 #include <tech.h>
 
-#define MIN_VALUE (signed)(1UL << (8*sizeof(long)-1))
-#define MAX_VALUE ((1UL << (8*sizeof(long)-1))-1)
+#define MIN_VALUE (signed long)(1UL << (8*sizeof(long)-1))
+#define MAX_VALUE (signed long)((1UL << (8*sizeof(long)-1))-1)
 
 
 /* 
@@ -66,6 +66,8 @@ Order:
 
 class Tile {
  private:
+  int idx;
+  
   struct {
     Tile *x, *y;
   } ll, ur;
@@ -97,12 +99,13 @@ class Tile {
   long nextx() { return ur.x ? ur.x->llx : MAX_VALUE; }
   long nexty() { return ur.y ? ur.y->lly : MAX_VALUE; }
 
-  long urx() { return nextx()-1; }
-  long ury() { return nexty()-1; }
 
   void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		   void *cookie, void (*f) (void *, Tile *));
-				   
+
+  void print (FILE *fp = NULL);
+  void printall ();
+
  public:
   Tile ();
   ~Tile ();
@@ -116,6 +119,11 @@ class Tile {
 		 unsigned long wx, unsigned long wy,
 		 bool force = false);
 
+  long geturx() { return nextx()-1; }
+  long getury() { return nexty()-1; }
+  long getllx() { return llx; }
+  long getlly() { return lly; }
+  
   friend class Layer;
 };
 
@@ -135,6 +143,7 @@ protected:
   
   Material **other;	       // for the base layer, fet + diff
   int nother;
+
  public:
   Layer (Material *);
   ~Layer ();
@@ -147,14 +156,17 @@ protected:
   int Draw (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
-  
-  void BBox (int *llx, int *lly, int *urx, int *ury, int type = 0);
+
+  /* type = -1 : all! */
+  void BBox (int *llx, int *lly, int *urx, int *ury, int type = -1);
 
   friend class Layout;
 };
 
+
 class Layout {
 public:
+  static bool _initdone;
   static void Init();
   
   /* 
@@ -164,13 +176,13 @@ public:
   Layout ();
   ~Layout();
 
-  int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy);
-  int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
-  int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+  int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
   int DrawDiffBBox (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
 
   /* 0 = metal1, etc. */
-  int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy );
+  int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
 
   /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
   int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);
@@ -188,14 +200,47 @@ public:
   // NOTE: WELL TYPE is NOT THE TYPE OF THE WELL MATERIAL, BUT THE TYPE OF
   // THE FET THAT NEEDS THE WELL.
 
+  void getBBox (long *llx, long *lly, long *urx, long *ury);
+
 private:
   Layer *base;
   Layer **metals;
   int nflavors;
   int nmetals;
-  
 };
 
+
+class LayoutBlob;
+
+struct blob_list {
+  LayoutBlob *b;
+  long gap;
+  struct blob_list *next;
+};
+
+class LayoutBlob {
+private:
+  union {
+    struct {
+      blob_list *hd, *tl;
+    } l;			// a blob list
+    struct {
+      Layout *l;		// ... layout block
+      unsigned int mirror;	// ... mirroring
+    } base;
+  };
+  int type;			// type field: 0 = base, 1 = horiz,
+				// 2 = vert
+
+public:
+  LayoutBlob (int type);
+  ~LayoutBlob ();
+
+  void appendBlob (LayoutBlob *b, long gap);
+
+  Layout *splat();
+
+};
 
 
 #endif /* __ACT_GEOM_H__ */

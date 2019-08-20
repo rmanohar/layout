@@ -45,8 +45,13 @@ class ActStackLayoutPass : public ActPass {
   void cleanup();
 
   void _createlayout (Process *p);
+  void _createlocallayout (Process *p);
 
   ActStackPass *stk;
+
+  int min_width;
+  int fold_n_width;
+  int fold_p_width;
 
   std::map<Process *, Layout *> *layoutmap;
 };

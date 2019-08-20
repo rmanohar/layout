@@ -32,6 +32,7 @@
 #include <config.h>
 
 #include "stk_pass.h"
+#include "stk_layout.h"
 #include "geom.h"
 
 #ifdef INTEGRATED_PLACER
@@ -671,6 +672,8 @@ int main (int argc, char **argv)
 
   ActStackPass *stkp = new ActStackPass (a);
 
+  ActStackLayoutPass *lp = new ActStackLayoutPass (a);
+
   if (spice) {
     FILE *sp = fopen (spice, "w");
     if (!sp) { fatal_error ("Could not open file `%s'", spice); }
@@ -680,6 +683,8 @@ int main (int argc, char **argv)
   //a->Print (stdout);
 
   stkp->run (p);
+
+  lp->run (p);
   
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
