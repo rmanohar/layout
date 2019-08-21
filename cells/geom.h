@@ -235,11 +235,17 @@ private:
 
 class LayoutBlob;
 
+enum blob_type { BLOB_BASE, BLOB_HORIZ, BLOB_VERT };
+enum mirror_type { MIRROR_NONE, MIRROR_LR, MIRROR_TB, MIRROR_BOTH };
+   // do we want to support 90 degree rotation?
+
 struct blob_list {
   LayoutBlob *b;
   long gap;
+  mirror_type mirror;
   struct blob_list *next;
 };
+
 
 class LayoutBlob {
 private:
@@ -249,23 +255,21 @@ private:
     } l;			// a blob list
     struct {
       Layout *l;		// ... layout block
-      unsigned int mirror;	// ... mirroring
       int *cuts;		// ... coordinate of well stripes
       int *flavors;		// ... well flavors
       int ncuts;		// ... number of cuts
     } base;
   };
-  int type;			// type field: 0 = base, 1 = horiz,
+  blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert
 
 public:
-  LayoutBlob (int type);
+  LayoutBlob (blob_type type, Layout *l = NULL);
   ~LayoutBlob ();
 
-  void appendBlob (LayoutBlob *b, long gap);
+  void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
 
-  Layout *splat();
-
+  void PrintRect (FILE *fp);
 };
 
 

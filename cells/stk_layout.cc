@@ -44,7 +44,7 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 void ActStackLayoutPass::cleanup()
 {
   if (layoutmap) {
-    std::map<Process *, Layout *>::iterator it;
+    std::map<Process *, LayoutBlob *>::iterator it;
     for (it = (*layoutmap).begin(); it != (*layoutmap).end(); it++) {
       /* something here */
     }
@@ -611,10 +611,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
   Assert (stk, "What?");
 
-  printf ("Create layout: ");
-  a->mfprintfproc (stdout, p);
-  printf ("\n");
-
   stks = stk->getStacks (p);
   if (!stks || list_length (stks) == 0) {
     (*layoutmap)[p] = NULL;
@@ -629,6 +625,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
   _min_width = min_width;
   _fold_p_width = fold_p_width;
   _fold_n_width = fold_n_width;
+
+  LayoutBlob *BLOB = new LayoutBlob (BLOB_HORIZ);
 
   if (list_length (gplist) > 0) {
     /* dual stacks */
@@ -647,16 +645,12 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       l->DrawDiffBBox (b.flavor, EDGE_NFET,
 		       b.n.llx, b.n.lly, b.n.urx-b.n.llx, b.n.ury-b.n.lly);
 
-#if 0
-      printf ("BBOX: p (%d,%d) -> (%d,%d); n (%d,%d) -> (%d,%d)\n", 
-	      b.p.llx, b.p.lly, b.p.urx, b.p.ury,
-	      b.n.llx, b.n.lly, b.n.urx, b.n.ury);
-#endif
-      l->PrintRect (stdout);
-      printf ("---\n");
-      
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l));
     }
   }
+
+  BLOB->PrintRect (stdout);
+  printf ("---\n");
 
 #if 0  
   char buf[1024];
@@ -668,8 +662,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     fatal_error ("Could not open file `%s' for writing!", buf);
   }
 #endif
-  
-  (*layoutmap)[p] = NULL;
+
+  (*layoutmap)[p] = BLOB;
   
 }
 
@@ -728,7 +722,7 @@ int ActStackLayoutPass::init ()
 {
   cleanup();
 
-  layoutmap = new std::map<Process *, Layout *>();
+  layoutmap = new std::map<Process *, LayoutBlob *>();
 
   min_width = config_get_int ("net.min_width");
   fold_n_width = config_get_int ("net.fold_nfet_width");

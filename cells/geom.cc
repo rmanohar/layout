@@ -27,6 +27,7 @@
 #include <act/passes/netlist.h>
 #include "geom.h"
 #include "tech.h"
+#include <qops.h>
 
 //static int tcnt = 0;
 
@@ -430,9 +431,9 @@ list_t *Tile::collectRect (long _llx, long _lly,
   return l;
 }
 
-static int pall = 0;
 
 #if 0
+static int pall = 0;
 void Tile::printall ()
 {
   list_t *l;
@@ -760,7 +761,7 @@ int Tile::addVirt (int flavor, int type,
     /* check virt flag */
     if (t->virt) return 0; /* failure! */
 
-    if (t->space) {
+    if (t->isSpace()) {
       new_attr = TILE_FLGS_TO_ATTR(flavor, type, DIFF_OFFSET);
     }
     else {
@@ -1187,4 +1188,68 @@ void Layer::PrintRect (FILE *fp)
 	     tmp->geturx()+1, tmp->getury()+1);
   }    
   list_free (l);
+}
+
+
+
+LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
+{
+  t = type;
+  
+  switch (t) {
+  case BLOB_BASE:
+    base.l = lptr;
+    base.cuts = NULL;
+    base.flavors = NULL;
+    base.ncuts = 0;
+    break;
+
+  case BLOB_HORIZ:
+  case BLOB_VERT:
+    l.hd = NULL;
+    l.tl = NULL;
+    if (lptr) {
+      blob_list *bl;
+      NEW (bl, blob_list);
+      bl->b = new LayoutBlob (BLOB_BASE, lptr);
+      bl->next = NULL;
+      bl->gap = 0;
+      bl->mirror = MIRROR_NONE;
+      q_ins (l.hd, l.tl, bl);
+    }
+    break;
+
+  default:
+    fatal_error ("What is this?");
+    break;
+  }
+}
+
+
+void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
+{
+  if (t == BLOB_BASE) {
+    warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
+    return;
+  }
+  blob_list *bl;
+  NEW (bl, blob_list);
+  bl->next = NULL;
+  bl->b = b;
+  bl->gap = gap;
+  bl->mirror = m;
+  q_ins (l.hd, l.tl, bl);
+}
+
+
+void LayoutBlob::PrintRect (FILE *fp)
+{
+  if (t == BLOB_BASE) {
+    base.l->PrintRect (fp);
+  }
+  else {
+    if (l.hd) {
+      l.hd->b->PrintRect (fp);
+    }
+  }
 }

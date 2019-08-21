@@ -53,7 +53,7 @@ class ActStackLayoutPass : public ActPass {
   int fold_n_width;
   int fold_p_width;
 
-  std::map<Process *, Layout *> *layoutmap;
+  std::map<Process *, LayoutBlob *> *layoutmap;
 };
 
 
