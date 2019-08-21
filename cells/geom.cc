@@ -329,7 +329,8 @@ Tile *Tile::find (long x, long y)
 }
 
 
-static int debug_apply = 0;
+//static int debug_apply = 0;
+
 /*
   Returns a list of all the tiles that overlap with the specified region
 */
@@ -344,7 +345,7 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
   _urx = _llx + (signed long)wx - 1;
   _ury = _lly + (signed long)wy - 1;
 
-#if 1
+#if 0
   if (debug_apply) {
     printf (" search: (%ld,%ld) -> (%ld,%ld)\n", _llx, _lly, _urx, _ury);
   }
@@ -365,7 +366,7 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
     Tile *tmp;
     t = (Tile *) list_delete_tail (frontier);
 
-#if 1
+#if 0
     if (debug_apply) {
       printf ("  :: "); t->print();
     }
@@ -380,7 +381,6 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
     while (tmp) {
       if (_llx <= tmp->llx && tmp->llx <= _urx &&
 	  !(tmp->getury() < _lly || tmp->lly > _ury)) {
-#if 1
 	/* another tile might add this one if:
 	   1. it goes below t->lly
 	   2. t->lly is not at the bottom limit
@@ -388,11 +388,12 @@ void Tile::applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 	if (tmp->getlly() < t->lly && t->lly > _lly)
 	  break;
 	
+#if 0
 	if (debug_apply) {
 	  printf ("     -> add: "); tmp->print();
 	}
 #endif
-	  list_append_head (frontier, tmp);
+	list_append_head (frontier, tmp);
       }
       else {
 	if (!(_llx <= tmp->llx && tmp->llx <= _urx))
@@ -1140,7 +1141,7 @@ void Layer::PrintRect (FILE *fp)
 
   l = list_new ();
 
-  debug_apply = 0;
+  //debug_apply = 1;
   
   hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
 		    (unsigned long)MAX_VALUE - (MIN_VALUE + 2), (unsigned long)MAX_VALUE - (MIN_VALUE + 2),
@@ -1148,7 +1149,7 @@ void Layer::PrintRect (FILE *fp)
 
   //hint->printall();
   
-  debug_apply = 0;
+  //debug_apply = 0;
 
 
   while (!list_isempty (l)) {
