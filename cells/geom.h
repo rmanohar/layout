@@ -36,7 +36,7 @@
 
 #define NUM_MINOR_OFFSET 2 // the # of offset values
 
-#define OFFSET_ONE_FLAVOR(type,off) ((type) + NUM_MINOR_OFFSET*(off))
+#define OFFSET_ONE_FLAVOR(type,off) ((type) + 2*(off))
 
 /* 
    flavor = transistor flavor 
@@ -51,13 +51,22 @@ Order:
   [ nfet pfet ndiff pdiff ] flavor1
   ...
 */
+
+#define ATTR_TYPE_PFET EDGE_PFET
+#define ATTR_TYPE_NFET EDGE_NFET
+
 #define TOTAL_OFFSET(flavor,type,off) (2*NUM_MINOR_OFFSET*(flavor)+OFFSET_ONE_FLAVOR(type,off))
 
+#define TILE_FLGS_TO_ATTR(flavor,type,off)  (1+TOTAL_OFFSET(flavor,type,off))
+#define TILE_ATTR_NONPOLY(x) ((x)-1)
+
+#define TILE_ATTR_TO_FLAV(attr)   (TILE_ATTR_NONPOLY(attr)/(2*NUM_MINOR_OFFSET))
+#define TILE_ATTR_TO_OFF(attr) ((TILE_ATTR_NONPOLY(attr) % (2*NUM_MINOR_OFFSET))/2)
+#define TILE_ATTR_TO_TYPE(attr)  (TILE_ATTR_NONPOLY(attr) % 2)
 
 #define TILE_ATTR_ISROUTE(x) ((x) == 0)
-#define TILE_ATTR_NONPOLY(x) ((x) - 1)
-#define TILE_ATTR_ISFET(x)   ((TILE_ATTR_NONPOLY(x) % (2*NUM_MINOR_OFFSET)) < 2)
-#define TILE_ATTR_ISDIFF(x)  !TILE_ATTR_ISFET(x)
+#define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
+#define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
 
 
 /* FET, DIFF */
@@ -66,7 +75,7 @@ Order:
 
 class Tile {
  private:
-  int idx;
+  //int idx;
   
   struct {
     Tile *x, *y;
@@ -119,6 +128,9 @@ class Tile {
   Tile *addRect (long _llx, long _lly,
 		 unsigned long wx, unsigned long wy,
 		 bool force = false);
+  int addVirt (int flavor, int type,
+	       long _llx, long _lly,
+	       unsigned long wx, unsigned long wy);
 
   long geturx() { return nextx()-1; }
   long getury() { return nexty()-1; }
@@ -161,6 +173,9 @@ protected:
 
   int Draw (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int Draw (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
+  int DrawVirt (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+
+  
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
 
@@ -239,6 +254,9 @@ private:
     struct {
       Layout *l;		// ... layout block
       unsigned int mirror;	// ... mirroring
+      int *cuts;		// ... coordinate of well stripes
+      int *flavors;		// ... well flavors
+      int ncuts;		// ... number of cuts
     } base;
   };
   int type;			// type field: 0 = base, 1 = horiz,

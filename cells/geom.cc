@@ -28,11 +28,11 @@
 #include "geom.h"
 #include "tech.h"
 
-static int tcnt = 0;
+//static int tcnt = 0;
 
 Tile::Tile ()
 {
-  idx = tcnt++;
+  //idx = tcnt++;
   
   /*-- default tile is a space tile that is infinitely large --*/
   ll.x = NULL;
@@ -227,7 +227,8 @@ void printtile (void *x, Tile *t)
 #define SCALE 8
 #define WINDOW 100
 #define OFFSET 10
-	  
+
+#if 0
 void Tile::print (FILE *fp)
 {
 
@@ -287,6 +288,7 @@ void Tile::print (FILE *fp)
 	  ur.x ? ur.x->idx : -1,
 	  ur.y ? ur.y->idx : -1);
 }
+#endif
 
 Tile *Tile::find (long x, long y)
 {
@@ -430,6 +432,7 @@ list_t *Tile::collectRect (long _llx, long _lly,
 
 static int pall = 0;
 
+#if 0
 void Tile::printall ()
 {
   list_t *l;
@@ -500,11 +503,12 @@ void Tile::printall ()
   fclose (fp);
 #endif  
 }
+#endif
 
 Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		     bool force)
 {
-#if 1
+#if 0
   printf ("addrect @ %d: (%ld, %ld) -> (%ld, %ld)\n", pall, _llx, _lly,
 	  _llx + wx - 1, _lly + wy - 1);
   //printall();
@@ -696,7 +700,7 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 
   if (flag != 3) {
     warning ("new tile link error: ll = %d ; ur = %d", flag & 1, (flag >> 1));
-    rt->print();
+    //rt->print();
   }
 #if 0
   printf ("-- new tile: ");
@@ -725,6 +729,73 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 #endif  
 
   return rt;
+}
+
+int Tile::addVirt (int flavor, int type,
+		   long _llx, long _lly, unsigned long wx, unsigned long wy)
+
+{
+  /*
+    collect all tiles
+  */
+  list_t *l = collectRect (_llx, _lly, wx, wy);
+
+  list_t *ml;
+  listitem_t *li;
+
+  if (list_isempty (l)) {
+    fatal_error ("Tile::collectRect() failed!");
+  }
+
+  /* 
+     walk through all the tiles with overlap, and prune them so that
+     we have created a region that is the specified rectangle 
+  */
+  
+  while (!list_isempty (l)) {
+    Tile *t;
+    int new_attr;
+    t = (Tile *) list_delete_tail (l);
+
+    /* check virt flag */
+    if (t->virt) return 0; /* failure! */
+
+    if (t->space) {
+      new_attr = TILE_FLGS_TO_ATTR(flavor, type, DIFF_OFFSET);
+    }
+    else {
+      if (TILE_ATTR_ISROUTE(t->attr)) {
+	/* route turns to fet */
+	new_attr = TILE_FLGS_TO_ATTR(flavor, type, FET_OFFSET);
+      }
+      else if (TILE_ATTR_ISFET(t->attr) || TILE_ATTR_ISDIFF (t->attr)) {
+	/* check it matches */
+	if (flavor != TILE_ATTR_TO_FLAV (t->attr)) return 0;
+	if (type != TILE_ATTR_TO_TYPE (t->attr)) return 0;
+	continue;
+      }
+      else {
+	Assert (0, "What?");
+      }
+    }
+
+    if (t->llx < _llx) {
+      t = t->splitX (_llx);	/* left edge prune */ 
+    }
+    if (t->lly < _lly) {
+      t = t->splitY (_lly);	/* bottom edge prune */
+    }
+    if (t->nextx() > _llx + (signed long)wx) {
+      t->splitX (_llx+(signed long)wx);	/* right edge prune */
+    }
+    if (t->nexty() > _lly + (signed long)wy) {
+      t->splitY (_lly + (signed long)wy);	/* top edge prune */
+    }
+    t->virt = 1;
+    t->space = 0;
+    t->attr = new_attr;
+  }
+  return 1;
 }
 
 
@@ -941,6 +1012,12 @@ int Layer::Draw (long llx, long lly, unsigned long wx, unsigned long wy,
   return 1;
 }
 
+int Layer::DrawVirt (int flavor, int type,
+		     long llx, long lly, unsigned long wx, unsigned long wy)
+{
+  return hint->addVirt (flavor, type, llx, lly, wx, wy);
+}
+
 int Layer::Draw (long llx, long lly, unsigned long wx, unsigned long wy,
 		 int type)
 {
@@ -959,9 +1036,17 @@ int Layout::DrawDiff (int flavor /* fet flavor */, int type /* n or p */,
 		      long llx, long lly, unsigned long wx, unsigned long wy,
 		      void *net)
 {
+  int attr = 1 + TOTAL_OFFSET (flavor, type, DIFF_OFFSET);
+  
   if (flavor < 0 || flavor >= nflavors) return 0;
-  return base->Draw (llx, lly, wx, wy, net,
-		     1 + TOTAL_OFFSET (flavor, type, DIFF_OFFSET));
+
+#if 0  
+  Assert (TILE_ATTR_TO_TYPE (attr) == type, "what?");
+  Assert (TILE_ATTR_TO_OFF (attr) == DIFF_OFFSET, "What?");
+  Assert (TILE_ATTR_TO_FLAV (attr) == flavor, "What?");
+#endif  
+
+  return base->Draw (llx, lly, wx, wy, net, attr);
 }
 
 
@@ -969,17 +1054,23 @@ int Layout::DrawFet (int flavor, int type,
 		     long llx, long lly, unsigned long wx, unsigned long wy,
 		     void *net)
 {
+  int attr =  1 + TOTAL_OFFSET (flavor, type, FET_OFFSET);
   if (flavor < 0 || flavor >= nflavors) return 0;
-  return base->Draw (llx, lly, wx, wy, net,
-		     1 + TOTAL_OFFSET (flavor, type, FET_OFFSET));
+
+#if 0  
+  Assert (TILE_ATTR_TO_TYPE (attr) == type, "what?");
+  Assert (TILE_ATTR_TO_OFF (attr) == FET_OFFSET, "What?");
+  Assert (TILE_ATTR_TO_FLAV (attr) == flavor, "What?");
+#endif  
+  
+  return base->Draw (llx, lly, wx, wy, net, attr);
 }
 
 int Layout::DrawDiffBBox (int flavor, int type,
 			  long llx, long lly, unsigned long wx, unsigned long wy)
 {
   if (flavor < 0 || flavor >= nflavors) return 0;
-  /* ignore: have to do this properly */
-  return 1;
+  return base->DrawVirt (flavor, type, llx, lly, wx, wy);
 }
 
   /* 0 = metal1, etc. */
@@ -1061,20 +1152,36 @@ void Layer::PrintRect (FILE *fp)
 
   while (!list_isempty (l)) {
     Tile *tmp = (Tile *) list_delete_tail (l);
+
+    if (tmp->virt) {
+      Assert (TILE_ATTR_ISDIFF (tmp->getAttr())
+	      || TILE_ATTR_ISFET (tmp->getAttr()), "Hmm");
+    }
+
+    if (tmp->virt && TILE_ATTR_ISDIFF (tmp->getAttr())) {
+      /* this is actually a space tile (virtual diff) */
+      continue;
+    }
+    
     fprintf (fp, "rect ");
+
     if (tmp->net) {
       dump_node (fp, N, (node_t *)tmp->net);
     }
     else {
       fprintf (fp, "#");
     }
-    
-    if (TILE_ATTR_ISROUTE(tmp->getAttr())) {
+
+    if ((tmp->virt && TILE_ATTR_ISFET(tmp->getAttr()))) {
+      fprintf (fp, " %s", mat->getName());
+    }
+    else if (TILE_ATTR_ISROUTE(tmp->getAttr())) {
       fprintf (fp, " %s", mat->getName());
     }
     else {
       fprintf (fp, " %s", other[TILE_ATTR_NONPOLY(tmp->getAttr())]->getName());
     }
+    
     fprintf (fp, " %ld %ld %ld %ld\n",
 	     tmp->getllx(), tmp->getlly(),
 	     tmp->geturx()+1, tmp->getury()+1);

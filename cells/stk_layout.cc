@@ -642,13 +642,18 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       /*--- process gp ---*/
       b = print_dualstack (0, 0, l, gp);
 
-#if 1
+      l->DrawDiffBBox (b.flavor, EDGE_PFET,
+		       b.p.llx, b.p.lly, b.p.urx-b.p.llx, b.p.ury-b.p.lly);
+      l->DrawDiffBBox (b.flavor, EDGE_NFET,
+		       b.n.llx, b.n.lly, b.n.urx-b.n.llx, b.n.ury-b.n.lly);
+
+#if 0
       printf ("BBOX: p (%d,%d) -> (%d,%d); n (%d,%d) -> (%d,%d)\n", 
 	      b.p.llx, b.p.lly, b.p.urx, b.p.ury,
 	      b.n.llx, b.n.lly, b.n.urx, b.n.ury);
+#endif
       l->PrintRect (stdout);
       printf ("---\n");
-#endif
       
     }
   }
