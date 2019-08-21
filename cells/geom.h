@@ -69,10 +69,6 @@ Order:
 #define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
 
 
-/* FET, DIFF */
-
-
-
 class Tile {
  private:
   //int idx;
