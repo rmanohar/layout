@@ -5,6 +5,7 @@
 #include <tech.h>
 #include <config.h>
 #include "stacks.h"
+#include "stk_pass.h"
 #include "geom.h"
 #include <string>
 
@@ -1012,7 +1013,7 @@ void geom_create_from_stack (Act *a, FILE *fplef, circuit_t *ckt,
   }
   strideo--;
 
-#if 0
+#if 1
   if (stride < 2 || strideo < 2) {
     warning("Tight ports");
   }

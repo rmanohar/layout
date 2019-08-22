@@ -28,51 +28,6 @@
 class circuit_t;
 #endif
 
-struct node_pair {
-  node_t *n, *p;
-  bool operator==(const node_pair &x) {
-    return n == x.n && p == x.p;
-  }
-  int endpoint (netlist_t*N) 
-  {
-    int cost = 0;
-
-   if (n == p) {
-     cost++;
-   }
-   if (n == N->GND) {
-     cost += 2;
-   }
-   if (p == N->Vdd) {
-     cost += 2;
-   }
-   return cost;
-  }
-  int midpoint (netlist_t *N)
-  {
-    if (n == p) { return 1; } else { return 0; }
-  }
-};
-
-struct gate_pairs {
-  struct node_pair l, r;
-  union {
-    list_t *gp;		     // gate pair list
-    struct {
-      edge_t *n, *p;		// base case
-      /* XXX: right now we don't check flavor, but we should! 
-	 The flavor of both edges must match.
-       */
-    } e;
-  } u;
-  unsigned int basepair:1;   // 1 if it is a basepair
-  unsigned int visited:1;    // 1 if visited
-  short share;		     // # of shared gates
-  short n_start, p_start;    // start id of edges
-  int nodeshare;	     // shared vertical nodes + bonus
-                             // points for supply on ends of the stack
-};
-
 
 list_t *stacks_create (netlist_t *N);
 void geom_create_from_stack (Act *a, FILE *fplef,

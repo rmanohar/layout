@@ -87,6 +87,7 @@ Layer::Layer (Material *m, netlist_t *_n)
   up = NULL;
   down = NULL;
   other = NULL;
+  nother = 0;
 
   hint = new Tile();
   vhint = new Tile();
@@ -1094,6 +1095,16 @@ int Layout::DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned l
   return metals[num]->Draw (llx, lly, wx, wy, net, 0);
 }
 
+int Layout::DrawMetalPin (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net)
+{
+  /* XXX: colors? */
+  int attr = 0;
+  if (num < 0 || num >= nmetals) return 0;
+
+  TILE_ATTR_MKPIN (attr);
+  return metals[num]->Draw (llx, lly, wx, wy, net, attr);
+}
+
 /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
 int Layout::DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy)
 {
@@ -1183,7 +1194,7 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
     if ((tmp->virt && TILE_ATTR_ISFET(tmp->getAttr()))) {
       fprintf (fp, " %s", mat->getName());
     }
-    else if (TILE_ATTR_ISROUTE(tmp->getAttr())) {
+    else if (TILE_ATTR_ISROUTE(tmp->getAttr()) || (nother == 0)) {
       fprintf (fp, " %s", mat->getName());
     }
     else {
@@ -1236,6 +1247,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
 
   case BLOB_HORIZ:
   case BLOB_VERT:
+  case BLOB_MERGE:
     l.hd = NULL;
     l.tl = NULL;
     if (lptr) {
@@ -1299,6 +1311,12 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 
       ury = ury + 10 /* XXX */ + gap + (b->ury - b->lly + 1);
     }
+    else if (t == BLOB_MERGE) {
+      llx = MIN (llx, b->llx);
+      lly = MIN (lly, b->lly);
+      urx = MAX (urx, b->urx);
+      ury = MAX (ury, b->ury);
+    }
     else {
       fatal_error ("What?");
     }
@@ -1311,7 +1329,7 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
   if (t == BLOB_BASE) {
     base.l->PrintRect (fp, mat);
   }
-  else {
+  else if (t == BLOB_HORIZ || t == BLOB_VERT) {
     TransformMat m;
     if (mat) {
       m = *mat;
@@ -1342,6 +1360,18 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
 	m.applyTranslate (0, bl->b->ury - bl->b->lly + 1);
       }
     }
+  }
+  else if (t == BLOB_MERGE) {
+    TransformMat m;
+    if (mat) {
+      m = *mat;
+    }
+    for (blob_list *bl = l.hd; bl; q_step (bl)) {
+      bl->b->PrintRect (fp, &m);
+    }
+  }
+  else {
+    fatal_error ("Unknown blob\n");
   }
 }
 
@@ -1534,4 +1564,34 @@ void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
     *urx = -1;
     *ury = -1;
   }
+}
+
+
+void LayoutBlob::getBBox (long *llxp, long *llyp,
+			  long *urxp, long *uryp)
+{
+  *llxp = llx;
+  *llyp = lly;
+  *urxp = urx;
+  *uryp = ury;
+}
+
+
+static void *_searchnet = NULL;
+static void appendnet (void *cookie, Tile *t)
+{
+  list_t *l = (list_t *)cookie;
+  if (t->getNet () == _searchnet) {
+    list_append (l, t);
+  }
+}
+
+list_t *Layer::search (void *net)
+{
+  list_t *l = list_new ();
+  _searchnet = net;
+  hint->applyTiles (MIN_VALUE, MIN_VALUE, MAX_VALUE - (MIN_VALUE + 1),
+		    MAX_VALUE - (MIN_VALUE + 1), l, appendnet);
+  _searchnet = NULL;
+  return l;
 }

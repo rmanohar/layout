@@ -24,7 +24,15 @@
 #include <act/layout/stk_layout.h>
 #include <act/iter.h>
 #include <config.h>
+#include <string>
 
+static unsigned long snap_to (unsigned long w, unsigned long pitch)
+{
+  if (w % pitch != 0) {
+    w += pitch - (w % pitch);
+  }
+  return w;
+}
 
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
@@ -410,12 +418,13 @@ static int emit_rectangle (Layout *L,
   return dx;
 }
 
-BBox print_dualstack (int dx, int dy, Layout *L, struct gate_pairs *gp)
+static BBox print_dualstack (Layout *L, struct gate_pairs *gp)
 {
   int flavor;
   int xpos, xpos_p;
   int diffspace;
   BBox b;
+  int dx = 0;
   
   if (gp->basepair) {
     flavor = gp->u.e.n->flavor;
@@ -450,15 +459,15 @@ BBox print_dualstack (int dx, int dy, Layout *L, struct gate_pairs *gp)
   xpos_p = dx;
 
   b.p.llx = dx;
-  b.p.lly = dy;
+  b.p.lly = 0;
   b.p.urx = dx;
-  b.p.ury = dy;
+  b.p.ury = 0;
   b.n = b.p;
 
   int padn, padp;
   int fposn, fposp;
 
-  int yp = dy + diffspace/2;
+  int yp = +diffspace/2;
   int yn = yp - diffspace;
   
   if (gp->basepair) {
@@ -604,6 +613,78 @@ BBox print_dualstack (int dx, int dy, Layout *L, struct gate_pairs *gp)
 }
 
 
+static BBox print_singlestack (Layout *L, list_t *l)
+{
+  int flavor;
+  int type;
+  node_t *n;
+  edge_t *e;
+  edge_t *prev;
+  int xpos = 0;
+  int ypos = 0;
+  BBox b;
+  int idx = 0;
+  int previdx = 0;
+
+  b.p.llx = 0;
+  b.p.lly = 0;
+  b.p.urx = 0;
+  b.p.ury = 0;
+  b.n = b.p;
+
+  if (list_length (l) < 4) return b;
+
+  n = (node_t *) list_value (list_first (l));
+  e = (edge_t *) list_value (list_next (list_first (l)));
+  idx = (long) list_value (list_next (list_next (list_first (l))));
+  
+  flavor = e->flavor;
+  type = e->type;
+  
+  DiffMat *diff = Technology::T->diff[type][flavor];
+  FetMat *fet = Technology::T->fet[type][flavor];
+  PolyMat *poly = Technology::T->poly;
+
+  /* ok, now we can draw! */
+  Assert (fet && diff && poly, "What?");
+
+  /* lets draw rectangles */
+  listitem_t *li;
+
+  prev = NULL;
+  previdx = 0;
+  li = list_first (l);
+  while (li && list_next (li) && list_next (list_next (li))) {
+    unsigned int flags = 0;
+    node_t *m;
+
+    n = (node_t *) list_value (li);
+    e = (edge_t *) list_value (list_next (li));
+    idx = (long) list_value (list_next (list_next (li)));
+    m = (node_t *) list_value (list_next (list_next (list_next (li))));
+
+    if (li == list_first (l)) {
+      flags |= EDGE_FLAGS_LEFT;
+    }
+    if (!list_next (list_next (list_next (li)))) {
+      flags |= EDGE_FLAGS_RIGHT;
+    }
+
+    xpos = emit_rectangle (L, 0, xpos, ypos, flags, prev, previdx, 
+			   n, e, idx, 1, &b);
+    prev = e;
+    previdx = idx;
+
+    li = list_next (list_next (list_next (li)));
+  }
+  Assert (li && !list_next (li), "Eh?");
+  n = (node_t *) list_value (li);
+  return b;
+}
+
+
+
+
 void ActStackLayoutPass::_createlocallayout (Process *p)
 {
   list_t *stks;
@@ -620,7 +701,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
   listitem_t *li;
 
   li = list_first (stks);
-  list_t *gplist = (list_t *) list_value (li);
+  list_t *stklist = (list_t *) list_value (li);
 
   _min_width = min_width;
   _fold_p_width = fold_p_width;
@@ -628,43 +709,164 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
   LayoutBlob *BLOB = new LayoutBlob (BLOB_HORIZ);
 
-  if (list_length (gplist) > 0) {
+  if (list_length (stklist) > 0) {
     /* dual stacks */
     listitem_t *si;
 
-    for (si = list_first (gplist); si; si = list_next (si)) {
+    for (si = list_first (stklist); si; si = list_next (si)) {
       struct gate_pairs *gp;
       Layout *l = new Layout(stk->getNL (p));
       gp = (struct gate_pairs *) list_value (si);
 
       /*--- process gp ---*/
-      b = print_dualstack (0, 0, l, gp);
+      b = print_dualstack (l, gp);
 
       l->DrawDiffBBox (b.flavor, EDGE_PFET,
 		       b.p.llx, b.p.lly, b.p.urx-b.p.llx, b.p.ury-b.p.lly);
       l->DrawDiffBBox (b.flavor, EDGE_NFET,
 		       b.n.llx, b.n.lly, b.n.urx-b.n.llx, b.n.ury-b.n.lly);
 
-      //long a, b, c, d;
-      //l->getBBox (&a, &b, &c, &d);
-      //printf ("BBOX: (%ld, %ld) -> (%ld, %ld)\n", a, b, c, d);
       BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l));
     }
   }
 
+  li = list_next (li);
+  stklist = (list_t *) list_value (li);
+
+  if (stklist && (list_length (stklist) > 0)) {
+    /* n stacks */
+    listitem_t *si;
+
+    for (si = list_first (stklist); si; si = list_next (si)) {
+      list_t *sl = (list_t *) list_value (si);
+      Layout *l = new Layout (stk->getNL (p));
+
+      b = print_singlestack (l, sl);
+      
+      l->DrawDiffBBox (b.flavor, EDGE_NFET, b.n.llx, b.n.lly,
+		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
+    }
+  }
+
+  li = list_next (li);
+  stklist = (list_t *) list_value (li);
+  if (stklist && (list_length (stklist) > 0)) {
+    /* p stacks */
+    listitem_t *si;
+
+    for (si = list_first (stklist); si; si = list_next (si)) {
+      list_t *sl = (list_t *) list_value (si);
+      Layout *l = new Layout (stk->getNL (p));
+
+      b = print_singlestack (l, sl);
+      
+      l->DrawDiffBBox (b.flavor, EDGE_PFET, b.n.llx, b.n.lly,
+		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
+    }
+  }
+
+  /* --- add pins --- */
+  netlist_t *n = stk->getNL (p);
+
+  long bllx, blly, burx, bury;
+  BLOB->getBBox (&bllx, &blly, &burx, &bury);
+
+  if (n && (bllx <= burx && blly <= bury)) {
+    /* we have a netlist + layout */
+    int p_in = 0;
+    int p_out = 0;
+    int s_in = 1;
+    int s_out = 1;
+
+    RoutingMat *m1 = Technology::T->metal[0];
+    RoutingMat *m2 = Technology::T->metal[1];
+
+    int redge = (burx - bllx + 1);
+    int tedge = (bury - blly + 1);
+
+    redge = snap_to (redge, m2->getPitch());
+    tedge = snap_to (tedge, m1->getPitch());
+    
+
+    for (int i=0; i < A_LEN (n->bN->ports); i++) {
+      if (n->bN->ports[i].omit) continue;
+      if (n->bN->ports[i].input) {
+	p_in++;
+      }
+      else {
+	p_out++;
+      }
+    }
+
+    if ((p_in * m2->getPitch() > redge) ||(p_out * m2->getPitch() > redge)) {
+      warning ("Can't fit ports!");
+    }
+    
+    if (p_in > 0) {
+      while ((m2->getPitch() + p_in * s_in * m2->getPitch()) <= redge) {
+	s_in++;
+      }
+      s_in--;
+    }
+
+    if (p_out > 0) {
+      while ((m2->getPitch() + p_out * s_out * m2->getPitch()) <= redge) {
+	s_out++;
+      }
+      s_out--;
+    }
+
+#if 0    
+    if (s_in < 2 || s_out < 2) {
+      warning ("Tight ports!");
+      fprintf (stderr, "Process: ");
+      a->mfprintfproc (stderr, p);
+      fprintf (stderr, "\n");
+    }
+#endif    
+
+    p_in = m2->getPitch();
+    p_out = m2->getPitch();
+
+    char tmp[1024];
+
+    Layout *pins = new Layout(n);
+    
+    for (int i=0; i < A_LEN (n->bN->ports); i++) {
+      if (n->bN->ports[i].omit) continue;
+
+      ihash_bucket_t *b;
+      b = ihash_lookup (n->bN->cH, (long)n->bN->ports[i].c);
+      Assert (b, "Hmm:");
+      act_booleanized_var_t *v;
+      struct act_nl_varinfo *av;
+      v = (act_booleanized_var_t *) b->v;
+      av = (struct act_nl_varinfo *)v->extra;
+      Assert (av, "Problem..");
+
+      if (n->bN->ports[i].input) {
+	int w = m2->minWidth ();
+	pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n);
+	p_in += m2->getPitch()*s_in;
+      }
+      else {
+	int w = m2->minWidth ();
+	pins->DrawMetalPin (1, bllx + p_out, blly + m1->getPitch(), w, w, av->n);
+	p_out += m2->getPitch()*s_out;
+      }
+    }
+    LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
+    bl->appendBlob (BLOB);
+    bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
+    BLOB = bl;
+  }
+  
   BLOB->PrintRect (stdout);
   printf ("---\n");
-
-#if 0  
-  char buf[1024];
-  a->msnprintfproc (buf, 1000, p);
-  sprintf (buf+strlen(buf), "_stks");
-  
-  fp = fopen (buf, "w");
-  if (!fp) {
-    fatal_error ("Could not open file `%s' for writing!", buf);
-  }
-#endif
 
   (*layoutmap)[p] = BLOB;
   
@@ -734,3 +936,249 @@ int ActStackLayoutPass::init ()
   _finished = 1;
   return 1;
 }
+
+
+int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
+{
+  int padx = 0;
+  int pady = 0;
+  netlist_t *n;
+  if (!completed ()) {
+    return 0;
+  }
+
+  if (!p) {
+    return 0;
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return 0;
+  }
+
+  n = stk->getNL (p);
+  if (!n) {
+    return 0;
+  }
+
+  long bllx, blly, burx, bury;
+  blob->getBBox (&bllx, &blly, &burx, &bury);
+
+  if (bllx > burx || blly > bury) {
+    /* no layout */
+    return 0;
+  }
+
+  fprintf (fp, "MACRO ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "\n");
+
+  fprintf (fp, "    CLASS CORE ;\n");
+  fprintf (fp, "    FOREIGN ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "%.6f %.6f ;\n", 0.0, 0.0);
+  fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
+
+  int redge = (burx - bllx + 1 + 10);
+  int tedge = (bury - blly + 1 + 10);
+
+  Assert (Technology::T->nmetals >= 3, "What?");
+  
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
+  RoutingMat *m3 = Technology::T->metal[2];
+
+
+  /* add space on all sides if there aren't many metal layers */
+  if (Technology::T->nmetals < 5) {
+    padx = 2*m2->getPitch();
+    pady = 2*m3->getPitch();
+    pady = snap_to (pady, m1->getPitch());
+  }
+
+  redge = snap_to (redge, m2->getPitch());
+  tedge = snap_to (tedge, m1->getPitch());
+
+  double scale = Technology::T->scale/1000.0;
+
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (redge + 2*padx)*scale,
+	   (tedge + 2*pady)*scale);
+  fprintf (fp, "    SYMMETRY X Y ;\n");
+  fprintf (fp, "    SITE CoreSite ;\n");
+
+  for (int i=0; i < A_LEN (n->bN->ports); i++) {
+    if (n->bN->ports[i].omit) continue;
+
+    char tmp[1024];
+    ActId *id = n->bN->ports[i].c->toid();
+    fprintf (fp, "    PIN ");
+    id->sPrint (tmp, 1024);
+    a->mfprintf (fp, "%s\n", tmp);
+    delete id;
+
+    fprintf (fp, "        DIRECTION %s ;\n",
+	     n->bN->ports[i].input ? "INPUT" : "OUTPUT");
+    fprintf (fp, "        USE ");
+
+    ihash_bucket_t *b;
+    const char *sigtype;
+    sigtype = "SIGNAL";
+    b = ihash_lookup (n->bN->cH, (long)n->bN->ports[i].c);
+    Assert (b, "What on earth");
+    act_booleanized_var_t *v;
+    struct act_nl_varinfo *av;
+    v = (act_booleanized_var_t *) b->v;
+    av = (struct act_nl_varinfo *)v->extra;
+    Assert (av, "Huh");
+    if (av->n == n->Vdd) {
+      sigtype = "POWER";
+    }
+    else if (av->n == n->GND) {
+      sigtype = "GROUND";
+    }
+    fprintf (fp, "%s ;\n", sigtype);
+
+    fprintf (fp, "        PORT\n");
+    fprintf (fp, "        LAYER %s ;\n", m2->getName());
+    /* -- find this rectangle, and print it out! -- */
+    /* ZZZ XXX HERE */
+    
+    fprintf (fp, "        END\n");
+    fprintf (fp, "    END ");
+    a->mfprintf (fp, "%s", tmp);
+    fprintf (fp, "\n");
+  }
+
+  /* XXX: add obstructions for metal layers */
+  if (tedge > 6*m1->getPitch()) {
+    fprintf (fp, "    OBS\n");
+    fprintf (fp, "      LAYER %s ;\n", m1->getName());
+    fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
+	     scale*(padx + m2->getPitch()), scale*(pady + 3*m1->getPitch()),
+	     scale*(padx + redge - m2->getPitch()),
+	     scale*(pady + tedge - 3*m1->getPitch()));
+    fprintf (fp, "    END\n");
+  }
+
+  return 1;
+}
+
+#ifdef INTEGRATED_PLACER
+int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
+{
+  int padx = 0;
+  int pady = 0;
+  netlist_t *n;
+  if (!completed ()) {
+    return 0;
+  }
+
+  if (!p) {
+    return 0;
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return 0;
+  }
+
+  n = stk->getNL (p);
+  if (!n) {
+    return 0;
+  }
+
+  char tmp[1024];
+  a->msnprintfproc (tmp, 1024, p);
+  
+  long bllx, blly, burx, bury;
+  blob->getBBox (&bllx, &blly, &burx, &bury);
+
+  int redge = (burx - bllx + 1 + 10); // XXX: 2*well_pad
+  int tedge = (bury - blly + 1 + 10);
+
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
+  RoutingMat *m3 = Technology::T->metal[2];
+
+
+  /* add space on all sides if there aren't many metal layers */
+  if (Technology::T->nmetals < 5) {
+    padx = 2*m2->getPitch();
+    pady = 2*m3->getPitch();
+    pady = snap_to (pady, m1->getPitch());
+  }
+
+  redge = snap_to (redge, m2->getPitch());
+  tedge = snap_to (tedge, m1->getPitch());
+
+  std::string cktstr(tmp);
+  ckt->add_block_type (cktstr, (redge + 2*padx)/m2->getPitch(),
+		       (tedge + 2*pady)/m1->getPitch());
+  
+  /* pins */
+  int p_in = 0;
+  int p_out = 0;
+
+  for (int i=0; i < A_LEN (n->bN->ports); i++) {
+    if (n->bN->ports[i].omit) continue;
+    if (n->bN->ports[i].input) {
+      p_in++;
+    }
+    else {
+      p_out++;
+    }
+  }
+
+  if ((p_in * m2->getPitch() > redge) ||(p_out * m2->getPitch() > redge)) {
+    warning ("Can't fit ports!");
+  }
+  
+  int s_in = 1;
+  int s_out = 1;
+
+  if (p_in > 0) {
+    while ((m2->getPitch() + p_in * s_in * m2->getPitch()) <= redge) {
+      s_in++;
+    }
+    s_in--;
+  }
+
+  if (p_out > 0) {
+    while ((m2->getPitch() + p_out * s_out * m2->getPitch()) <= redge) {
+      s_out++;
+    }
+    s_out--;
+  }
+  
+  if (s_in < 2 || s_out < 2) {
+    warning ("Tight ports!");
+  }
+
+  p_in = m2->getPitch() + padx;
+  p_out = m2->getPitch() + padx;
+
+  for (int i=0; i < A_LEN (n->bN->ports); i++) {
+    if (n->bN->ports[i].omit) continue;
+
+    ActId *id = n->bN->ports[i].c->toid();
+    id->sPrint (tmp, 1024);
+    char tmp2[1024];
+    a->msnprintf (tmp2, 1024, "%s", tmp);
+    delete id;
+
+    std::string pinname(tmp2);
+
+    if (n->bN->ports[i].input) {
+      ckt->add_pin_to_block (cktstr, pinname, p_in/m2->getPitch(),
+			     (tedge + pady)/m1->getPitch());
+      p_in += m2->getPitch()*s_in;
+    }
+    else {
+      ckt->add_pin_to_block (cktstr, pinname, p_out/m2->getPitch(),
+			     (pady + 1)/m1->getPitch());
+      p_out += m2->getPitch()*s_out;
+    }
+  }
+  return 1;
+}
+#endif

@@ -34,6 +34,7 @@
 #include "stk_pass.h"
 #include "stk_layout.h"
 #include "geom.h"
+#include "stacks.h"
 
 #ifdef INTEGRATED_PLACER
 #include "placer.h"
@@ -91,6 +92,7 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
   return 1;
 }
 
+#ifdef INTEGRATED_PLACER
 void add_ckt (Act *a, circuit_t *ckt, ActId *prefix, act_local_net_t *net)
 {
   char buf[10240];
@@ -154,6 +156,7 @@ void add_ckt (Act *a, circuit_t *ckt, ActId *prefix, act_local_net_t *net)
     ckt->add_pin_to_net (netstr, blkname, pinname);
   }
 }
+#endif
 
 struct process_aux {
 
@@ -681,8 +684,6 @@ int main (int argc, char **argv)
     fclose (sp);
   }
   //a->Print (stdout);
-
-  stkp->run (p);
 
   lp->run (p);
   

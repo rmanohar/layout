@@ -68,6 +68,9 @@ Order:
 #define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
 #define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
 
+/* pins are only on metal layers */
+#define TILE_ATTR_ISPIN(x)  ((x) & 4)
+#define TILE_ATTR_MKPIN(x)  ((x) |= 4)
 
 class Tile {
  private:
@@ -132,6 +135,7 @@ class Tile {
   int isSpace() { return space; }
   unsigned int getAttr() { return attr; }
   unsigned int isVirt() { return virt; }
+  void *getNet ()  { return net; }
   
   friend class Layer;
 };
@@ -180,9 +184,10 @@ protected:
   int Draw (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
   int DrawVirt (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
 
-  
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
+
+  list_t *search (void *net);
 
   /* type = -1 : all! */
   void BBox (long *llx, long *lly, long *urx, long *ury, int type = -1);
@@ -212,6 +217,8 @@ public:
 
   /* 0 = metal1, etc. */
   int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  
+  int DrawMetalPin (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
 
   /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
   int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);
@@ -220,6 +227,7 @@ public:
   Layer *getLayerDiff () { return base; }
   Layer *getLayerWell () { return base; }
   Layer *getLayerFet ()  { return base; }
+  Layer *getLayerMetal (int n) { return metals[n]; }
   
 
   PolyMat *getPoly ();
@@ -244,7 +252,7 @@ private:
 
 class LayoutBlob;
 
-enum blob_type { BLOB_BASE, BLOB_HORIZ, BLOB_VERT };
+enum blob_type { BLOB_BASE, BLOB_HORIZ, BLOB_VERT, BLOB_MERGE };
 enum mirror_type { MIRROR_NONE, MIRROR_LR, MIRROR_TB, MIRROR_BOTH };
    // do we want to support 90 degree rotation?
 
@@ -272,7 +280,7 @@ private:
   blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert
 
-  long llx, lly, urx, ury;
+  long llx, lly, urx, ury;	// bounding box
 
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
