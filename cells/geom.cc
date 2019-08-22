@@ -29,6 +29,16 @@
 #include "tech.h"
 #include <qops.h>
 
+
+#ifndef MAX
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
+
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
 //static int tcnt = 0;
 
 Tile::Tile ()
@@ -217,6 +227,7 @@ PolyMat *Layout::getPoly ()
 {
   return Technology::T->poly;
 }
+
 
 
 void printtile (void *x, Tile *t)
@@ -1097,11 +1108,11 @@ int Layout::DrawVia (int num, long llx, long lly, unsigned long wx, unsigned lon
 }
 
 
-void Layout::PrintRect (FILE *fp)
+void Layout::PrintRect (FILE *fp, TransformMat *t)
 {
-  base->PrintRect (fp);
+  base->PrintRect (fp, t);
   for (int i=0; i < nmetals; i++) {
-    metals[i]->PrintRect (fp);
+    metals[i]->PrintRect (fp, t);
   }
 }
 
@@ -1135,7 +1146,7 @@ static void dump_node (FILE *fp, netlist_t *N, node_t *n)
   }
 }
 
-void Layer::PrintRect (FILE *fp)
+void Layer::PrintRect (FILE *fp, TransformMat *t)
 {
   list_t *l;
 
@@ -1144,7 +1155,7 @@ void Layer::PrintRect (FILE *fp)
   //debug_apply = 1;
   
   hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
-		    (unsigned long)MAX_VALUE - (MIN_VALUE + 2), (unsigned long)MAX_VALUE - (MIN_VALUE + 2),
+		    (unsigned long)MAX_VALUE - (MIN_VALUE + 1), (unsigned long)MAX_VALUE - (MIN_VALUE + 1),
 		    l, append_nonspacetile);
 
   //hint->printall();
@@ -1155,16 +1166,11 @@ void Layer::PrintRect (FILE *fp)
   while (!list_isempty (l)) {
     Tile *tmp = (Tile *) list_delete_tail (l);
 
-    if (tmp->virt) {
-      Assert (TILE_ATTR_ISDIFF (tmp->getAttr())
-	      || TILE_ATTR_ISFET (tmp->getAttr()), "Hmm");
-    }
-
     if (tmp->virt && TILE_ATTR_ISDIFF (tmp->getAttr())) {
       /* this is actually a space tile (virtual diff) */
       continue;
     }
-    
+
     fprintf (fp, "rect ");
 
     if (tmp->net) {
@@ -1184,9 +1190,31 @@ void Layer::PrintRect (FILE *fp)
       fprintf (fp, " %s", other[TILE_ATTR_NONPOLY(tmp->getAttr())]->getName());
     }
     
-    fprintf (fp, " %ld %ld %ld %ld\n",
-	     tmp->getllx(), tmp->getlly(),
-	     tmp->geturx()+1, tmp->getury()+1);
+    long llx, lly, urx, ury;
+
+    if (t) {
+      t->apply (tmp->getllx(), tmp->getlly(), &llx, &lly);
+      t->apply (tmp->geturx(), tmp->getury(), &urx, &ury);
+
+      if (llx > urx) {
+	long x = llx;
+	llx = urx;
+	urx = x;
+      }
+      if (lly > ury) {
+	long x = lly;
+	lly = ury;
+	ury = x;
+      }
+    }
+    else {
+      llx = tmp->getllx();
+      lly = tmp->getlly();
+      urx = tmp->geturx();
+      ury = tmp->getury();
+    }
+    
+    fprintf (fp, " %ld %ld %ld %ld\n", llx, lly, urx+1, ury+1);
   }    
   list_free (l);
 }
@@ -1203,6 +1231,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
     base.cuts = NULL;
     base.flavors = NULL;
     base.ncuts = 0;
+    lptr->getBBox (&llx, &lly, &urx, &ury);
     break;
 
   case BLOB_HORIZ:
@@ -1217,6 +1246,16 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       bl->gap = 0;
       bl->mirror = MIRROR_NONE;
       q_ins (l.hd, l.tl, bl);
+      llx = bl->b->llx;
+      lly = bl->b->lly;
+      urx = bl->b->urx;
+      ury = bl->b->ury;
+    }
+    else {
+      llx = 0;
+      lly = 0;
+      urx = -1;
+      ury = -1;
     }
     break;
 
@@ -1240,17 +1279,259 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
   bl->gap = gap;
   bl->mirror = m;
   q_ins (l.hd, l.tl, bl);
+
+  if (l.hd == l.tl) {
+    llx = b->llx;
+    lly = b->lly;
+    urx = b->urx;
+    ury = b->ury;
+  }
+  else {
+    if (t == BLOB_HORIZ) {
+      lly = MIN (lly, b->lly);
+      ury = MAX (ury, b->ury);
+
+      urx = urx + 10 /* XXX */ + gap + (b->urx - b->llx + 1);
+    }
+    else if (t == BLOB_VERT) {
+      llx = MIN (llx, b->llx);
+      urx = MAX (urx, b->urx);
+
+      ury = ury + 10 /* XXX */ + gap + (b->ury - b->lly + 1);
+    }
+    else {
+      fatal_error ("What?");
+    }
+  }
 }
 
 
-void LayoutBlob::PrintRect (FILE *fp)
+void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
 {
   if (t == BLOB_BASE) {
-    base.l->PrintRect (fp);
+    base.l->PrintRect (fp, mat);
   }
   else {
-    if (l.hd) {
-      l.hd->b->PrintRect (fp);
+    TransformMat m;
+    if (mat) {
+      m = *mat;
     }
+    for (blob_list *bl = l.hd; bl; q_step (bl)) {
+      long llx, lly, urx, ury;
+      if (t == BLOB_HORIZ) {
+	if (bl != l.hd) {
+	  m.applyTranslate (bl->gap + 10, 0);
+	}
+	else {
+	  m.applyTranslate (bl->gap, 0);
+	}
+      }
+      else {
+	if (bl != l.hd) {
+	  m.applyTranslate (0, bl->gap + 10);
+	}
+	else {
+	  m.applyTranslate (0, bl->gap);
+	}
+      }
+      bl->b->PrintRect (fp, &m);
+      if (t == BLOB_HORIZ) {
+	m.applyTranslate (bl->b->urx - bl->b->llx + 1, 0);
+      }
+      else {
+	m.applyTranslate (0, bl->b->ury - bl->b->lly + 1);
+      }
+    }
+  }
+}
+
+
+
+TransformMat::TransformMat()
+{
+  int i, j;
+  for (i=0; i < 3; i++)
+    for (j=0; j < 3; j++)
+      m[i][j] = (i == j) ? 1 : 0;
+}
+
+static void print_mat (long m[3][3])
+{
+  printf ("mat: [ [%ld %ld %ld] [%ld %ld %ld] [%ld %ld %ld] ]\n",
+	  m[0][0], m[0][1], m[0][2],
+	  m[1][0], m[1][1], m[1][2],
+	  m[2][0], m[2][1], m[2][2]);
+}
+
+static void mat_mult (long res[3][3], long a[3][3], long b[3][3])
+{
+  long tmp[3][3];
+  int i, j, k;
+
+  for (i=0; i < 3; i++)
+    for (j=0; j < 3; j++) {
+      tmp[i][j] = 0;
+    }
+  
+  for (i=0; i < 3; i++)
+    for (j = 0; j < 3; j++)
+      for (k = 0; k < 3; k++) {
+	tmp[i][j] += a[i][k]*b[k][j];
+      }
+  
+  for (i=0; i < 3; i++)
+    for (j=0; j < 3; j++) {
+      res[i][j] = tmp[i][j];
+    }
+}
+
+void TransformMat::applyRot90()
+{
+  long rotmat[3][3] = { { 0, -1, 0 },
+			{ 1, 0, 0 },
+			{ 0, 0, 1 } };
+
+  mat_mult (m, rotmat, m);
+}
+
+void TransformMat::mirrorLR()
+{
+  long mirror[3][3] = { { -1, 0, 0 },
+			{ 0, 1, 0 },
+			{ 0, 0, 1 } };
+
+  mat_mult (m, mirror, m);
+}
+
+
+
+void TransformMat::mirrorTB()
+{
+  long mirror[3][3] = { { 1, 0, 0 },
+			{ 0, -1, 0 },
+			{ 0, 0, 1 } };
+
+  mat_mult (m, mirror, m);
+}
+
+void TransformMat::applyTranslate (long dx, long dy)
+{
+  long translate[3][3] = { { 1, 0, 0 },
+			   { 0, 1, 0 },
+			   { 0, 0, 1 } };
+
+  translate[0][2] = dx;
+  translate[1][2] = dy;
+
+  mat_mult (m, translate, m);
+}
+
+
+void TransformMat::apply (long inx, long iny, long *outx, long *outy)
+{
+  long z;
+  *outx = inx*m[0][0] + iny*m[0][1] + m[0][2];
+  *outy = inx*m[1][0] + iny*m[1][1] + m[1][2];
+  z = inx*m[2][0] + iny*m[2][1] + m[2][2];
+  Assert (z == 1, "What?");
+}
+
+void Layer::BBox (long *llx, long *lly, long *urx, long *ury, int type)
+{
+  list_t *l;
+  long xllx, xlly, xurx, xury;
+  int first = 1;
+
+  l = list_new ();
+  
+  hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
+		    (unsigned long)MAX_VALUE - (MIN_VALUE + 1), (unsigned long)MAX_VALUE - (MIN_VALUE + 1),
+		    l, append_nonspacetile);
+
+  while (!list_isempty (l)) {
+    Tile *tmp = (Tile *) list_delete_tail (l);
+
+    if (tmp->virt && TILE_ATTR_ISDIFF (tmp->getAttr())) {
+      /* this is actually a space tile (virtual diff) */
+      continue;
+    }
+
+    if (type != -1) {
+      int attr;
+      attr = tmp->getAttr ();
+      if (tmp->virt) {
+	if (TILE_ATTR_ISFET (tmp->getAttr())) {
+	  attr = 0; /* routing */
+	}
+      }
+      if (type != attr) continue;
+    }
+    
+    if (first) {
+      xllx = tmp->getllx ();
+      xlly = tmp->getlly ();
+      xurx = tmp->geturx ();
+      xury = tmp->getury ();
+      first = 0;
+    }
+    else {
+      xllx = MIN(xllx, tmp->getllx ());
+      xlly = MIN(xlly, tmp->getlly ());
+      xurx = MAX(xurx, tmp->geturx ());
+      xury = MAX(xury, tmp->getury ());
+    }
+  }
+  if (!first) {
+    *llx = xllx;
+    *lly = xlly;
+    *urx = xurx;
+    *ury = xury;
+  }
+  else {
+    *llx = 0;
+    *lly = 0;
+    *urx = -1;
+    *ury = -1;
+  }
+}
+
+
+void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
+{
+  long a, b, c, d;
+  int set;
+
+  set = 0;
+  base->BBox (&a, &b, &c, &d);
+  if (a <= c && b <= d) {
+    *llx = a;
+    *lly = b;
+    *urx = c;
+    *ury = d;
+    set = 1;
+  }
+  for (int i=0; i < nmetals; i++) {
+    metals[i]->BBox (&a, &b, &c, &d);
+    if (a <= c && b <= d) {
+      if (set) {
+	*llx = MIN (*llx, a);
+	*lly = MIN (*lly, b);
+	*urx = MAX (*urx, c);
+	*ury = MAX (*ury, d);
+      }
+      else {
+	*llx = a;
+	*lly = b;
+	*urx = c;
+	*ury = d;
+	set = 1;
+      }
+    }
+  }
+  if (!set) {
+    *llx = 0;
+    *lly = 0;
+    *urx = -1;
+    *ury = -1;
   }
 }

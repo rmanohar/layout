@@ -110,9 +110,6 @@ class Tile {
 
 
  public:
-  void print (FILE *fp = NULL);
-  void printall ();
-  
   Tile ();
   ~Tile ();
 
@@ -136,10 +133,22 @@ class Tile {
   unsigned int getAttr() { return attr; }
   unsigned int isVirt() { return virt; }
   
-  
   friend class Layer;
 };
 
+
+class TransformMat {
+  long m[3][3];
+public:
+  TransformMat ();
+
+  void applyRot90 ();
+  void applyTranslate (long dx, long dy);
+  void mirrorLR ();
+  void mirrorTB ();
+
+  void apply (long inx, long iny, long *outx, long *outy);
+};
 
 
 class Layer {
@@ -176,9 +185,9 @@ protected:
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
 
   /* type = -1 : all! */
-  void BBox (int *llx, int *lly, int *urx, int *ury, int type = -1);
+  void BBox (long *llx, long *lly, long *urx, long *ury, int type = -1);
 
-  void PrintRect (FILE *fp);
+  void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   friend class Layout;
 };
@@ -222,7 +231,7 @@ public:
 
   void getBBox (long *llx, long *lly, long *urx, long *ury);
 
-  void PrintRect (FILE *fp);
+  void PrintRect (FILE *fp, TransformMat *t = NULL);
 
 private:
   Layer *base;
@@ -263,13 +272,17 @@ private:
   blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert
 
+  long llx, lly, urx, ury;
+
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   ~LayoutBlob ();
 
   void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
 
-  void PrintRect (FILE *fp);
+  void PrintRect (FILE *fp, TransformMat *t = NULL);
+
+  void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
 };
 
 

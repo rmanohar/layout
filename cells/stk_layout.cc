@@ -645,6 +645,9 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       l->DrawDiffBBox (b.flavor, EDGE_NFET,
 		       b.n.llx, b.n.lly, b.n.urx-b.n.llx, b.n.ury-b.n.lly);
 
+      //long a, b, c, d;
+      //l->getBBox (&a, &b, &c, &d);
+      //printf ("BBOX: (%ld, %ld) -> (%ld, %ld)\n", a, b, c, d);
       BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l));
     }
   }
