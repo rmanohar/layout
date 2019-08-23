@@ -862,7 +862,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
   printf ("---\n");
 
   (*layoutmap)[p] = BLOB;
-  
 }
 
 
@@ -979,6 +978,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 
+  /* find pins */
   for (int i=0; i < A_LEN (n->bN->ports); i++) {
     if (n->bN->ports[i].omit) continue;
 
@@ -1013,7 +1013,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 
     fprintf (fp, "        PORT\n");
 
-    /* -- find this rectangle, and print it out! -- */
+    /* -- find all pins of this name! -- */
     TransformMat mat;
     mat.applyTranslate (-bllx, -blly);
     list_t *tiles = blob->search (av->n, &mat);
@@ -1065,7 +1065,8 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
     fprintf (fp, "\n");
   }
 
-  /* XXX: add obstructions for metal layers */
+  /* XXX: add obstructions for metal layers; in reality we need to
+     add the routed metal and then grab that here */
   long rllx, rlly, rurx, rury;
   blob->getBBox (&rllx, &rlly, &rurx, &rury);
   RoutingMat *m1 = Technology::T->metal[0];
@@ -1115,38 +1116,26 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
   a->msnprintfproc (tmp, 1024, p);
   
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
 
-  if (bllx > burx || blly > bury) {
-    /* no layout */
-    return 0;
-  }
-
-
-  int redge = (burx - bllx + 1 + 10); // XXX: 2*well_pad
-  int tedge = (bury - blly + 1 + 10);
+  if (bllx > burx || blly > bury) return 0;
 
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
-  RoutingMat *m3 = Technology::T->metal[2];
-
-  /* add space on all sides if there aren't many metal layers */
-  if (Technology::T->nmetals < 5) {
-    padx = 2*m2->getPitch();
-    pady = 2*m3->getPitch();
-    pady = snap_to (pady, m1->getPitch());
-  }
-
-  redge = snap_to (redge, m2->getPitch());
-  tedge = snap_to (tedge, m1->getPitch());
 
   std::string cktstr(tmp);
-  ckt->add_block_type (cktstr, (redge + 2*padx)/m2->getPitch(),
-		       (tedge + 2*pady)/m1->getPitch());
-  
-  /* pins */
+  ckt->add_block_type (cktstr, (burx - bllx)/m2->getPitch(),
+		       (bury - blly)/m1->getPitch());
+
+  /* -- pins -- */
+
+  long rllx, rlly, rurx, rury;
+  BLOB->getBBox (&rllx, &rlly, &rurx, &rury);
+
   int p_in = 0;
   int p_out = 0;
+  int s_in = 1;
+  int s_out = 1;
 
   for (int i=0; i < A_LEN (n->bN->ports); i++) {
     if (n->bN->ports[i].omit) continue;
@@ -1158,33 +1147,27 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
     }
   }
 
-  if ((p_in * m2->getPitch() > redge) ||(p_out * m2->getPitch() > redge)) {
-    warning ("Can't fit ports!");
-  }
-  
-  int s_in = 1;
-  int s_out = 1;
+  int xgap = (rllx - bllx);
+  int ygap = (rlly - blly);
 
   if (p_in > 0) {
-    while ((m2->getPitch() + p_in * s_in * m2->getPitch()) <= redge) {
+    while ((xgap + m2->getPitch() + p_in * s_in * m2->getPitch()) <=
+	   (burx - xgap)) {
       s_in++;
     }
     s_in--;
   }
 
   if (p_out > 0) {
-    while ((m2->getPitch() + p_out * s_out * m2->getPitch()) <= redge) {
+    while ((xgap + m2->getPitch() + p_out * s_out * m2->getPitch()) <=
+	   (burx - xgap)) {
       s_out++;
     }
     s_out--;
   }
-  
-  if (s_in < 2 || s_out < 2) {
-    warning ("Tight ports!");
-  }
 
-  p_in = m2->getPitch() + padx;
-  p_out = m2->getPitch() + padx;
+  p_in = m2->getPitch() + xgap;
+  p_out = m2->getPitch() + xgap;
 
   for (int i=0; i < A_LEN (n->bN->ports); i++) {
     if (n->bN->ports[i].omit) continue;
@@ -1199,15 +1182,16 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
 
     if (n->bN->ports[i].input) {
       ckt->add_pin_to_block (cktstr, pinname, p_in/m2->getPitch(),
-			     (tedge + pady)/m1->getPitch());
+			     (bury - blly - ygap)/m1->getPitch());
       p_in += m2->getPitch()*s_in;
     }
     else {
       ckt->add_pin_to_block (cktstr, pinname, p_out/m2->getPitch(),
-			     (pady + 1)/m1->getPitch());
+			     (ygap + 1)/m1->getPitch());
       p_out += m2->getPitch()*s_out;
     }
   }
+
   return 1;
 }
 #endif
@@ -1285,4 +1269,3 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     fprintf (fp, "END %s_C\n\n", vup->getName());
   }
 }
-    
