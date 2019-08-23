@@ -51,7 +51,7 @@ class ActStackLayoutPass : public ActPass {
 #endif
 
   void emitLEFHeader (FILE *fp);
-
+  int emitRect (FILE *fp, Process *p);
 
  private:
   int init ();

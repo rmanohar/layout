@@ -855,12 +855,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     BLOB = bl;
   }
 
-  printf ("--- cell: ");
-  a->mfprintfproc (stdout, p);
-  printf ("\n");
-  BLOB->PrintRect (stdout);
-  printf ("---\n");
-
   (*layoutmap)[p] = BLOB;
 }
 
@@ -929,6 +923,36 @@ int ActStackLayoutPass::init ()
   return 1;
 }
 
+int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
+{
+  if (!completed ()) {
+    return 0;
+  }
+  if (!p) {
+    return 0;
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return 0;
+  }
+
+  long bllx, blly, burx, bury;
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+
+  if (bllx > burx || blly > bury) {
+    /* no layout */
+    return 0;
+  }
+
+  TransformMat mat;
+
+  mat.applyTranslate (-bllx, -blly);
+
+  blob->PrintRect (fp, &mat);
+
+  return 1;
+}
 
 int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 {
