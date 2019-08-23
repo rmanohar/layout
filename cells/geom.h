@@ -194,6 +194,8 @@ protected:
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
+  const char *getRouteName() { return mat->getName(); }
+
   friend class Layout;
 };
 
@@ -241,6 +243,8 @@ public:
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
+  list_t *search (void *net);
+  
 private:
   Layer *base;
   Layer **metals;
@@ -263,6 +267,10 @@ struct blob_list {
   struct blob_list *next;
 };
 
+struct tile_listentry {
+  TransformMat m;
+  list_t *tiles;
+};
 
 class LayoutBlob {
 private:
@@ -286,11 +294,12 @@ public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   ~LayoutBlob ();
 
-  void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
+  void appendBlob (LayoutBlob *b, long gap = 10, mirror_type m = MIRROR_NONE);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
+  list_t *search (void *net, TransformMat *m = NULL);
 };
 
 

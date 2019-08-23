@@ -979,7 +979,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "%.6f %.6f ;\n", 0.0, 0.0);
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
-  int redge = (burx - bllx + 1 + 10);
+  int redge = (burx - bllx + 1 + 10); // 10 here should be well spacing
   int tedge = (bury - blly + 1 + 10);
 
   Assert (Technology::T->nmetals >= 3, "What?");
@@ -1039,10 +1039,43 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
     fprintf (fp, "%s ;\n", sigtype);
 
     fprintf (fp, "        PORT\n");
-    fprintf (fp, "        LAYER %s ;\n", m2->getName());
+
     /* -- find this rectangle, and print it out! -- */
-    /* ZZZ XXX HERE */
-    
+    list_t *tiles = blob->search (av->n);
+    listitem_t *tli;
+    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+      listitem_t *xi;
+      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+	Layer *lname = (Layer *) list_value (xi);
+	xi = list_next (xi);
+	Assert (xi, "Hmm");
+	list_t *actual_tiles = (list_t *) list_value (xi);
+	listitem_t *ti;
+	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	  long tllx, tlly, turx, tury;
+	  Tile *tmp = (Tile *) list_value (ti);
+	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	  if (tllx > turx) {
+	    long x = tllx;
+	    tllx = turx;
+	    turx = x;
+	  }
+	  
+	  if (tlly > tury) {
+	    long x = tlly;
+	    tlly = tury;
+	    tury = x;
+	  }
+
+	  fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
+	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		   scale*tllx, scale*tlly, scale*turx, scale*tury);
+	}
+      }
+    }
     fprintf (fp, "        END\n");
     fprintf (fp, "    END ");
     a->mfprintf (fp, "%s", tmp);
@@ -1182,3 +1215,78 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
   return 1;
 }
 #endif
+
+
+void ActStackLayoutPass::emitLEFHeader (FILE *fp)
+{
+  /* -- lef header -- */
+  fprintf (fp, "VERSION 5.8 ;\n\n");
+  fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
+  fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
+  fprintf (fp, "UNITS\n");
+  fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
+  fprintf (fp, "END UNITS\n\n");
+
+  fprintf (fp, "MANUFACTURINGGRID 0.000500 ; \n\n");
+  fprintf (fp, "CLEARANCEMEASURE EUCLIDEAN ; \n\n");
+  fprintf (fp, "USEMINSPACING OBS ON ; \n\n");
+
+  fprintf (fp, "SITE CoreSite\n");
+  fprintf (fp, "    CLASS CORE ;\n");
+  fprintf (fp, "    SIZE 0.2 BY 1.2 ;\n"); /* not used */
+  fprintf (fp, "END CoreSite\n\n");
+  
+  int i;
+  double scale = Technology::T->scale/1000.0;
+  for (i=0; i < Technology::T->nmetals; i++) {
+    RoutingMat *mat = Technology::T->metal[i];
+    fprintf (fp, "LAYER %s\n", mat->getName());
+    fprintf (fp, "   TYPE ROUTING ;\n");
+
+    fprintf (fp, "   DIRECTION %s ;\n",
+	     (i % 2) ? "VERTICAL" : "HORIZONTAL");
+    fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
+    if (mat->minArea() > 0) {
+      fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
+    }
+    fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
+    fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
+    fprintf (fp, "   PITCH %.6f %.6f ;\n",
+	     mat->getPitch()*scale, mat->getPitch()*scale);
+    fprintf (fp, "END %s\n\n", mat->getName());
+
+
+    if (i != Technology::T->nmetals - 1) {
+      fprintf (fp, "LAYER %s\n", mat->getUpC()->getName());
+      fprintf (fp, "    TYPE CUT ;\n");
+      fprintf (fp, "    SPACING %.6f ;\n", scale*mat->getUpC()->getSpacing());
+      fprintf (fp, "    WIDTH %.6f ;\n",  scale*mat->getUpC()->getWidth ());
+      fprintf (fp, "END %s\n\n", mat->getUpC()->getName());
+    }
+  }
+  fprintf (fp, "\n");
+
+  for (i=0; i < Technology::T->nmetals-1; i++) {
+    RoutingMat *mat = Technology::T->metal[i];
+    Contact *vup = mat->getUpC();
+    double scale = Technology::T->scale/1000.0;
+    double w;
+    
+    fprintf (fp, "VIA %s_C DEFAULT\n", vup->getName());
+
+    w = (vup->getWidth() + 2*vup->getSym())*scale/2;
+    fprintf (fp, "   LAYER %s ;\n", mat->getName());
+    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+
+    w = vup->getWidth()*scale/2;
+    fprintf (fp, "   LAYER %s ;\n", vup->getName());
+    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+
+    w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
+    fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
+    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+    
+    fprintf (fp, "END %s_C\n\n", vup->getName());
+  }
+}
+    

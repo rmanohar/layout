@@ -177,7 +177,6 @@ struct process_aux {
   int visited;
 };
 
-#define MICRON_CONVERSION 2000
 #define TRACK_CONVERSION 18
 
 static std::map<Process *, process_aux *> *procmap = NULL;
@@ -256,94 +255,6 @@ void usage (char *name)
   exit (1);
 }
 
-
-static void lef_header (FILE *fp, circuit_t *ckt)
-{
-  /* -- lef header -- */
-  fprintf (fp, "VERSION 5.8 ;\n\n");
-  fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
-  fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
-  fprintf (fp, "UNITS\n");
-  
-  fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
-
-#ifdef INTEGRATED_PLACER
-  if (ckt)
-  ckt->lef_database_microns = MICRON_CONVERSION;
-#endif  
-  
-  fprintf (fp, "END UNITS\n\n");
-
-  fprintf (fp, "MANUFACTURINGGRID 0.000500 ; \n\n");
-  fprintf (fp, "CLEARANCEMEASURE EUCLIDEAN ; \n\n");
-  fprintf (fp, "USEMINSPACING OBS ON ; \n\n");
-
-  fprintf (fp, "SITE CoreSite\n");
-  fprintf (fp, "    CLASS CORE ;\n");
-  fprintf (fp, "    SIZE 0.2 BY 1.2 ;\n"); /* not used */
-  fprintf (fp, "END CoreSite\n\n");
-  
-  int i;
-  double scale = Technology::T->scale/1000.0;
-  for (i=0; i < Technology::T->nmetals; i++) {
-    RoutingMat *mat = Technology::T->metal[i];
-    fprintf (fp, "LAYER %s\n", mat->getName());
-    fprintf (fp, "   TYPE ROUTING ;\n");
-
-    fprintf (fp, "   DIRECTION %s ;\n",
-	     (i % 2) ? "VERTICAL" : "HORIZONTAL");
-    fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
-    if (mat->minArea() > 0) {
-      fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
-    }
-    fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
-    fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
-    fprintf (fp, "   PITCH %.6f %.6f ;\n",
-	     mat->getPitch()*scale, mat->getPitch()*scale);
-    fprintf (fp, "END %s\n\n", mat->getName());
-
-
-    if (i != Technology::T->nmetals - 1) {
-      fprintf (fp, "LAYER %s\n", mat->getUpC()->getName());
-      fprintf (fp, "    TYPE CUT ;\n");
-      fprintf (fp, "    SPACING %.6f ;\n", scale*mat->getUpC()->getSpacing());
-      fprintf (fp, "    WIDTH %.6f ;\n",  scale*mat->getUpC()->getWidth ());
-      fprintf (fp, "END %s\n\n", mat->getUpC()->getName());
-    }
-  }
-
-#ifdef INTEGRATED_PLACER
-  if (ckt)
-  ckt->m2_pitch = Technology::T->metal[1]->getPitch()*scale;
-#endif
-
-  fprintf (fp, "\n");
-
-  for (i=0; i < Technology::T->nmetals-1; i++) {
-    RoutingMat *mat = Technology::T->metal[i];
-    Contact *vup = mat->getUpC();
-    double scale = Technology::T->scale/1000.0;
-    double w;
-    
-    fprintf (fp, "VIA %s_C DEFAULT\n", vup->getName());
-
-    w = (vup->getWidth() + 2*vup->getSym())*scale/2;
-    fprintf (fp, "   LAYER %s ;\n", mat->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
-
-    w = vup->getWidth()*scale/2;
-    fprintf (fp, "   LAYER %s ;\n", vup->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
-
-    w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
-    fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
-    
-    fprintf (fp, "END %s_C\n\n", vup->getName());
-  }
-}
-
-
 static void def_header (FILE *fp, circuit_t *ckt, Process *p)
 {
   int i;
@@ -359,8 +270,12 @@ static void def_header (FILE *fp, circuit_t *ckt, Process *p)
   
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
 #ifdef INTEGRATED_PLACER
-  if (ckt)
-  ckt->def_distance_microns = MICRON_CONVERSION;
+  if (ckt) {
+    ckt->def_distance_microns = MICRON_CONVERSION;
+    ckt->lef_database_microns = MICRON_CONVERSION;
+    ckt->m2_pitch =
+      Technology::T->metal[1]->getPitch()*Technology::T->scale/1000.0;
+  }
 #endif  
 }
 
@@ -700,16 +615,7 @@ int main (int argc, char **argv)
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", lefname);
   }
-#ifdef INTEGRATED_PLACER
-  if (do_place) {
-    lef_header (fp, &ckt);
-  }
-  else {
-    lef_header (fp, NULL);
-  }
-#else  
-  lef_header (fp, NULL);
-#endif  
+  lp->emitLEFHeader (fp);
 
   ActTypeiter it(cell_ns);
 

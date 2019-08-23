@@ -1165,7 +1165,7 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
 
   //debug_apply = 1;
   
-  hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
+  hint->applyTiles (MIN_VALUE, MIN_VALUE,
 		    (unsigned long)MAX_VALUE - (MIN_VALUE + 1), (unsigned long)MAX_VALUE - (MIN_VALUE + 1),
 		    l, append_nonspacetile);
 
@@ -1303,13 +1303,13 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       lly = MIN (lly, b->lly);
       ury = MAX (ury, b->ury);
 
-      urx = urx + 10 /* XXX */ + gap + (b->urx - b->llx + 1);
+      urx = urx + gap + (b->urx - b->llx + 1);
     }
     else if (t == BLOB_VERT) {
       llx = MIN (llx, b->llx);
       urx = MAX (urx, b->urx);
 
-      ury = ury + 10 /* XXX */ + gap + (b->ury - b->lly + 1);
+      ury = ury + gap + (b->ury - b->lly + 1);
     }
     else if (t == BLOB_MERGE) {
       llx = MIN (llx, b->llx);
@@ -1337,20 +1337,10 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       long llx, lly, urx, ury;
       if (t == BLOB_HORIZ) {
-	if (bl != l.hd) {
-	  m.applyTranslate (bl->gap + 10, 0);
-	}
-	else {
-	  m.applyTranslate (bl->gap, 0);
-	}
+	m.applyTranslate (bl->gap, 0);
       }
       else {
-	if (bl != l.hd) {
-	  m.applyTranslate (0, bl->gap + 10);
-	}
-	else {
-	  m.applyTranslate (0, bl->gap);
-	}
+	m.applyTranslate (0, bl->gap);
       }
       bl->b->PrintRect (fp, &m);
       if (t == BLOB_HORIZ) {
@@ -1590,8 +1580,95 @@ list_t *Layer::search (void *net)
 {
   list_t *l = list_new ();
   _searchnet = net;
-  hint->applyTiles (MIN_VALUE, MIN_VALUE, MAX_VALUE - (MIN_VALUE + 1),
-		    MAX_VALUE - (MIN_VALUE + 1), l, appendnet);
+  hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l, appendnet);
   _searchnet = NULL;
   return l;
+}
+
+/*
+  Returns a list with alternating  (Layer, listoftiles)
+*/
+list_t *Layout::search (void *net)
+{
+  list_t *ret = list_new ();
+  list_t *tmp;
+
+  tmp = base->search (net);
+  if (list_isempty (tmp)) {
+    list_free (tmp);
+  }
+  else {
+    list_append (ret, base);
+    list_append (ret, tmp);
+  }
+  
+  for (int i=0; i < nmetals; i++) {
+    list_t *l = metals[i]->search (net);
+    if (list_isempty (l)) {
+      list_free (l);
+    }
+    else {
+      list_append (ret, metals[i]);
+      list_append (ret, l);
+    }
+  }
+  return ret;
+}
+
+list_t *LayoutBlob::search (void *net, TransformMat *m)
+{
+  TransformMat tmat;
+  list_t *tiles;
+
+  if (m) {
+    tmat = *m;
+  }
+  if (t == BLOB_BASE) {
+    tiles = base.l->search (net);
+    if (list_isempty (tiles)) {
+      return tiles;
+    }
+    else {
+      struct tile_listentry *tle;
+      NEW (tle, struct tile_listentry);
+      tle->m = tmat;
+      tle->tiles = tiles;
+      tiles = list_new ();
+      list_append (tiles, tle);
+      return tiles;
+    }
+  }
+  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+    blob_list *bl;
+    tiles = list_new ();
+    
+    for (bl = l.hd; bl; q_step (bl)) {
+      if (bl == l.hd) {
+	/* no change to tmat */
+      }
+      else {
+	if (t == BLOB_MERGE) {
+	  /* no change to tmat */
+	}
+	else if (t == BLOB_HORIZ) {
+	  tmat.applyTranslate (bl->gap, 0);
+	}
+	else if (t == BLOB_VERT) {
+	  tmat.applyTranslate (0, bl->gap);
+	}
+	else {
+	  fatal_error ("What is this?");
+	}
+      }
+      list_t *tmp = bl->b->search (net, &tmat);
+      list_concat (tiles, tmp);
+      list_free (tmp);
+    }
+  }
+  else {
+    fatal_error ("New blob?");
+  }
+  return tiles;
 }

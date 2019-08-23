@@ -31,6 +31,10 @@
 #include "placer.h"
 #endif
 
+
+/* lef/def conversion factor to microns */
+#define MICRON_CONVERSION 2000
+
 /*-- data structures --*/
 
 class ActStackLayoutPass : public ActPass {
@@ -45,6 +49,8 @@ class ActStackLayoutPass : public ActPass {
 #ifdef INTEGRATED_PLACER
   int createBlocks (circuit_t *ckt, Process *p);
 #endif
+
+  void emitLEFHeader (FILE *fp);
 
 
  private:
