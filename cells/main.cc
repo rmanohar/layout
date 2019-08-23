@@ -617,6 +617,9 @@ int main (int argc, char **argv)
   }
   lp->emitLEFHeader (fp);
 
+  FILE *xfp = fopen ("test.lef", "w");
+  lp->emitLEFHeader (xfp);
+
   ActTypeiter it(cell_ns);
 
   procmap = new std::map<Process *, process_aux *>();
@@ -635,6 +638,8 @@ int main (int argc, char **argv)
 
     list_t *l = stkp->getStacks (p);
 
+    lp->emitLEF (xfp, p);
+
     px = new process_aux();
     px->p = p;
 
@@ -652,7 +657,6 @@ int main (int argc, char **argv)
 #endif
     fprintf (fp, "\n");
 
-    
 #if 0
     /* tracks */
     int ctracks = Technology::T->metal[0]->getPitch();
@@ -660,6 +664,7 @@ int main (int argc, char **argv)
 #endif
   }
   fclose (fp);
+  fclose (xfp);
 
   boolinfo->createNets (p);
 

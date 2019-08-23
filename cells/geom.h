@@ -146,6 +146,8 @@ class TransformMat {
 public:
   TransformMat ();
 
+  void mkI();
+
   void applyRot90 ();
   void applyTranslate (long dx, long dy);
   void mirrorLR ();
@@ -187,6 +189,8 @@ protected:
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
 
+  int isMetal ();
+  
   list_t *search (void *net);
 
   /* type = -1 : all! */
@@ -300,6 +304,9 @@ public:
 
   void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
   list_t *search (void *net, TransformMat *m = NULL);
+
+  void calcBoundary (long *bllx, long *blly, long *burx, long *bury);
+  
 };
 
 

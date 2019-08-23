@@ -994,6 +994,12 @@ int Layer::drawVia (long llx, long lly, unsigned long wx, unsigned long wy,
   return 1;
 }
 
+int Layer::isMetal ()
+{
+  if (nother > 0) return 0;
+  return 1;
+}
+
 int Layer::drawVia (long llx, long lly, unsigned long wx, unsigned long wy,
 		    int type)
 {
@@ -1336,11 +1342,13 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
     }
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       long llx, lly, urx, ury;
-      if (t == BLOB_HORIZ) {
-	m.applyTranslate (bl->gap, 0);
-      }
-      else {
-	m.applyTranslate (0, bl->gap);
+      if (bl != l.hd) {
+	if (t == BLOB_HORIZ) {
+	  m.applyTranslate (bl->gap, 0);
+	}
+	else {
+	  m.applyTranslate (0, bl->gap);
+	}
       }
       bl->b->PrintRect (fp, &m);
       if (t == BLOB_HORIZ) {
@@ -1365,14 +1373,18 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
   }
 }
 
-
-
-TransformMat::TransformMat()
+void TransformMat::mkI ()
 {
   int i, j;
   for (i=0; i < 3; i++)
     for (j=0; j < 3; j++)
       m[i][j] = (i == j) ? 1 : 0;
+}
+
+
+TransformMat::TransformMat()
+{
+  mkI();
 }
 
 static void print_mat (long m[3][3])
@@ -1671,4 +1683,52 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
     fatal_error ("New blob?");
   }
   return tiles;
+}
+
+
+
+static unsigned long snap_to (unsigned long w, unsigned long pitch)
+{
+  if (w % pitch != 0) {
+    w += pitch - (w % pitch);
+  }
+  return w;
+}
+
+
+/*
+  Returns LEF boundary in blob coordinate system
+*/
+void LayoutBlob::calcBoundary (long *bllx, long *blly,
+			       long *burx, long *bury)
+{
+  if (llx > urx || lly > ury) {
+    *bllx = 0;
+    *blly = 0;
+    *burx = -1;
+    *bury = -1;
+    return;
+  }
+
+  Assert (Technology::T->nmetals >= 3, "Hmm");
+
+  long padx = 0, pady = 0;
+
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
+  RoutingMat *m3 = Technology::T->metal[2];
+
+  if (Technology::T->nmetals < 5) {
+    padx = 2*m2->getPitch();
+    pady = 2*m3->getPitch();
+    pady = snap_to (pady, m1->getPitch());
+  }
+
+  *burx = snap_to (urx - llx + 1 + 10 + 2*padx, m2->getPitch());
+  *bury = snap_to (ury - lly + 1 + 10 + 2*pady, m1->getPitch());
+
+  *bllx = llx - padx;
+  *blly = lly - pady;
+  *burx = *burx + llx - padx;
+  *bury = *bury + lly - pady;
 }

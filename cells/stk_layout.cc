@@ -790,7 +790,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
     redge = snap_to (redge, m2->getPitch());
     tedge = snap_to (tedge, m1->getPitch());
-    
 
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
@@ -819,15 +818,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       }
       s_out--;
     }
-
-#if 0    
-    if (s_in < 2 || s_out < 2) {
-      warning ("Tight ports!");
-      fprintf (stderr, "Process: ");
-      a->mfprintfproc (stderr, p);
-      fprintf (stderr, "\n");
-    }
-#endif    
 
     p_in = m2->getPitch();
     p_out = m2->getPitch();
@@ -864,7 +854,10 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
     BLOB = bl;
   }
-  
+
+  printf ("--- cell: ");
+  a->mfprintfproc (stdout, p);
+  printf ("\n");
   BLOB->PrintRect (stdout);
   printf ("---\n");
 
@@ -962,7 +955,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   }
 
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -976,33 +969,13 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "    CLASS CORE ;\n");
   fprintf (fp, "    FOREIGN ");
   a->mfprintfproc (fp, p);
-  fprintf (fp, "%.6f %.6f ;\n", 0.0, 0.0);
+  fprintf (fp, " %.6f %.6f ;\n", 0.0, 0.0);
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
-
-  int redge = (burx - bllx + 1 + 10); // 10 here should be well spacing
-  int tedge = (bury - blly + 1 + 10);
-
-  Assert (Technology::T->nmetals >= 3, "What?");
-  
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
-  RoutingMat *m3 = Technology::T->metal[2];
-
-
-  /* add space on all sides if there aren't many metal layers */
-  if (Technology::T->nmetals < 5) {
-    padx = 2*m2->getPitch();
-    pady = 2*m3->getPitch();
-    pady = snap_to (pady, m1->getPitch());
-  }
-
-  redge = snap_to (redge, m2->getPitch());
-  tedge = snap_to (tedge, m1->getPitch());
 
   double scale = Technology::T->scale/1000.0;
 
-  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (redge + 2*padx)*scale,
-	   (tedge + 2*pady)*scale);
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale,
+	   (bury - blly)*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 
@@ -1041,7 +1014,9 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
     fprintf (fp, "        PORT\n");
 
     /* -- find this rectangle, and print it out! -- */
-    list_t *tiles = blob->search (av->n);
+    TransformMat mat;
+    mat.applyTranslate (-bllx, -blly);
+    list_t *tiles = blob->search (av->n, &mat);
     listitem_t *tli;
     for (tli = list_first (tiles); tli; tli = list_next (tli)) {
       struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
@@ -1050,11 +1025,19 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 	Layer *lname = (Layer *) list_value (xi);
 	xi = list_next (xi);
 	Assert (xi, "Hmm");
+	
+	if (!lname->isMetal()) continue;
+	
 	list_t *actual_tiles = (list_t *) list_value (xi);
 	listitem_t *ti;
 	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
 	  long tllx, tlly, turx, tury;
 	  Tile *tmp = (Tile *) list_value (ti);
+
+	  /* only use pin tiles */
+	  if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
+	  
+	  
 	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
 	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
 
@@ -1072,7 +1055,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 
 	  fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
 	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
-		   scale*tllx, scale*tlly, scale*turx, scale*tury);
+		   scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
 	}
       }
     }
@@ -1083,15 +1066,23 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   }
 
   /* XXX: add obstructions for metal layers */
-  if (tedge > 6*m1->getPitch()) {
+  long rllx, rlly, rurx, rury;
+  blob->getBBox (&rllx, &rlly, &rurx, &rury);
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
+  if ((rury - rlly) > 6*m1->getPitch()) {
     fprintf (fp, "    OBS\n");
     fprintf (fp, "      LAYER %s ;\n", m1->getName());
     fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     scale*(padx + m2->getPitch()), scale*(pady + 3*m1->getPitch()),
-	     scale*(padx + redge - m2->getPitch()),
-	     scale*(pady + tedge - 3*m1->getPitch()));
+	     scale*((rllx - bllx) + m2->getPitch()),
+	     scale*((rlly - blly) + 3*m1->getPitch()),
+	     scale*((rurx - bllx) - m2->getPitch()),
+	     scale*((rury - blly) - 3*m1->getPitch()));
     fprintf (fp, "    END\n");
   }
+  fprintf (fp, "END ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "\n");
 
   return 1;
 }
@@ -1126,13 +1117,18 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
   long bllx, blly, burx, bury;
   blob->getBBox (&bllx, &blly, &burx, &bury);
 
+  if (bllx > burx || blly > bury) {
+    /* no layout */
+    return 0;
+  }
+
+
   int redge = (burx - bllx + 1 + 10); // XXX: 2*well_pad
   int tedge = (bury - blly + 1 + 10);
 
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
   RoutingMat *m3 = Technology::T->metal[2];
-
 
   /* add space on all sides if there aren't many metal layers */
   if (Technology::T->nmetals < 5) {
