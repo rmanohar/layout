@@ -638,6 +638,12 @@ int main (int argc, char **argv)
 
     list_t *l = stkp->getStacks (p);
 
+    FILE *tfp;
+
+    tfp = fopen (p->getName(), "w");
+    lp->emitRect (tfp, p);
+    fclose (tfp);
+
     lp->emitLEF (xfp, p);
 
     px = new process_aux();

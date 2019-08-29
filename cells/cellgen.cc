@@ -2,7 +2,7 @@
 #include <string.h>
 #include <list.h>
 #include <act/passes/netlist.h>
-#include <tech.h>
+#include <act/tech.h>
 #include <config.h>
 #include "stacks.h"
 #include "stk_pass.h"

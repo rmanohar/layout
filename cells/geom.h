@@ -22,7 +22,7 @@
 #ifndef __ACT_GEOM_H__
 #define __ACT_GEOM_H__
 
-#include <tech.h>
+#include <act/tech.h>
 
 #define MIN_VALUE (signed long)(1UL << (8*sizeof(long)-1))
 #define MAX_VALUE (signed long)((1UL << (8*sizeof(long)-1))-1)

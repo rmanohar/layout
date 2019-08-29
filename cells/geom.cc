@@ -25,9 +25,9 @@
 #include <act/act.h>
 #include <act/passes.h>
 #include <act/passes/netlist.h>
-#include "geom.h"
-#include "tech.h"
+#include <act/tech.h>
 #include <qops.h>
+#include "geom.h"
 
 
 #ifndef MAX
