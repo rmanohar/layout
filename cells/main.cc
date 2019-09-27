@@ -38,8 +38,6 @@
 
 #ifdef INTEGRATED_PLACER
 #include "placer.h"
-#include "placeral.h"
-#include "placerdla.h"
 #endif
 
 static Act *global_act;

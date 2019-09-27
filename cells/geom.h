@@ -272,8 +272,9 @@ struct blob_list {
 };
 
 struct tile_listentry {
-  TransformMat m;
-  list_t *tiles;
+  TransformMat m;  /**< the coordinate transformation matrix */
+  list_t *tiles;   /**< a list alternating between Layer pointer and a
+		      list of tiles  */
 };
 
 class LayoutBlob {
@@ -302,11 +303,36 @@ public:
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
+  /**
+   * Computes the actual bounding box of the layout blob
+   *
+   * @param llxp, llyp, urxp, uryp are used to return the boundary.
+   */
   void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
+
+  /**
+   * Returns a list of tiles in the layout that match the net
+   *  @param net is the net pointer (a node_t)
+   *  @param m should not be used at the top-level, but provides the
+   *  current transformatiom matrix used by the recursive call to the
+   *  search function.
+   *  @return a list_t of tile_listentry tiles.
+   */
   list_t *search (void *net, TransformMat *m = NULL);
 
+  /**
+   *  Calculate the placement boundary for the LayoutBlob; this
+   *  includes padding on the edges, as well as alignment
+   *  constraints: the x-dimension is aligned to the m2 pitch, and the
+   *  y-dimension is aligned to the m1 pitch.
+   *
+   *  If there are 3 or fewer metal layers, space for 2 wires on all
+   *  sides of the layout are added.
+   *
+   *  @param bllx, blly, burx, bury are used to return the boundary
+   *  coordinates.
+   */
   void calcBoundary (long *bllx, long *blly, long *burx, long *bury);
-  
 };
 
 
