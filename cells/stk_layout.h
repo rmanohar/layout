@@ -65,6 +65,7 @@ class ActStackLayoutPass : public ActPass {
   int min_width;
   int fold_n_width;
   int fold_p_width;
+  int lambda_to_scale;
 
   std::map<Process *, LayoutBlob *> *layoutmap;
 };

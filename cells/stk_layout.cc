@@ -87,6 +87,7 @@ struct BBox {
 
 /* calculate actual edge width */
 static int _fold_n_width, _fold_p_width, _min_width;
+static int _lambda_to_scale;
 static int getwidth (int idx, edge_t *e)
 {
   if (e->type == EDGE_NFET) {
@@ -94,7 +95,7 @@ static int getwidth (int idx, edge_t *e)
       return EDGE_WIDTH (e,idx,_fold_n_width,_min_width);
     }
     else {
-      return e->w;
+      return e->w*_lambda_to_scale;
     }
   }
   else {
@@ -102,9 +103,15 @@ static int getwidth (int idx, edge_t *e)
       return EDGE_WIDTH (e,idx,_fold_p_width,_min_width);
     }
     else {
-      return e->w;
+      return e->w*_lambda_to_scale;
     }
   }
+}
+
+
+static int getlength (edge_t *e)
+{
+  return e->l*_lambda_to_scale;
 }
 
 
@@ -364,31 +371,32 @@ static int emit_rectangle (Layout *L,
 
   /* now print fet */
   if (yup < 0) {
-    L->DrawFet (e->flavor, e->type, dx, dy + yup*e_w, e->l, -yup*e_w, NULL);
+    L->DrawFet (e->flavor, e->type, dx, dy + yup*e_w, getlength (e),
+		-yup*e_w, NULL);
   }
   else {
-    L->DrawFet (e->flavor, e->type, dx, dy, e->l, yup*e_w, NULL);
+    L->DrawFet (e->flavor, e->type, dx, dy, getlength (e), yup*e_w, NULL);
   }
 
-  int poverhang = p->getOverhang (e->l);
+  int poverhang = p->getOverhang (getlength (e));
   int uoverhang = poverhang;
 
   if (fet_type != 0) {
-    uoverhang = MAX (uoverhang, p->getNotchOverhang (e->l));
+    uoverhang = MAX (uoverhang, p->getNotchOverhang (getlength (e)));
   }
 
   /* now print poly edges */
   if (yup < 0) {
-    L->DrawPoly (dx, dy, e->l, -yup*poverhang, e->g);
-    L->DrawPoly (dx, dy + yup*(e_w+uoverhang), e->l, -yup*uoverhang, NULL);
+    L->DrawPoly (dx, dy, getlength (e), -yup*poverhang, e->g);
+    L->DrawPoly (dx, dy + yup*(e_w+uoverhang), getlength(e), -yup*uoverhang, NULL);
   }
   else {
-    L->DrawPoly (dx, dy - yup*poverhang, e->l, yup*poverhang, e->g);
-    L->DrawPoly (dx, dy + yup*e_w, e->l, yup*uoverhang, NULL);
+    L->DrawPoly (dx, dy - yup*poverhang, getlength (e), yup*poverhang, e->g);
+    L->DrawPoly (dx, dy + yup*e_w, getlength (e), yup*uoverhang, NULL);
   }
   
 
-  dx += e->l;
+  dx += getlength (e);
   
   if (flags & EDGE_FLAGS_RIGHT) {
     node_t *right;
@@ -706,6 +714,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
   _min_width = min_width;
   _fold_p_width = fold_p_width;
   _fold_n_width = fold_n_width;
+  _lambda_to_scale = lambda_to_scale;
 
   LayoutBlob *BLOB = new LayoutBlob (BLOB_HORIZ);
 
@@ -911,6 +920,7 @@ int ActStackLayoutPass::run (Process *p)
 
 int ActStackLayoutPass::init ()
 {
+  double net_lambda;
   cleanup();
 
   layoutmap = new std::map<Process *, LayoutBlob *>();
@@ -918,6 +928,14 @@ int ActStackLayoutPass::init ()
   min_width = config_get_int ("net.min_width");
   fold_n_width = config_get_int ("net.fold_nfet_width");
   fold_p_width = config_get_int ("net.fold_pfet_width");
+
+  net_lambda = config_get_real ("net.lambda");
+
+  lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale);
+
+  if (lambda_to_scale*Technology::T->scale != net_lambda*1e9) {
+    warning ("Lambda (%g) and technology scale factor (%g) are not integer multiples; rounding down", net_lambda, Technology::T->scale);
+  }
 
   _finished = 1;
   return 1;
