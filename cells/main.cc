@@ -523,8 +523,11 @@ int main (int argc, char **argv)
 
     FILE *tfp;
     char cname[10240];
+    int len;
 
     a->msnprintfproc (cname, 10240, p);
+    len = strlen (cname);
+    snprintf (cname + len, 10240-len, ".rect");
 
     tfp = fopen (cname, "w");
     lp->emitRect (tfp, p);
