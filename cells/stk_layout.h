@@ -44,7 +44,7 @@ class ActStackLayoutPass : public ActPass {
 
   int run (Process *p = NULL);
 
-  Layout *getLayout (Process *p = NULL);
+  LayoutBlob *getLayout (Process *p = NULL);
   int emitLEF (FILE *fp, Process *p);
 #ifdef INTEGRATED_PLACER
   int createBlocks (circuit_t *ckt, Process *p);

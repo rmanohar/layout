@@ -1113,7 +1113,8 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   blob->getBBox (&rllx, &rlly, &rurx, &rury);
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
-  if ((rury - rlly) > 6*m1->getPitch()) {
+  if (((rury - rlly) > 6*m1->getPitch()) &&
+      ((rurx - rllx) > 2*m2->getPitch())) {
     fprintf (fp, "    OBS\n");
     fprintf (fp, "      LAYER %s ;\n", m1->getName());
     fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
@@ -1310,4 +1311,14 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     
     fprintf (fp, "END %s_C\n\n", vup->getName());
   }
+}
+
+
+LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
+{
+  if (!completed ()) {
+    return 0;
+  }
+  if (!p) return NULL;
+  return (*layoutmap)[p];
 }

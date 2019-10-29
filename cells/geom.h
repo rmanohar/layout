@@ -33,8 +33,9 @@
 */
 #define FET_OFFSET 0
 #define DIFF_OFFSET 1
+#define WDIFF_OFFSET 2
 
-#define NUM_MINOR_OFFSET 2 // the # of offset values
+#define NUM_MINOR_OFFSET 3 // the # of offset values
 
 #define OFFSET_ONE_FLAVOR(type,off) ((type) + 2*(off))
 
@@ -45,10 +46,12 @@
 
 Order:
 
-     n/p + 2*(fet/diff) + 4*(flavor)
+     n/p + 2*(fet/diff/wdiff) + 6*(flavor)
 
-  [ nfet pfet ndiff pdiff ] flavor0
-  [ nfet pfet ndiff pdiff ] flavor1
+  (ndiff has pwelldiff associated with it)
+
+  [ nfet pfet ndiff pdiff pwdiff nwdiff ] flavor0
+  [ nfet pfet ndiff pdiff pwdiff nwdiff ] flavor1
   ...
 */
 
@@ -67,6 +70,7 @@ Order:
 #define TILE_ATTR_ISROUTE(x) ((x) == 0)
 #define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
 #define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
+#define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WELL_OFFSET)
 
 /* pins are only on metal layers */
 #define TILE_ATTR_ISPIN(x)  ((x) & 4)
@@ -277,6 +281,25 @@ struct tile_listentry {
 		      list of tiles  */
 };
 
+class LayoutEdgeAttrib {
+
+private:
+  // well attributes
+  struct well_info {
+    int offset;
+    unsigned int plugged:1;
+    unsigned int flavor:7;
+  } *wells;
+  int wellcnt;
+
+  struct mat_info {
+    int offset;
+    int width;
+    Material *m;
+  } *mats;
+  int matcnt;
+};
+
 class LayoutBlob {
 private:
   union {
@@ -285,9 +308,6 @@ private:
     } l;			// a blob list
     struct {
       Layout *l;		// ... layout block
-      int *cuts;		// ... coordinate of well stripes
-      int *flavors;		// ... well flavors
-      int ncuts;		// ... number of cuts
     } base;
   };
   blob_type t;			// type field: 0 = base, 1 = horiz,
@@ -295,6 +315,8 @@ private:
 
   long llx, lly, urx, ury;	// bounding box
 
+  LayoutEdgeAttrib *edges[4];	// 0 = l, 1 = t, 2 = r, 3 = b
+  
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   ~LayoutBlob ();

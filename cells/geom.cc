@@ -1241,13 +1241,15 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
 LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
 {
   t = type;
+
+  edges[0] = NULL;
+  edges[1] = NULL;
+  edges[2] = NULL;
+  edges[3] = NULL;
   
   switch (t) {
   case BLOB_BASE:
     base.l = lptr;
-    base.cuts = NULL;
-    base.flavors = NULL;
-    base.ncuts = 0;
     lptr->getBBox (&llx, &lly, &urx, &ury);
     break;
 
@@ -1725,7 +1727,7 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
   }
 
   *burx = snap_to (urx - llx + 1 + 10 + 2*padx, m2->getPitch());
-  *bury = snap_to (ury - lly + 1 + 10 + 2*pady, m1->getPitch());
+  *bury = snap_to (ury - lly + 1 + 2*pady, m1->getPitch());
 
   *bllx = llx - padx;
   *blly = lly - pady;
