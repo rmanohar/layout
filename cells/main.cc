@@ -38,6 +38,8 @@
 
 static Act *global_act;
 
+static double area_multiplier;
+
 static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
 {
   Assert (net, "Why are you calling this function?");
@@ -264,7 +266,7 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   gapply->run (p);
 
   /* add white space */
-  total_area *= 2.0; // 1.7;
+  total_area *= area_multiplier; // 1.7;
 
   /* make it roughly square */
   total_area = sqrt (total_area);
@@ -371,6 +373,8 @@ int main (int argc, char **argv)
   char *defname = NULL;
   char *cellname = NULL;
   int do_place = 0;
+
+  area_multiplier = 1.4;
   
   Act::Init (&argc, &argv);
   config_read ("prs2net.conf");
@@ -382,8 +386,12 @@ int main (int argc, char **argv)
 
   
 
-  while ((ch = getopt (argc, argv, "c:p:l:d:s:P")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:l:d:s:Pa:")) != -1) {
     switch (ch) {
+    case 'a':
+      area_multiplier = atof (optarg);
+      break;
+      
     case 'c':
       if (cellname) {
 	FREE (cellname);

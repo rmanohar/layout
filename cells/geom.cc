@@ -1726,8 +1726,11 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
     pady = snap_to (pady, m1->getPitch());
   }
 
-  *burx = snap_to (urx - llx + 1 + 10 + 2*padx, m2->getPitch());
-  *bury = snap_to (ury - lly + 1 + 2*pady, m1->getPitch());
+  /* calculate diff spacing */
+  int diff_spc = Technology::T->getMaxDiffSpacing();
+
+  *burx = snap_to (urx - llx + 1 + diff_spc + 2*padx, m2->getPitch());
+  *bury = snap_to (ury - lly + 1 + diff_spc + 2*pady, m1->getPitch());
 
   *bllx = llx - padx;
   *blly = lly - pady;
