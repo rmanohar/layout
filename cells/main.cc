@@ -503,6 +503,8 @@ int main (int argc, char **argv)
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
 
+  //a->Print (stdout);
+
   /*--- print out lef file, plus rectangles ---*/
 
   FILE *xfp = fopen (lefname, "w");
@@ -525,6 +527,12 @@ int main (int argc, char **argv)
     if (!p->isCell()) continue;
     if (!p->isExpanded()) continue;
     netlist_t *N = netinfo->getNL (p);
+
+    if (!N) {
+      /* cell defined, but not used */
+      continue;
+    }
+
     Assert (N, "Hmm...");
 
     list_t *l = stkp->getStacks (p);

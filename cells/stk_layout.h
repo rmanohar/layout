@@ -25,6 +25,7 @@
 #include <act/act.h>
 #include <act/layout/geom.h>
 #include <map>
+#include <unordered_set>
 #include <hash.h>
 
 #ifdef INTEGRATED_PLACER
@@ -44,6 +45,10 @@ class ActStackLayoutPass : public ActPass {
 
   int run (Process *p = NULL);
 
+  /* computes the maximum cell height needed for all the cells
+     involved in process p */
+  int maxHeight (Process *p = NULL);
+
   LayoutBlob *getLayout (Process *p = NULL);
   int emitLEF (FILE *fp, Process *p);
 #ifdef INTEGRATED_PLACER
@@ -57,6 +62,7 @@ class ActStackLayoutPass : public ActPass {
   int init ();
   void cleanup();
 
+  int _maxHeight (Process *p);
   void _createlayout (Process *p);
   void _createlocallayout (Process *p);
 
@@ -68,6 +74,7 @@ class ActStackLayoutPass : public ActPass {
   int lambda_to_scale;
 
   std::map<Process *, LayoutBlob *> *layoutmap;
+  std::unordered_set<Process *> *visited;
 };
 
 

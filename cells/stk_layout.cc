@@ -849,12 +849,12 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
       if (n->bN->ports[i].input) {
 	int w = m2->minWidth ();
-	pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n);
+	pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n, 0);
 	p_in += m2->getPitch()*s_in;
       }
       else {
 	int w = m2->minWidth ();
-	pins->DrawMetalPin (1, bllx + p_out, blly + m1->getPitch(), w, w, av->n);
+	pins->DrawMetalPin (1, bllx + p_out, blly + m1->getPitch(), w, w, av->n, 1);
 	p_out += m2->getPitch()*s_out;
       }
     }
@@ -1242,6 +1242,8 @@ int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
 
 void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 {
+  double scale = Technology::T->scale/1000.0;
+  
   /* -- lef header -- */
   fprintf (fp, "VERSION 5.8 ;\n\n");
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
@@ -1256,11 +1258,13 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 
   fprintf (fp, "SITE CoreSite\n");
   fprintf (fp, "    CLASS CORE ;\n");
-  fprintf (fp, "    SIZE 0.2 BY 1.2 ;\n"); /* not used */
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
+	   Technology::T->metal[1]->getPitch()*scale, // m2
+	   Technology::T->metal[0]->getPitch()*scale  // m1
+	   );
   fprintf (fp, "END CoreSite\n\n");
   
   int i;
-  double scale = Technology::T->scale/1000.0;
   for (i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mat = Technology::T->metal[i];
     fprintf (fp, "LAYER %s\n", mat->getName());
@@ -1321,4 +1325,78 @@ LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
   }
   if (!p) return NULL;
   return (*layoutmap)[p];
+}
+
+
+/*
+  Returns the max height of all layout blocks within p that have not
+  been visited yet 
+*/
+int ActStackLayoutPass::_maxHeight (Process *p)
+{
+  int maxval = 0;
+  LayoutBlob *b;
+
+  visited->insert (p);
+
+  b = (*layoutmap)[p];
+  if (b) {
+    long llx, lly, urx, ury;
+    b->getBBox (&llx, &lly, &urx, &ury);
+    maxval = (ury - lly + 1);
+  }
+  
+  ActInstiter i(p->CurScope ());
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (TypeFactory::isProcessType (vx->t)) {
+      Process *x = dynamic_cast<Process *> (vx->t->BaseType());
+      if (x->isExpanded()) {
+	if (visited->insert (x).second == false) {
+	  int tmp = _maxHeight (x);
+	  if (tmp > maxval) {
+	    maxval = tmp;
+	  }
+	}
+      }
+    }
+  }
+  return maxval;
+}
+
+
+int ActStackLayoutPass::maxHeight (Process *p)
+{
+  int maxval = 0;
+
+  if (!completed()) {
+    return 0;
+  }
+
+  visited = new std::unordered_set<Process *>();
+  
+  if (!p) {
+    ActNamespace *g = ActNamespace::Global();
+    ActInstiter i(g->CurScope());
+
+    for (i = i.begin(); i != i.end(); i++) {
+      ValueIdx *vx = (*i);
+      if (TypeFactory::isProcessType (vx->t)) {
+	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
+	if (x->isExpanded()) {
+	  if (visited->insert (x).second == false) {
+	    int tmp = _maxHeight (x);
+	    if (tmp > maxval) {
+	      maxval = tmp;
+	    }
+	  }
+	}
+      }
+    }
+  }
+  else {
+    maxval = _maxHeight (p);
+  }
+  delete visited;
+  return maxval;
 }

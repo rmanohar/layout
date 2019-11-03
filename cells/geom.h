@@ -67,14 +67,17 @@ Order:
 #define TILE_ATTR_TO_OFF(attr) ((TILE_ATTR_NONPOLY(attr) % (2*NUM_MINOR_OFFSET))/2)
 #define TILE_ATTR_TO_TYPE(attr)  (TILE_ATTR_NONPOLY(attr) % 2)
 
-#define TILE_ATTR_ISROUTE(x) ((x) == 0)
-#define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
-#define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
-#define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WELL_OFFSET)
-
 /* pins are only on metal layers */
 #define TILE_ATTR_ISPIN(x)  ((x) & 4)
 #define TILE_ATTR_MKPIN(x)  ((x) |= 4)
+#define TILE_ATTR_ISOUTPUT(x)  ((x) & 8)
+#define TILE_ATTR_MKOUTPUT(x) ((x) |= 8)
+
+#define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
+#define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
+#define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WELL_OFFSET)
+#define TILE_ATTR_ISROUTE(x) ((x) == 0)
+
 
 class Tile {
  private:
@@ -115,6 +118,8 @@ class Tile {
   void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		   void *cookie, void (*f) (void *, Tile *));
 
+
+  int isPin() { return TILE_ATTR_ISPIN(attr); }
 
  public:
   Tile ();
@@ -228,7 +233,9 @@ public:
   /* 0 = metal1, etc. */
   int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
   
-  int DrawMetalPin (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawMetalPin (int num, long llx, long lly,
+		    unsigned long wx, unsigned long wy,
+		    void *net, int dir); /* dir 0 = input, 1 = output */
 
   /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
   int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);

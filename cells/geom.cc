@@ -1101,13 +1101,16 @@ int Layout::DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned l
   return metals[num]->Draw (llx, lly, wx, wy, net, 0);
 }
 
-int Layout::DrawMetalPin (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net)
+int Layout::DrawMetalPin (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net, int dir)
 {
   /* XXX: colors? */
   int attr = 0;
   if (num < 0 || num >= nmetals) return 0;
 
   TILE_ATTR_MKPIN (attr);
+  if (dir) {
+    TILE_ATTR_MKOUTPUT (attr);
+  }
   return metals[num]->Draw (llx, lly, wx, wy, net, attr);
 }
 
@@ -1188,7 +1191,17 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
       continue;
     }
 
-    fprintf (fp, "rect ");
+    if (mat != Technology::T->poly && tmp->isPin()) {
+      if (TILE_ATTR_ISOUTPUT(tmp->attr)) {
+	fprintf (fp, "outrect ");
+      }
+      else {
+	fprintf (fp, "inrect ");
+      }
+    }
+    else {
+      fprintf (fp, "rect ");
+    }
 
     if (tmp->net) {
       dump_node (fp, N, (node_t *)tmp->net);
