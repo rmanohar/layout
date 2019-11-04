@@ -23,6 +23,7 @@
 #include <list.h>
 #include <unistd.h>
 #include <math.h>
+#include <string.h>
 #include <map>
 
 #include <act/passes/cells.h>
