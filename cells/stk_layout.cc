@@ -674,7 +674,7 @@ static BBox print_singlestack (Layout *L, list_t *l)
     if (li == list_first (l)) {
       flags |= EDGE_FLAGS_LEFT;
     }
-    if (!list_next (list_next (list_next (li)))) {
+    if (!list_next (list_next (list_next (list_next (li))))) {
       flags |= EDGE_FLAGS_RIGHT;
     }
 
@@ -800,6 +800,14 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     redge = snap_to (redge, m2->getPitch());
     tedge = snap_to (tedge, m1->getPitch());
 
+    /* move the top edge if there isn't enough space for two
+       rows of pins 
+    */
+    while (blly + tedge - m2->minWidth() <=
+	blly + m1->getPitch() + m2->minWidth()) {
+      tedge += m1->getPitch();
+    }
+
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
       if (n->bN->ports[i].input) {
@@ -819,6 +827,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 	s_in++;
       }
       s_in--;
+      if (s_in == 0) { s_in = 1; }
     }
 
     if (p_out > 0) {
@@ -826,6 +835,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 	s_out++;
       }
       s_out--;
+      if (s_out == 0) { s_out = 1; }
     }
 
     p_in = m2->getPitch();
@@ -834,7 +844,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     char tmp[1024];
 
     Layout *pins = new Layout(n);
-    
+
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
 

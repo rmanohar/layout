@@ -1733,11 +1733,13 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
   RoutingMat *m2 = Technology::T->metal[1];
   RoutingMat *m3 = Technology::T->metal[2];
 
+#if 0  
   if (Technology::T->nmetals < 5) {
     padx = 2*m2->getPitch();
     pady = 2*m3->getPitch();
     pady = snap_to (pady, m1->getPitch());
   }
+#endif
 
   /* calculate diff spacing */
   int diff_spc = Technology::T->getMaxDiffSpacing();
