@@ -1277,6 +1277,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       bl->b = new LayoutBlob (BLOB_BASE, lptr);
       bl->next = NULL;
       bl->gap = 0;
+      bl->shift = 0;
       bl->mirror = MIRROR_NONE;
       q_ins (l.hd, l.tl, bl);
       llx = bl->b->llx;
@@ -1305,11 +1306,13 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
     warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
     return;
   }
+  
   blob_list *bl;
   NEW (bl, blob_list);
   bl->next = NULL;
   bl->b = b;
   bl->gap = gap;
+  bl->shift = 0;
   bl->mirror = m;
   q_ins (l.hd, l.tl, bl);
 
@@ -1321,14 +1324,46 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
   }
   else {
     if (t == BLOB_HORIZ) {
-      lly = MIN (lly, b->lly);
-      ury = MAX (ury, b->ury);
+      int d1, d2;
+      int aret;
+      /* align! */
+      aret = GetAlignment (l.tl->b->edges[LAYOUT_EDGE_RIGHT], b->edges[LAYOUT_EDGE_LEFT], &d1, &d2);
+      if (aret == 0) {
+	warning ("appendBlob: no valid alignment, but continuing anyway");
+	d1 = 0;
+      }
+      else if (aret == 1) {
+	d1 = 0;
+      }
+      else if (aret == 2) {
+	d1 = (d1 + d2)/2;
+      }
+      bl->shift = d1;
+      
+      lly = MIN (lly, b->lly + bl->shift);
+      ury = MAX (ury, b->ury + bl->shift);
 
       urx = urx + gap + (b->urx - b->llx + 1);
     }
     else if (t == BLOB_VERT) {
-      llx = MIN (llx, b->llx);
-      urx = MAX (urx, b->urx);
+      int d1, d2;
+      int aret;
+      /* align! */
+      aret = GetAlignment (l.tl->b->edges[LAYOUT_EDGE_TOP], b->edges[LAYOUT_EDGE_BOTTOM], &d1, &d2);
+      if (aret == 0) {
+	warning ("appendBlob: no valid alignment, but continuing anyway");
+	d1 = 0;
+      }
+      else if (aret == 1) {
+	d1 = 0;
+      }
+      else if (aret == 2) {
+	d1 = (d1 + d2)/2;
+      }
+      bl->shift = d1;
+
+      llx = MIN (llx, b->llx + bl->shift);
+      urx = MAX (urx, b->urx + bl->shift);
 
       ury = ury + gap + (b->ury - b->lly + 1);
     }
@@ -1359,10 +1394,10 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
       long llx, lly, urx, ury;
       if (bl != l.hd) {
 	if (t == BLOB_HORIZ) {
-	  m.applyTranslate (bl->gap, 0);
+	  m.applyTranslate (bl->gap, bl->shift);
 	}
 	else {
-	  m.applyTranslate (0, bl->gap);
+	  m.applyTranslate (bl->shift, bl->gap);
 	}
       }
       bl->b->PrintRect (fp, &m);
@@ -1680,10 +1715,10 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
 	  /* no change to tmat */
 	}
 	else if (t == BLOB_HORIZ) {
-	  tmat.applyTranslate (bl->gap, 0);
+	  tmat.applyTranslate (bl->gap, bl->shift);
 	}
 	else if (t == BLOB_VERT) {
-	  tmat.applyTranslate (0, bl->gap);
+	  tmat.applyTranslate (bl->shift, bl->gap);
 	}
 	else {
 	  fatal_error ("What is this?");
@@ -1751,4 +1786,20 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
   *blly = lly - pady;
   *burx = *burx + llx - padx;
   *bury = *bury + lly - pady;
+}
+
+
+int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
+		    int *d1, int *d2)
+{
+  if (!a1 && !a2) {
+    return 1;
+  }
+  if ((a1 && !a2) || (!a1 && a2)) {
+    return 0;
+  }
+  /* now check! */
+  *d1 = 0;
+  *d2 = 0;
+  return 2;
 }

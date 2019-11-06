@@ -278,6 +278,7 @@ enum mirror_type { MIRROR_NONE, MIRROR_LR, MIRROR_TB, MIRROR_BOTH };
 struct blob_list {
   LayoutBlob *b;
   long gap;
+  long shift;			// shift in the other direction
   mirror_type mirror;
   struct blob_list *next;
 };
@@ -305,6 +306,10 @@ private:
     Material *m;
   } *mats;
   int matcnt;
+
+public:
+  int getWellCount () { return wellcnt; }
+
 };
 
 class LayoutBlob {
@@ -321,6 +326,11 @@ private:
 				// 2 = vert
 
   long llx, lly, urx, ury;	// bounding box
+
+#define LAYOUT_EDGE_LEFT 0  
+#define LAYOUT_EDGE_RIGHT 2
+#define LAYOUT_EDGE_TOP 1
+#define LAYOUT_EDGE_BOTTOM 3
 
   LayoutEdgeAttrib *edges[4];	// 0 = l, 1 = t, 2 = r, 3 = b
   
@@ -362,6 +372,16 @@ public:
    *  coordinates.
    */
   void calcBoundary (long *bllx, long *blly, long *burx, long *bury);
+
+  /**
+   *  Calculate the edge alignment between two edge atttributes
+   *  @return 0 if there is no possible alignment,
+   *          1 if any alignment is fine,
+   *	      2 if the alignment is specified by the range d1 to d2
+  */
+  int GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
+		    int *d1, int *d2);
+  
 };
 
 
