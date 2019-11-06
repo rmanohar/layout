@@ -35,6 +35,148 @@
 
 #define COST(p)  ((p)->share*WEIGHT_SHARING + (p)->nodeshare)
 
+
+static void dump_node (FILE *fp, netlist_t *N, node_t *n)
+{
+  if (n->v) {
+    ActId *tmp = n->v->v->id->toid();
+    tmp->Print (fp);
+    delete tmp;
+  }
+  else {
+    if (n == N->Vdd) {
+      fprintf (fp, "Vdd");
+    }
+    else if (n == N->GND) {
+      fprintf (fp, "GND");
+    }
+    else {
+      fprintf (fp, "#%d", n->i);
+    }
+  }
+}
+
+static void dump_edge (netlist_t *N, edge_t *e)
+{
+  printf ("{");
+  if (e->type == EDGE_NFET) {
+    printf ("n%d:", e->flavor);
+  }
+  else {
+    printf ("p%d:", e->flavor);
+  }
+  printf ("[f:%d]", e->nfolds);
+  printf ("<%d,%d>", e->w, e->l);
+  printf (" g:");
+  dump_node (stdout, N, e->g);
+  printf (" ");
+  dump_node (stdout, N, e->a);
+  printf (" ");
+  dump_node (stdout, N, e->b);
+  printf ("}");
+}
+
+static void dump_gateinfo (netlist_t *N, edge_t *e1, edge_t *e2)
+{
+  if (e1 && e2) {
+    dump_node (stdout, N, e1->g);
+    printf ("<%d,%d>", e1->w, e1->l);
+    if (e2->g != e1->g) {
+      printf (":");
+      dump_node (stdout, N, e2->g);
+      printf ("<%d,%d>", e2->w, e2->l);
+    }
+  }
+  else if (e1) {
+    dump_node (stdout, N, e1->g);
+    printf ("<%d,%d>", e1->w, e1->l);
+    printf (":");
+  }
+  else {
+    Assert (e2, "Eh?");
+    printf (":");
+    dump_node (stdout, N, e2->g);
+    printf ("<%d,%d>", e2->w, e2->l);
+  }
+}
+
+static void dump_nodepair (netlist_t *N, struct node_pair *p)
+{
+  printf ("(");
+  dump_node (stdout, N, p->n);
+  printf (",");
+  dump_node (stdout, N, p->p);
+  printf (")");
+}
+
+static void dump_pair (netlist_t *N, struct gate_pairs *p)
+{
+  listitem_t *li;
+  edge_t *e1, *e2;
+
+  printf ("dual_stack [n=%d]: ", p->nodeshare);
+  dump_nodepair (N, &p->l);
+  printf (" ");
+  dump_nodepair (N, &p->r);
+  printf (" ");
+
+  if (p->basepair) {
+    e1 = p->u.e.n;
+    e2 = p->u.e.p;
+    printf (" e%d: ", p->share);
+    dump_gateinfo (N, e1, e2);
+    if (e1) { printf (" ns=%d", p->n_start); }
+    if (e2) { printf (" ps=%d", p->p_start); }
+    printf ("\n");
+    return;
+  }
+
+  struct node_pair prev;
+  
+  prev = p->l;
+  for (li = list_first (p->u.gp); li; li = list_next (li)) {
+    struct gate_pairs *tmp;
+
+    tmp = (struct gate_pairs *) list_value (li);
+    Assert (tmp->basepair, "Hmm");
+    e1 = tmp->u.e.n;
+    e2 = tmp->u.e.p;
+
+    printf ("\n\t e%d: ", tmp->share);
+
+    dump_nodepair (N, &prev);
+    printf ("[");
+
+    dump_gateinfo (N, e1, e2);
+    if (e1) { printf (" ns=%d", tmp->n_start); }
+    if (e2) { printf (" ps=%d", tmp->p_start); }
+    
+    printf("] -> ");
+
+    if (e1) {
+      if (prev.n == e1->a) {
+	prev.n = e1->b;
+      }
+      else {
+	Assert (prev.n == e1->b, "Hmm");
+	prev.n = e1->a;
+      }
+    }
+
+    if (e2) {
+      if (prev.p == e2->a) {
+	prev.p = e2->b;
+      }
+      else {
+	Assert (prev.p == e2->b, "Hmm");
+	prev.p = e2->a;
+      }
+    }
+    dump_nodepair (N, &prev);
+  }
+  printf("\n");
+}
+
 int node_pair::endpoint (netlist_t *N)
 {
   int cost = 0;
@@ -555,6 +697,11 @@ void ActStackPass::_createstacks (Process *p)
   /* check we have already handled this process */
   if ((*stkmap)[p]) return;
 
+#if 0
+  printf ("--------------------------------------------\n");
+  printf ("creating stacks for: %s\n", p->getName());
+#endif  
+
   /* nodes to be processed */
   pnodes = list_new ();
   nnodes = list_new ();
@@ -702,8 +849,8 @@ void ActStackPass::_createstacks (Process *p)
 	      delete_pair (p);
 	    }
 	    if (p2 && !find_pairs (pairs, p2)) {
-	      heap_insert (pairs, maxedges-COST(p), p2);
-	      list_append (rawpairs, p);
+	      heap_insert (pairs, maxedges-COST(p2), p2);
+	      list_append (rawpairs, p2);
 #if 0
 	      dump_pair (N, p);
 #endif
@@ -721,6 +868,7 @@ void ActStackPass::_createstacks (Process *p)
   /* We have all potential pairing opportunities, which correspond
      to fet chains of length 1.
   */
+
   final = heap_new (32);
   int found = 1;
   while (heap_size (pairs) > 0) {
@@ -889,12 +1037,13 @@ void ActStackPass::_createstacks (Process *p)
     struct gate_pairs *gp;
 
     gp = (struct gate_pairs *) list_value (li);
+
     if (!gp->visited) {
       delete_pair (gp);
     }
   }
   list_free (rawpairs);
-
+  
   /*-- stks has the final candidate stacks.
     Now we add the remaining edges where possible, stitching together
     stacks if that is a possibility.
