@@ -86,25 +86,14 @@ struct BBox {
 
 
 /* calculate actual edge width */
-static int _fold_n_width, _fold_p_width, _min_width;
 static int _lambda_to_scale;
 static int getwidth (int idx, edge_t *e)
 {
   if (e->type == EDGE_NFET) {
-    if (_fold_n_width != 0) {
-      return EDGE_WIDTH (e,idx,_fold_n_width,_min_width);
-    }
-    else {
-      return e->w*_lambda_to_scale;
-    }
+    return EDGE_WIDTH (e,idx)*_lambda_to_scale;
   }
   else {
-    if (_fold_p_width != 0) {
-      return EDGE_WIDTH (e,idx,_fold_p_width,_min_width);
-    }
-    else {
-      return e->w*_lambda_to_scale;
-    }
+    return EDGE_WIDTH (e,idx)*_lambda_to_scale;
   }
 }
 
@@ -711,9 +700,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
   li = list_first (stks);
   list_t *stklist = (list_t *) list_value (li);
 
-  _min_width = min_width;
-  _fold_p_width = fold_p_width;
-  _fold_n_width = fold_n_width;
   _lambda_to_scale = lambda_to_scale;
 
   LayoutBlob *BLOB = new LayoutBlob (BLOB_HORIZ);
@@ -935,12 +921,7 @@ int ActStackLayoutPass::init ()
 
   layoutmap = new std::map<Process *, LayoutBlob *>();
 
-  min_width = config_get_int ("net.min_width");
-  fold_n_width = config_get_int ("net.fold_nfet_width");
-  fold_p_width = config_get_int ("net.fold_pfet_width");
-
   net_lambda = config_get_real ("net.lambda");
-
   lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale);
 
   if (lambda_to_scale*Technology::T->scale != net_lambda*1e9) {
