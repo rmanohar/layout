@@ -1447,11 +1447,11 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
 
 
 static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
-		      int toplevel)
+		      int toplevel, int pins)
 {
   Assert (net, "Why are you calling this function?");
   if (net->skip) return 0;
-  if (net->port && !toplevel) return 0;
+  if (net->port && (!toplevel || !pins)) return 0;
 
   if (A_LEN (net->pins) < 2) return 0;
 
@@ -1496,7 +1496,7 @@ static unsigned long netcount;
 
 static ActBooleanizePass *boolinfo;
 
-void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
+void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pins)
 {
   Assert (p->isExpanded(), "What are we doing");
 
@@ -1505,7 +1505,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
 
   /* first, print my local nets */
   for (int i=0; i < A_LEN (n->nets); i++) {
-    if (print_net (a, fp, prefix, &n->nets[i], prefix == NULL ? (i+1) : 0)) {
+    if (print_net (a, fp, prefix, &n->nets[i], prefix == NULL ? (i+1) : 0, do_pins)) {
       netcount++;
     }
   }
@@ -1540,7 +1540,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
       while (!as->isend()) {
 	Array *x = as->toArray();
 	newid->setArray (x);
-	_collect_emit_nets (a, cpy, instproc, fp);
+	_collect_emit_nets (a, cpy, instproc, fp, do_pins);
 	delete x;
 	newid->setArray (NULL);
 	as->step();
@@ -1548,7 +1548,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
       delete as;
     }
     else {
-      _collect_emit_nets (a, cpy, instproc, fp);
+      _collect_emit_nets (a, cpy, instproc, fp, do_pins);
     }
     delete cpy;
   }
@@ -1570,7 +1570,8 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
 }
 
-void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad)
+void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
+				  int do_pins)
 {
   emitDEFHeader (fp, p);
 
@@ -1663,32 +1664,36 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad)
 
   boolinfo = dynamic_cast<ActBooleanizePass *>(a->pass_find ("booleanize"));
 
-  int num_pins = 0;
+  if (do_pins) {
+    int num_pins = 0;
 
-  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
-    if (act_bnl->ports[i].omit) continue;
-    num_pins++;
+    for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+      if (act_bnl->ports[i].omit) continue;
+      num_pins++;
+    }
+    fprintf (fp, "PINS %d ;\n", num_pins);
+    num_pins = 0;
+    for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+      if (act_bnl->ports[i].omit) continue;
+      Assert (act_bnl->ports[i].netid != -1, "What?");
+      fprintf (fp, "- top_iopin%d + NET ", act_bnl->ports[i].netid);
+      ActId *tmp = act_bnl->nets[act_bnl->ports[i].netid].net->toid();
+      tmp->Print (fp);
+      delete tmp;
+      if (act_bnl->ports[i].input) {
+	fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ");
+      }
+      else {
+	fprintf (fp, " + DIRECTION OUTPUT + USE SIGNAL ");
+      }
+      /* placement directives will go here */
+      fprintf (fp, " ;\n");
+    }
   }
-  fprintf (fp, "PINS %d ;\n", num_pins);
-  num_pins = 0;
-  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
-    if (act_bnl->ports[i].omit) continue;
-    Assert (act_bnl->ports[i].netid != -1, "What?");
-    fprintf (fp, "- top_iopin%d + NET ", act_bnl->ports[i].netid);
-    ActId *tmp = act_bnl->nets[act_bnl->ports[i].netid].net->toid();
-    tmp->Print (fp);
-    delete tmp;
-    if (act_bnl->ports[i].input) {
-      fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ");
-    }
-    else {
-      fprintf (fp, " + DIRECTION OUTPUT + USE SIGNAL ");
-    }
-    /* placement directives will go here */
-    fprintf (fp, " ;\n");
+  else {
+    fprintf (fp, "PINS 0 ;\n");
   }
   fprintf (fp, "END PINS\n\n");
-
 
   netcount = 0;
   unsigned long pos = 0;
@@ -1703,7 +1708,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad)
     ( inst5638 A ) ( inst4678 Y )
     ;
   */
-  _collect_emit_nets (a, NULL, p, fp);
+  _collect_emit_nets (a, NULL, p, fp, do_pins);
   
   fprintf (fp, "END NETS\n\n");
   fprintf (fp, "END DESIGN\n");

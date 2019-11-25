@@ -60,7 +60,7 @@ int main (int argc, char **argv)
   char *lefname = NULL;
   char *defname = NULL;
   char *cellname = NULL;
-  int do_place = 0;
+  int do_pins = 0;
 
   area_multiplier = 1.4;
   
@@ -86,7 +86,7 @@ int main (int argc, char **argv)
       break;
       
     case 'P':
-      do_place = 1;
+      do_pins = 1;
       break;
 
     case 'p':
@@ -241,7 +241,7 @@ int main (int argc, char **argv)
   if (!yfp) {
     fatal_error ("Could not open file `%s' for writing", defname);
   }
-  lp->emitDEF (yfp, p, area_multiplier);
+  lp->emitDEF (yfp, p, area_multiplier, do_pins);
   fclose (yfp);
 
   /* -- dump updated cells file, if necessary -- */
