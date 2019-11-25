@@ -58,6 +58,7 @@ class ActStackLayoutPass : public ActPass {
 
   void emitLEFHeader (FILE *fp);
   void emitDEFHeader (FILE *fp, Process *p);
+  void emitDEF (FILE *fp, Process *p, double pad = 1.4);
   
   int emitRect (FILE *fp, Process *p);
 
@@ -75,6 +76,10 @@ class ActStackLayoutPass : public ActPass {
   int fold_n_width;
   int fold_p_width;
   int lambda_to_scale;
+
+  /* temporary variables */
+  int _total_instances;
+  double _total_area;
 
   std::map<Process *, LayoutBlob *> *layoutmap;
   std::unordered_set<Process *> *visited;

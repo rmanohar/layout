@@ -23,8 +23,10 @@
 #include <act/layout/stk_pass.h>
 #include <act/layout/stk_layout.h>
 #include <act/iter.h>
+#include <act/passes.h>
 #include <config.h>
 #include <string>
+#include <math.h>
 
 static unsigned long snap_to (unsigned long w, unsigned long pitch)
 {
@@ -1401,6 +1403,158 @@ int ActStackLayoutPass::maxHeight (Process *p)
  *
  *------------------------------------------------------------------------
  */
+static int _instcount;
+static double _areacount;
+
+static void count_inst (void *x, ActId *prefix, Process *p)
+{
+  ActStackLayoutPass *ap = (ActStackLayoutPass *)x;
+  
+  if (p->getprs()) {
+    /* there is a circuit */
+    
+    LayoutBlob *b;
+    long llx, lly, urx, ury;
+    _instcount++;
+    b = ap->getLayout (p);
+    Assert (b, "What are we doing?");
+    b->calcBoundary (&llx, &lly, &urx, &ury);
+    _areacount += (urx - llx + 1)*(ury - lly + 1);
+  }
+}
+
+/*
+ * Flat instance dump
+ */
+static Act *global_act;
+static void dump_inst (void *x, ActId *prefix, Process *p)
+{
+  FILE *fp = (FILE *)x;
+  char buf[10240];
+
+  if (p->getprs()) {
+    /* FORMAT: 
+         - inst2591 NAND4X2 ;
+         - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
+    */
+    fprintf (fp, "- ");
+    prefix->sPrint (buf, 10240);
+    global_act->mfprintf (fp, "%s ", buf);
+    global_act->mfprintfproc (fp, p);
+    fprintf (fp, " ;\n");
+  }
+}
+
+
+static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
+		      int toplevel)
+{
+  Assert (net, "Why are you calling this function?");
+  if (net->skip) return 0;
+  if (net->port && !toplevel) return 0;
+
+  if (A_LEN (net->pins) < 2) return 0;
+
+  fprintf (fp, "- ");
+  if (prefix) {
+    prefix->Print (fp);
+    fprintf (fp, ".");
+  }
+  ActId *tmp = net->net->toid();
+  tmp->Print (fp);
+  delete tmp;
+
+  fprintf (fp, "\n  ");
+
+  char buf[10240];
+
+  if (net->port) {
+    fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
+  }
+
+  for (int i=0; i < A_LEN (net->pins); i++) {
+    fprintf (fp, " ( ");
+    if (prefix) {
+      prefix->sPrint (buf, 10240);
+      a->mfprintf (fp, "%s.", buf);
+    }
+    net->pins[i].inst->sPrint (buf, 10240);
+    a->mfprintf (fp, "%s ", buf);
+
+    tmp = net->pins[i].pin->toid();
+    tmp->sPrint (buf, 10240);
+    delete tmp;
+    a->mfprintf (fp, "%s ", buf);
+    fprintf (fp, ")");
+  }
+  fprintf (fp, "\n;\n");
+
+  return 1;
+}
+
+static unsigned long netcount;
+
+static ActBooleanizePass *boolinfo;
+
+void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp)
+{
+  Assert (p->isExpanded(), "What are we doing");
+
+  act_boolean_netlist_t *n = boolinfo->getBNL (p);
+  Assert (n, "What!");
+
+  /* first, print my local nets */
+  for (int i=0; i < A_LEN (n->nets); i++) {
+    if (print_net (a, fp, prefix, &n->nets[i], prefix == NULL ? (i+1) : 0)) {
+      netcount++;
+    }
+  }
+
+  ActInstiter i(p->CurScope());
+
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (!TypeFactory::isProcessType (vx->t)) continue;
+
+    ActId *newid;
+    ActId *cpy;
+    
+    Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
+    int ports_exist;
+
+    newid = new ActId (vx->getName());
+    if (prefix) {
+      cpy = prefix->Clone ();
+      ActId *tmp = cpy;
+      while (tmp->Rest()) {
+	tmp = tmp->Rest();
+      }
+      tmp->Append (newid);
+    }
+    else {
+      cpy = newid;
+    }
+
+    if (vx->t->arrayInfo()) {
+      Arraystep *as = vx->t->arrayInfo()->stepper();
+      while (!as->isend()) {
+	Array *x = as->toArray();
+	newid->setArray (x);
+	_collect_emit_nets (a, cpy, instproc, fp);
+	delete x;
+	newid->setArray (NULL);
+	as->step();
+      }
+      delete as;
+    }
+    else {
+      _collect_emit_nets (a, cpy, instproc, fp);
+    }
+    delete cpy;
+  }
+  return;
+}
+
 
 void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
 {
@@ -1415,4 +1569,147 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
 }
-				   
+
+void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad)
+{
+  emitDEFHeader (fp, p);
+
+  /* -- get area -- */
+  ActPass *tap = a->pass_find ("apply");
+  if (!tap) {
+    tap = new ActApplyPass (a);
+  }
+  ActApplyPass *ap = dynamic_cast<ActApplyPass *>(tap);
+
+  _instcount = 0;
+  _areacount = 0;
+  ap->setCookie (this);
+  ap->setInstFn (count_inst);
+  ap->run (p);
+
+  _total_instances = _instcount;
+  _total_area = _areacount;
+
+  _total_area *= pad;
+
+  double side = sqrt (_total_area);
+
+  double unit_conv = Technology::T->scale*MICRON_CONVERSION/1000.0;
+
+  side *= unit_conv;
+
+  int pitchx, pitchy, track_gap;
+  int nx, ny;
+
+  pitchx = Technology::T->metal[1]->getPitch();
+  pitchy = Technology::T->metal[0]->getPitch();
+
+  pitchx *= unit_conv;
+  pitchy *= unit_conv;
+
+#define TRACK_HEIGHT 18
+
+  track_gap = pitchy * TRACK_HEIGHT;
+
+  nx = (side + pitchx - 1)/pitchx;
+  ny = (side + track_gap - 1)/track_gap;
+
+  fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
+	   10*pitchx, track_gap,
+	   (10+nx)*pitchx, (1+ny)*track_gap);
+  
+  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
+	   10*pitchx, pitchy, ny, track_gap);
+
+  /* routing tracks: metal1, metal2 */
+
+  for (int i=0; i < Technology::T->nmetals; i++) {
+    RoutingMat *mx = Technology::T->metal[i];
+    int pitchxy = mx->getPitch()*unit_conv;
+    int startxy = mx->minWidth()*unit_conv/2;
+    
+    int ntracksx = (pitchx*nx)/pitchxy;
+    int ntracksy = (track_gap*ny)/pitchxy;
+
+    /* vertical tracks */
+    fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
+	     10*pitchx + startxy, ntracksx, pitchxy, mx->getName());
+    /* horizontal tracks */
+    fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
+	     track_gap + startxy, ntracksy, pitchxy, mx->getName());
+
+    fprintf (fp, "\n");
+  }
+
+  /* -- instances  -- */
+  fprintf (fp, "COMPONENTS %d ;\n", _total_instances);
+  ap->setCookie (fp);
+  ap->setInstFn (dump_inst);
+  global_act = a;
+  ap->run (p);
+  global_act = NULL;
+  fprintf (fp, "END COMPONENTS\n\n");
+
+
+  /* -- pins -- */
+  ActPass *anlp = a->pass_find ("prs2net");
+  Assert (anlp, "What?");
+  ActNetlistPass *nl = dynamic_cast<ActNetlistPass *>(anlp);
+  Assert (nl, "What?");
+
+  netlist_t *act_ckt = nl->getNL (p);
+  Assert (act_ckt, "No circuit?");
+  act_boolean_netlist_t *act_bnl = act_ckt->bN;
+
+  boolinfo = dynamic_cast<ActBooleanizePass *>(a->pass_find ("booleanize"));
+
+  int num_pins = 0;
+
+  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+    if (act_bnl->ports[i].omit) continue;
+    num_pins++;
+  }
+  fprintf (fp, "PINS %d ;\n", num_pins);
+  num_pins = 0;
+  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+    if (act_bnl->ports[i].omit) continue;
+    Assert (act_bnl->ports[i].netid != -1, "What?");
+    fprintf (fp, "- top_iopin%d + NET ", act_bnl->ports[i].netid);
+    ActId *tmp = act_bnl->nets[act_bnl->ports[i].netid].net->toid();
+    tmp->Print (fp);
+    delete tmp;
+    if (act_bnl->ports[i].input) {
+      fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ");
+    }
+    else {
+      fprintf (fp, " + DIRECTION OUTPUT + USE SIGNAL ");
+    }
+    /* placement directives will go here */
+    fprintf (fp, " ;\n");
+  }
+  fprintf (fp, "END PINS\n\n");
+
+
+  netcount = 0;
+  unsigned long pos = 0;
+
+  /* -- nets -- */
+  pos = ftell (fp);
+  fprintf (fp, "NETS %012lu ;\n", netcount);
+  /*
+    Output format: 
+
+    - net1237
+    ( inst5638 A ) ( inst4678 Y )
+    ;
+  */
+  _collect_emit_nets (a, NULL, p, fp);
+  
+  fprintf (fp, "END NETS\n\n");
+  fprintf (fp, "END DESIGN\n");
+
+  fseek (fp, pos, SEEK_SET);
+  
+  fprintf (fp, "NETS %12lu ;\n", netcount);
+  fseek (fp, 0, SEEK_END);
+}
