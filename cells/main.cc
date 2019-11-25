@@ -41,11 +41,12 @@ static Act *global_act;
 
 static double area_multiplier;
 
-static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
+static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
+		      int toplevel)
 {
   Assert (net, "Why are you calling this function?");
   if (net->skip) return 0;
-  if (net->port) return 0;
+  if (net->port && !toplevel) return 0;
 
   if (A_LEN (net->pins) < 2) return 0;
 
@@ -61,6 +62,10 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net)
   fprintf (fp, "\n  ");
 
   char buf[10240];
+
+  if (net->port) {
+    fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
+  }
 
   for (int i=0; i < A_LEN (net->pins); i++) {
     fprintf (fp, " ( ");
@@ -119,7 +124,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp,
 
   /* first, print my local nets */
   for (int i=0; i < A_LEN (n->nets); i++) {
-    if (print_net (a, fp, prefix, &n->nets[i])) {
+    if (print_net (a, fp, prefix, &n->nets[i], prefix == NULL ? (i+1) : 0)) {
       netcount++;
     }
   }
@@ -246,19 +251,8 @@ static void dump_nets (void *x, ActId *prefix, Process *p)
 
 ActApplyPass *gapply = NULL;
 
-static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char *defname)
+static void emit_def (FILE *fp, Act *a, Process *p, circuit_t *ckt, char *defname)
 {
-  FILE *fp;
-
-  global_act = a;
-  
-  fp = fopen (defname, "w");
-  if (!fp) {
-    fatal_error ("Could not open file `%s' for writing", defname);
-  }
-  def_header (fp, ckt, p);
-  
-  
   double unit_conv;
 
   /* collect process info */
@@ -329,8 +323,41 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   
   fprintf (fp, "END COMPONENTS\n\n");
 
+  ActPass *anlp = a->pass_find ("prs2net");
+  Assert (anlp, "What?");
+  ActNetlistPass *nl = dynamic_cast<ActNetlistPass *>(anlp);
+  Assert (nl, "What?");
+
+  netlist_t *act_ckt = nl->getNL (p);
+  Assert (act_ckt, "No circuit?");
+  act_boolean_netlist_t *act_bnl = act_ckt->bN;
+
+  int num_pins = 0;
+
+  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+    if (act_bnl->ports[i].omit) continue;
+    num_pins++;
+  }
+
   /* -- no I/O constraints -- */
-  fprintf (fp, "PINS 0 ;\n");
+  fprintf (fp, "PINS %d ;\n", num_pins);
+  num_pins = 0;
+  for (int i=0; i < A_LEN (act_bnl->ports); i++) {
+    if (act_bnl->ports[i].omit) continue;
+    Assert (act_bnl->ports[i].netid != -1, "What?");
+    fprintf (fp, "- top_iopin%d + NET ", act_bnl->ports[i].netid);
+    ActId *tmp = act_bnl->nets[act_bnl->ports[i].netid].net->toid();
+    tmp->Print (fp);
+    delete tmp;
+    if (act_bnl->ports[i].input) {
+      fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ");
+    }
+    else {
+      fprintf (fp, " + DIRECTION OUTPUT + USE SIGNAL ");
+    }
+    fprintf (fp, " ;\n");
+  }
+  
   fprintf (fp, "END PINS\n\n");
 
   /* -- emit net info -- */
@@ -346,9 +373,7 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   ( inst5638 A ) ( inst4678 Y )
  ;
   */
-
   _collect_emit_nets (a, NULL, p, fp, ckt);
-
   
   fprintf (fp, "END NETS\n\n");
   fprintf (fp, "END DESIGN\n");
@@ -358,7 +383,6 @@ static void emit_def (Act *a, Process *p, circuit_t *ckt, char *proc_name, char 
   fp = fopen (defname, "r+");
   fseek (fp, pos, SEEK_SET);
   fprintf (fp, "NETS %12lu ;\n", netcount);
-  fclose (fp);
 }
 
 
@@ -569,7 +593,15 @@ int main (int argc, char **argv)
   boolinfo->createNets (p);
 
   /*--- print out def file ---*/
-  emit_def (a, p, NULL, proc_name, defname);
+
+  FILE *yfp = fopen (defname, "w");
+  if (!yfp) {
+    fatal_error ("Could not open file `%s' for writing", defname);
+  }
+  lp->emitDEFHeader (yfp, p);
+  global_act = a;
+  emit_def (yfp, a, p, NULL, defname);
+  fclose (yfp);
 
   delete procmap;
 

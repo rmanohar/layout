@@ -1391,3 +1391,28 @@ int ActStackLayoutPass::maxHeight (Process *p)
   delete visited;
   return maxval;
 }
+
+
+
+
+/*------------------------------------------------------------------------
+ *  
+ *  Routines for DEF file generation
+ *
+ *------------------------------------------------------------------------
+ */
+
+void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
+{
+  /* -- def header -- */
+  fprintf (fp, "VERSION 5.8 ;\n\n");
+  fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
+  fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
+  fprintf (fp, "DESIGN ");
+
+  a->mfprintfproc (fp, p);
+  fprintf (fp, " ;\n");
+  
+  fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
+}
+				   

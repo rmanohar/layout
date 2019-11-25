@@ -51,11 +51,14 @@ class ActStackLayoutPass : public ActPass {
 
   LayoutBlob *getLayout (Process *p = NULL);
   int emitLEF (FILE *fp, Process *p);
+  
 #ifdef INTEGRATED_PLACER
   int createBlocks (circuit_t *ckt, Process *p);
 #endif
 
   void emitLEFHeader (FILE *fp);
+  void emitDEFHeader (FILE *fp, Process *p);
+  
   int emitRect (FILE *fp, Process *p);
 
  private:

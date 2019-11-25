@@ -1264,6 +1264,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   case BLOB_BASE:
     base.l = lptr;
     lptr->getBBox (&llx, &lly, &urx, &ury);
+    /* XXX: set edge attributes */
     break;
 
   case BLOB_HORIZ:
@@ -1798,7 +1799,7 @@ int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
   if ((a1 && !a2) || (!a1 && a2)) {
     return 0;
   }
-  /* now check! */
+  /* XXX: now check! */
   *d1 = 0;
   *d2 = 0;
   return 2;
