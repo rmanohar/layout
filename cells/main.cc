@@ -185,6 +185,14 @@ int main (int argc, char **argv)
   }
   lp->emitLEFHeader (fp);
 
+  FILE *fpcell;
+  snprintf (buf, 1024, "%s.cell", outname);
+  fpcell = fopen (buf, "w");
+  if (!fpcell) {
+    fatal_error ("Could not open file `%s' for writing", buf);
+  }
+  lp->emitWellHeader (fpcell);
+
   /* -- walk through cells, emitting 
        1. LEF files for any cell layout
        2. .rect files for those cells
@@ -209,6 +217,9 @@ int main (int argc, char **argv)
     /* append to LEF file */
     lp->emitLEF (fp, p);
     fprintf (fp, "\n");
+
+    lp->emitWellLEF (fpcell, p);
+    fprintf (fpcell, "\n");
     
     /* generate .rect file */
     {
@@ -225,6 +236,7 @@ int main (int argc, char **argv)
     }
   }
   fclose (fp);
+  fclose (fpcell);
 
   /* 
      preparation for DEF file generation: create flat netlist using

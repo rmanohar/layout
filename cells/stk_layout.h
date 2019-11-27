@@ -59,6 +59,10 @@ class ActStackLayoutPass : public ActPass {
   void emitLEFHeader (FILE *fp);
   void emitDEFHeader (FILE *fp, Process *p);
   void emitDEF (FILE *fp, Process *p, double pad = 1.4, int do_pins = 1);
+
+  /* well information */
+  void emitWellHeader (FILE *fp);
+  int emitWellLEF (FILE *fp, Process *p);
   
   int emitRect (FILE *fp, Process *p);
   int haveRect (Process *p);

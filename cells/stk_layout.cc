@@ -1142,6 +1142,63 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   return 1;
 }
 
+int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
+{
+  int padx = 0;
+  int pady = 0;
+  netlist_t *n;
+  if (!completed ()) {
+    return 0;
+  }
+
+  if (!p) {
+    return 0;
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return 0;
+  }
+
+  n = stk->getNL (p);
+  if (!n) {
+    return 0;
+  }
+
+  long bllx, blly, burx, bury;
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+
+  if (bllx > burx || blly > bury) {
+    /* no layout */
+    return 0;
+  }
+
+  double scale = Technology::T->scale/1000.0;
+
+  fprintf (fp, "MACRO ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "\n");
+
+  fprintf (fp, "    UNPLUG\n");
+
+  /*--- get all the welldiff areas and print them ---*/
+  
+  
+
+
+
+  fprintf (fp, "    END UNPLUG\n");
+
+
+
+  fprintf (fp, "END ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "\n");
+
+  return 1;
+}
+
+
 #ifdef INTEGRATED_PLACER
 int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
 {
@@ -1325,6 +1382,24 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
     
     fprintf (fp, "END %s_C\n\n", vup->getName());
+  }
+}
+
+void ActStackLayoutPass::emitWellHeader (FILE *fp)
+{
+  double scale = Technology::T->scale/1000.0;
+  
+  for (int i=0; i < Technology::T->num_devs; i++) {
+    for (int j = 0 ; j < 2; j++) {
+      WellMat *w = Technology::T->well[j][i];
+      if (w) {
+	fprintf (fp, "LAYER %s\n", w->getName());
+	fprintf (fp, " MINWIDTH %.6f ;\n", w->minWidth()*scale);
+	fprintf (fp, " SPACING %.6f ;\n", w->minSpacing(i)*scale);
+	fprintf (fp, " OPPOSPACING %.6f ;\n", w->oppSpacing(i)*scale);
+	fprintf (fp, "END %s\n\n", w->getName());
+      }
+    }
   }
 }
 
