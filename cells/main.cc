@@ -37,15 +37,17 @@
 #include "geom.h"
 #include "stacks.h"
 
-static double area_multiplier;
-
-static ActNetlistPass *netinfo = NULL;
-static ActBooleanizePass *boolinfo = NULL;
-
 void usage (char *name)
 {
   fprintf (stderr, "Unknown options.\n");
-  fprintf (stderr, "Usage: %s -p procname -l lefname -d defname [-s spicename] [-c cell.act] <file.act>\n", name);
+  fprintf (stderr, "Usage: %s -p procname [-s] [-o <name>] [-a <mult>] [-c <cell>] <file.act>\n", name);
+  fprintf (stderr, " -p procname: name of ACT process corresponding to the top-level of the design\n");
+  fprintf (stderr, " -o <name>: output files will be <name>.<extension> (default: out)\n");
+  fprintf (stderr, " -s : emit spice netlist\n");
+  fprintf (stderr, " -P : include PINS section in DEF file\n");
+  fprintf (stderr, " -a <mult>: use <mult> as the area multiplier for the DEF fie (default 1.4)\n");
+  fprintf (stderr, " -c <cell>: Read in the <cell> ACT file as a starting point for cells,\n\toverwriting it with an updated version with any new cells\n");
+  fprintf (stderr, "\n");
   exit (1);
 }
 
@@ -55,12 +57,13 @@ int main (int argc, char **argv)
   Process *p;
   int ch;
   char *proc_name = NULL;
-  char *spice = NULL;
-  FILE *fp;
-  char *lefname = NULL;
-  char *defname = NULL;
+  char *outname = NULL;
   char *cellname = NULL;
   int do_pins = 0;
+  int do_spice = 0;
+  char buf[1024];
+  FILE *fp;
+  double area_multiplier;
 
   area_multiplier = 1.4;
   
@@ -72,7 +75,7 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "c:p:l:d:s:Pa:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sPa:")) != -1) {
     switch (ch) {
     case 'a':
       area_multiplier = atof (optarg);
@@ -96,25 +99,15 @@ int main (int argc, char **argv)
       proc_name = Strdup (optarg);
       break;
 
-    case 'd':
-      if (defname) {
-	FREE (defname);
+    case 'o':
+      if (outname) {
+	FREE (outname);
       }
-      defname = Strdup (optarg);
+      outname = Strdup (optarg);
       break;
       
-    case 'l':
-      if (lefname) {
-	FREE (lefname);
-      }
-      lefname = Strdup (optarg);
-      break;
-
     case 's':
-      if (spice) {
-	FREE (spice);
-      }
-      spice = Strdup (optarg);
+      do_spice = 1;
       break;
 
     case '?':
@@ -136,11 +129,8 @@ int main (int argc, char **argv)
   if (!proc_name) {
     fatal_error ("Missing process name!");
   }
-  if (!lefname) {
-    fatal_error ("Missing lef name!");
-  }
-  if (!defname) {
-    fatal_error ("Missing def name!");
+  if (!outname) {
+    outname = Strdup ("out");
   }
 
   /*--- read in and expand ACT file ---*/
@@ -157,7 +147,6 @@ int main (int argc, char **argv)
   
   a->Expand();
 
-
   /*--- find top level process ---*/
   p = a->findProcess (proc_name);
   if (!p) {
@@ -168,38 +157,39 @@ int main (int argc, char **argv)
   /*--- core passes ---*/
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
-  boolinfo = new ActBooleanizePass (a);
-  netinfo = new ActNetlistPass (a);
-  netinfo->run (p);
-
-  ActStackPass *stkp = new ActStackPass (a);
-
   ActStackLayoutPass *lp = new ActStackLayoutPass (a);
 
-  if (spice) {
-    FILE *sp = fopen (spice, "w");
-    if (!sp) { fatal_error ("Could not open file `%s'", spice); }
+  lp->run (p);
+
+  /* --- emit SPICE netlist, if requested --- */
+  if (do_spice) {
+    ActNetlistPass *netinfo;
+    snprintf (buf, 1024, "%s.sp", outname);
+    FILE *sp = fopen (buf, "w");
+    if (!sp) { fatal_error ("Could not open file `%s'", buf); }
+    netinfo = dynamic_cast<ActNetlistPass *>(a->pass_find ("prs2net"));
     netinfo->Print (sp, p);
     fclose (sp);
   }
-  //a->Print (stdout);
 
-  lp->run (p);
-  
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
 
   //a->Print (stdout);
 
   /*--- print out lef file, plus rectangles ---*/
-  FILE *xfp = fopen (lefname, "w");
-  if (!xfp) {
-    fatal_error ("Could not open file `%s' for writing", lefname);
+  snprintf (buf, 1024, "%s.lef", outname);
+  fp = fopen (buf, "w");
+  if (!fp) {
+    fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitLEFHeader (xfp);
+  lp->emitLEFHeader (fp);
 
+  /* -- walk through cells, emitting 
+       1. LEF files for any cell layout
+       2. .rect files for those cells
+  -- */
   ActTypeiter it(cell_ns);
-
   for (it = it.begin(); it != it.end(); it++) {
     Type *u = (*it);
     Process *p = dynamic_cast<Process *>(u);
@@ -207,52 +197,60 @@ int main (int argc, char **argv)
     if (!p) continue;
     if (!p->isCell()) continue;
     if (!p->isExpanded()) continue;
-    netlist_t *N = netinfo->getNL (p);
 
-    if (!N) {
-      /* cell defined, but not used */
+    if (!p->getprs()) {
+      /* no circuits */
+      continue;
+    }
+    if (!lp->haveRect (p)) {
       continue;
     }
 
     /* append to LEF file */
-    lp->emitLEF (xfp, p);
-    fprintf (xfp, "\n");
+    lp->emitLEF (fp, p);
+    fprintf (fp, "\n");
     
     /* generate .rect file */
-    FILE *tfp;
-    char cname[10240];
-    int len;
+    {
+      FILE *tfp;
+      char cname[10240];
+      int len;
 
-    a->msnprintfproc (cname, 10240, p);
-    len = strlen (cname);
-    snprintf (cname + len, 10240-len, ".rect");
-
-    tfp = fopen (cname, "w");
-    lp->emitRect (tfp, p);
-    fclose (tfp);
+      a->msnprintfproc (cname, 10240, p);
+      len = strlen (cname);
+      snprintf (cname + len, 10240-len, ".rect");
+      tfp = fopen (cname, "w");
+      lp->emitRect (tfp, p);
+      fclose (tfp);
+    }
   }
-  fclose (xfp);
+  fclose (fp);
 
-  /* -- preparation for DEF file generation: create flat netlist -- */
+  /* 
+     preparation for DEF file generation: create flat netlist using
+     special method in the booleanize pass
+  */
+  ActBooleanizePass *boolinfo;
+  boolinfo = dynamic_cast<ActBooleanizePass *> (a->pass_find ("booleanize"));
   boolinfo->createNets (p);
 
   /* --- print out def file --- */
-  FILE *yfp = fopen (defname, "w+");
-  if (!yfp) {
-    fatal_error ("Could not open file `%s' for writing", defname);
+  snprintf (buf, 1024, "%s.def", outname);
+  fp = fopen (buf, "w+");
+  if (!fp) {
+    fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitDEF (yfp, p, area_multiplier, do_pins);
-  fclose (yfp);
+  lp->emitDEF (fp, p, area_multiplier, do_pins);
+  fclose (fp);
 
   /* -- dump updated cells file, if necessary -- */
   if (cellname) {
-    xfp = fopen (cellname, "w");
-    if (!xfp) {
+    fp = fopen (cellname, "w");
+    if (!fp) {
       fatal_error ("Could not write `%s'", cellname);
     }
-    cp->Print (xfp);
-    fclose (xfp);
+    cp->Print (fp);
+    fclose (fp);
   }
-
   return 0;
 }

@@ -61,6 +61,7 @@ class ActStackLayoutPass : public ActPass {
   void emitDEF (FILE *fp, Process *p, double pad = 1.4, int do_pins = 1);
   
   int emitRect (FILE *fp, Process *p);
+  int haveRect (Process *p);
 
  private:
   int init ();

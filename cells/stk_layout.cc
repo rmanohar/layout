@@ -965,6 +965,24 @@ int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
   return 1;
 }
 
+int ActStackLayoutPass::haveRect (Process *p)
+{
+  if (!completed ()) {
+    return 0;
+  }
+  if (!p) {
+    return 0;
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return 0;
+  }
+  else {
+    return 1;
+  }
+}
+
 int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 {
   int padx = 0;
