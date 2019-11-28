@@ -88,6 +88,7 @@ Layer::Layer (Material *m, netlist_t *_n)
   down = NULL;
   other = NULL;
   nother = 0;
+  bbox = 0;
 
   hint = new Tile();
   vhint = new Tile();
@@ -974,6 +975,8 @@ int Layer::drawVia (long llx, long lly, unsigned long wx, unsigned long wy,
 {
   Tile *x;
 
+  bbox = 0;
+
   x = vhint->addRect (llx, lly, wx, wy);
   if (!x) return 0;
 
@@ -1012,6 +1015,8 @@ int Layer::Draw (long llx, long lly, unsigned long wx, unsigned long wy,
 {
   Tile *x;
 
+  bbox = 0;
+
   x = hint->addRect (llx, lly, wx, wy);
   if (!x) return 0;
 
@@ -1035,6 +1040,7 @@ int Layer::Draw (long llx, long lly, unsigned long wx, unsigned long wy,
 int Layer::DrawVirt (int flavor, int type,
 		     long llx, long lly, unsigned long wx, unsigned long wy)
 {
+  bbox = 0;
   return hint->addVirt (flavor, type, llx, lly, wx, wy);
 }
 
@@ -1525,6 +1531,14 @@ void Layer::BBox (long *llx, long *lly, long *urx, long *ury, int type)
   long xllx, xlly, xurx, xury;
   int first = 1;
 
+  if (bbox && type == -1) {
+    *llx = _llx;
+    *lly = _lly;
+    *urx = _urx;
+    *ury = _ury;
+    return;
+  }
+
   l = list_new ();
   
   hint->applyTiles (MIN_VALUE+1, MIN_VALUE+1,
@@ -1575,6 +1589,13 @@ void Layer::BBox (long *llx, long *lly, long *urx, long *ury, int type)
     *lly = 0;
     *urx = -1;
     *ury = -1;
+  }
+  if (type == -1) {
+    bbox = 1;
+    _llx = *llx;
+    _lly = *lly;
+    _urx = *urx;
+    _ury = *ury;
   }
 }
 

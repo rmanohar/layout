@@ -183,6 +183,9 @@ protected:
 
   netlist_t *N;
 
+  unsigned int bbox:1;		// 1 if bbox below is valid
+  long _llx, _lly, _urx, _ury;
+
  public:
   Layer (Material *, netlist_t *);
   ~Layer ();
