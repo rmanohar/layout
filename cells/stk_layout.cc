@@ -1179,17 +1179,109 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n");
 
-  fprintf (fp, "    UNPLUG\n");
+  fprintf (fp, "    VERSION ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "\n");
+  fprintf (fp, "        UNPLUG\n");
 
-  /*--- get all the welldiff areas and print them ---*/
-  
-  
+  TransformMat mat;
+  mat.applyTranslate (-bllx, -blly);
+
+  for (int i=0; i < Technology::T->num_devs; i++) {
+    for (int j=0; j < 2; j++) {
+
+      WellMat *w = Technology::T->well[j][i];
+      list_t *tiles = blob->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET), &mat);
+      long wllx, wlly, wurx, wury;
+      int init = 0;
+
+      listitem_t *tli;
+      for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+	struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+
+	/* a transform matrix + list of (layer,tile-list) pairs */
+	
+	listitem_t *xi;
+	for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+	  Layer *name = (Layer *) list_value (xi);
+	  xi = list_next (xi);
+	  Assert (xi, "What?");
+
+	  list_t *actual_tiles = (list_t *) list_value (xi);
+	  listitem_t *ti;
+
+	  for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	    long tllx, tlly, turx, tury;
+	    Tile *tmp = (Tile *) list_value (ti);
+
+	    tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	    tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	    if (tllx > turx) {
+	      long x = tllx;
+	      tllx = turx;
+	      turx = x;
+	    }
+	  
+	    if (tlly > tury) {
+	      long x = tlly;
+	      tlly = tury;
+	      tury = x;
+	    }
+	    if (!init) {
+	      wllx = tllx;
+	      wlly = tlly;
+	      wurx = turx;
+	      wury = tury;
+	      init = 1;
+	    }
+	    else {
+	      wllx = MIN(wllx, tllx);
+	      wlly = MIN(wlly, tlly);
+	      wurx = MAX(wurx, turx);
+	      wury = MAX(wury, tury);
+	    }
+	  }
+	}
+      }
+
+      if (init && w) {
+	wurx ++;
+	wury ++;
+	
+	//wllx -= w->getOverhang();
+	wlly -= w->getOverhang();
+	//wurx += w->getOverhang();
+	wury += w->getOverhang();
+
+	wllx = 0; // XXX: FIXME MAX(wllx, 0);
+	wlly = MAX(wlly, 0);
+
+	// XXX: FIXME wurx = MIN(wurx, burx - bllx);
+	wurx = burx - bllx;
+	
+	wury = MIN(wury, bury - blly + 1);
+	
+	fprintf (fp, "        LAYER %s ;\n", w->getName());
+	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		 scale*wllx, scale*wlly, scale*wurx, scale*wury);
+	fprintf (fp, "        END\n");
+      }
+      list_free (tiles);
+    }
+  }
+  fprintf (fp, "    END VERSION\n");
+
+  fprintf (fp, "    VERSION ");
+  a->mfprintfproc (fp, p);
+  fprintf (fp, "_plug\n");
+
+  fprintf (fp, "        PLUG\n");
+
+  /* -- plugged lef -- */
 
 
-
-  fprintf (fp, "    END UNPLUG\n");
-
-
+  fprintf (fp, "    END VERSION\n");
 
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);

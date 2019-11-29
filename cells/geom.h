@@ -204,6 +204,7 @@ protected:
   int isMetal ();
   
   list_t *search (void *net);
+  list_t *search (int attr);
 
   /* type = -1 : all! */
   void BBox (long *llx, long *lly, long *urx, long *ury, int type = -1);
@@ -262,6 +263,7 @@ public:
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   list_t *search (void *net);
+  list_t *search (int attr);
   
 private:
   Layer *base;
@@ -361,6 +363,8 @@ public:
    *  @return a list_t of tile_listentry tiles.
    */
   list_t *search (void *net, TransformMat *m = NULL);
+  list_t *search (int type, TransformMat *m = NULL); // this is for
+						     // base layers
 
   /**
    *  Calculate the placement boundary for the LayoutBlob; this

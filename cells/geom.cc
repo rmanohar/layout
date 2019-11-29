@@ -1660,6 +1660,15 @@ static void appendnet (void *cookie, Tile *t)
   }
 }
 
+static int _searchtype = -1;
+static void appendtype (void *cookie, Tile *t)
+{
+  list_t *l = (list_t *)cookie;
+  if (t->getAttr() == _searchtype) {
+    list_append (l, t);
+  }
+}
+
 list_t *Layer::search (void *net)
 {
   list_t *l = list_new ();
@@ -1670,6 +1679,17 @@ list_t *Layer::search (void *net)
   _searchnet = NULL;
   return l;
 }
+
+list_t *Layer::search (int type)
+{
+  list_t *l = list_new ();
+  _searchtype = type;
+  hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l, appendtype);
+  return l;
+}
+
 
 /*
   Returns a list with alternating  (Layer, listoftiles)
@@ -1697,6 +1717,25 @@ list_t *Layout::search (void *net)
       list_append (ret, metals[i]);
       list_append (ret, l);
     }
+  }
+  return ret;
+}
+
+/*
+  Returns a list with alternating  (Layer, listoftiles)
+*/
+list_t *Layout::search (int type)
+{
+  list_t *ret = list_new ();
+  list_t *tmp;
+
+  tmp = base->search (type);
+  if (list_isempty (tmp)) {
+    list_free (tmp);
+  }
+  else {
+    list_append (ret, base);
+    list_append (ret, tmp);
   }
   return ret;
 }
@@ -1747,6 +1786,62 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
 	}
       }
       list_t *tmp = bl->b->search (net, &tmat);
+      list_concat (tiles, tmp);
+      list_free (tmp);
+    }
+  }
+  else {
+    fatal_error ("New blob?");
+  }
+  return tiles;
+}
+
+list_t *LayoutBlob::search (int type, TransformMat *m)
+{
+  TransformMat tmat;
+  list_t *tiles;
+
+  if (m) {
+    tmat = *m;
+  }
+  if (t == BLOB_BASE) {
+    tiles = base.l->search (type);
+    if (list_isempty (tiles)) {
+      return tiles;
+    }
+    else {
+      struct tile_listentry *tle;
+      NEW (tle, struct tile_listentry);
+      tle->m = tmat;
+      tle->tiles = tiles;
+      tiles = list_new ();
+      list_append (tiles, tle);
+      return tiles;
+    }
+  }
+  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+    blob_list *bl;
+    tiles = list_new ();
+    
+    for (bl = l.hd; bl; q_step (bl)) {
+      if (bl == l.hd) {
+	/* no change to tmat */
+      }
+      else {
+	if (t == BLOB_MERGE) {
+	  /* no change to tmat */
+	}
+	else if (t == BLOB_HORIZ) {
+	  tmat.applyTranslate (bl->gap, bl->shift);
+	}
+	else if (t == BLOB_VERT) {
+	  tmat.applyTranslate (bl->shift, bl->gap);
+	}
+	else {
+	  fatal_error ("What is this?");
+	}
+      }
+      list_t *tmp = bl->b->search (type, &tmat);
       list_concat (tiles, tmp);
       list_free (tmp);
     }
