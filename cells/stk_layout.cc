@@ -1006,6 +1006,8 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
     return 0;
   }
 
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
   long bllx, blly, burx, bury;
   blob->calcBoundary (&bllx, &blly, &burx, &bury);
 
@@ -1014,8 +1016,17 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
     return 0;
   }
 
+  for (int lef=0; lef < 2; lef++) {
+
+  if (lef != 0) { fprintf (fp, "\n"); }
+
   fprintf (fp, "MACRO ");
   a->mfprintfproc (fp, p);
+
+  if (lef == 1) {
+    fprintf (fp, "_plug");
+  }
+  
   fprintf (fp, "\n");
 
   fprintf (fp, "    CLASS CORE ;\n");
@@ -1027,7 +1038,7 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   double scale = Technology::T->scale/1000.0;
 
   fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale,
-	   (bury - blly)*scale);
+	   (bury - blly + (lef == 0 ? 0 : 4*m2->getPitch()))*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 
@@ -1122,8 +1133,6 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
      add the routed metal and then grab that here */
   long rllx, rlly, rurx, rury;
   blob->getBBox (&rllx, &rlly, &rurx, &rury);
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
   if (((rury - rlly) > 6*m1->getPitch()) &&
       ((rurx - rllx) > 2*m2->getPitch())) {
     fprintf (fp, "    OBS\n");
@@ -1138,6 +1147,9 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n");
+
+  }
+  
 
   return 1;
 }
@@ -1173,16 +1185,28 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
     return 0;
   }
 
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
   double scale = Technology::T->scale/1000.0;
 
   fprintf (fp, "MACRO ");
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n");
 
+  for (int lef=0; lef < 2; lef++) {
+
   fprintf (fp, "    VERSION ");
   a->mfprintfproc (fp, p);
+  if (lef == 1) {
+    fprintf (fp, "_plug");
+  }
   fprintf (fp, "\n");
-  fprintf (fp, "        UNPLUG\n");
+  if (lef == 0) {
+    fprintf (fp, "        UNPLUG\n");
+  }
+  else {
+    fprintf (fp, "        PLUG\n");
+  }
 
   TransformMat mat;
   mat.applyTranslate (-bllx, -blly);
@@ -1258,9 +1282,9 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
 	wlly = MAX(wlly, 0);
 
 	// XXX: FIXME wurx = MIN(wurx, burx - bllx);
-	wurx = burx - bllx;
+	wurx = burx - bllx + (lef == 0 ? 0 : 4*m2->getPitch());
 	
-	wury = MIN(wury, bury - blly + 1);
+	wury = MIN(wury, bury - blly);
 	
 	fprintf (fp, "        LAYER %s ;\n", w->getName());
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
@@ -1272,16 +1296,7 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
   }
   fprintf (fp, "    END VERSION\n");
 
-  fprintf (fp, "    VERSION ");
-  a->mfprintfproc (fp, p);
-  fprintf (fp, "_plug\n");
-
-  fprintf (fp, "        PLUG\n");
-
-  /* -- plugged lef -- */
-
-
-  fprintf (fp, "    END VERSION\n");
+  }
 
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);
