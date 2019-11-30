@@ -1501,9 +1501,12 @@ void ActStackLayoutPass::emitWellHeader (FILE *fp)
       WellMat *w = Technology::T->well[j][i];
       if (w) {
 	fprintf (fp, "LAYER %s\n", w->getName());
-	fprintf (fp, " MINWIDTH %.6f ;\n", w->minWidth()*scale);
-	fprintf (fp, " SPACING %.6f ;\n", w->minSpacing(i)*scale);
-	fprintf (fp, " OPPOSPACING %.6f ;\n", w->oppSpacing(i)*scale);
+	fprintf (fp, "    MINWIDTH %.6f ;\n", w->minWidth()*scale);
+	fprintf (fp, "    SPACING %.6f ;\n", w->minSpacing(i)*scale);
+	fprintf (fp, "    OPPOSPACING %.6f ;\n", w->oppSpacing(i)*scale);
+	if (w->maxPlugDist() > 0) {
+	  fprintf (fp, "    MAXPLUGDIST %.6f ;\n", w->maxPlugDist()*scale);
+	}
 	fprintf (fp, "END %s\n\n", w->getName());
       }
     }
