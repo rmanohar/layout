@@ -1022,7 +1022,6 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 
   fprintf (fp, "MACRO ");
   a->mfprintfproc (fp, p);
-
   if (lef == 1) {
     fprintf (fp, "_plug");
   }
@@ -1032,6 +1031,10 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "    CLASS CORE ;\n");
   fprintf (fp, "    FOREIGN ");
   a->mfprintfproc (fp, p);
+  if (lef == 1) {
+    fprintf (fp, "_plug");
+  }
+
   fprintf (fp, " %.6f %.6f ;\n", 0.0, 0.0);
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
@@ -1146,6 +1149,9 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   }
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);
+  if (lef == 1) {
+    fprintf (fp, "_plug");
+  }
   fprintf (fp, "\n");
 
   }
