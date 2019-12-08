@@ -49,6 +49,9 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   Assert (pass, "Hmm...");
   stk = dynamic_cast<ActStackPass *>(pass);
   Assert (stk, "Hmm too...");
+
+  _total_area = -1;
+  _total_instances = -1;
 }
 
 void ActStackLayoutPass::cleanup()

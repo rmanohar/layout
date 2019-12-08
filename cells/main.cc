@@ -47,6 +47,8 @@ void usage (char *name)
   fprintf (stderr, " -P : include PINS section in DEF file\n");
   fprintf (stderr, " -a <mult>: use <mult> as the area multiplier for the DEF fie (default 1.4)\n");
   fprintf (stderr, " -c <cell>: Read in the <cell> ACT file as a starting point for cells,\n\toverwriting it with an updated version with any new cells\n");
+  fprintf (stderr, " -S : share staticizers\n");
+  fprintf (stderr, " -A : report area\n");
   fprintf (stderr, "\n");
   exit (1);
 }
@@ -64,6 +66,7 @@ int main (int argc, char **argv)
   char buf[1024];
   FILE *fp;
   double area_multiplier;
+  int report_area = 0;
 
   area_multiplier = 1.4;
   
@@ -75,8 +78,12 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "c:p:o:sPa:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sPAa:")) != -1) {
     switch (ch) {
+    case 'A':
+      report_area = 1;
+      break;
+      
     case 'a':
       area_multiplier = atof (optarg);
       break;
@@ -254,6 +261,19 @@ int main (int argc, char **argv)
   }
   lp->emitDEF (fp, p, area_multiplier, do_pins);
   fclose (fp);
+
+  if (report_area) {
+    double a = lp->getArea();
+    a *= Technology::T->scale/1000.0;
+    a *= Technology::T->scale/1000.0;
+    if (a > 1e4) {
+      a /= 1e6;
+      printf ("Area: %.3g mm^2\n", a);
+    }
+    else {
+      printf ("Area: %.3g um^2\n", a);
+    }
+  }
 
   /* -- dump updated cells file, if necessary -- */
   if (cellname) {

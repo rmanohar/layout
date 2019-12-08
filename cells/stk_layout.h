@@ -67,6 +67,8 @@ class ActStackLayoutPass : public ActPass {
   int emitRect (FILE *fp, Process *p);
   int haveRect (Process *p);
 
+  double getArea () { return _total_area; }
+
  private:
   int init ();
   void cleanup();
