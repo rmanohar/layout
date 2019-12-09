@@ -801,12 +801,28 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
+
+      ihash_bucket_t *b;
+      b = ihash_lookup (n->bN->cH, (long)n->bN->ports[i].c);
+
+      if (!b) {
+	/* port is only used as a pass through, and is not a pin for
+	   the local LEF */
+	continue;
+      }
+      
       if (n->bN->ports[i].input) {
 	p_in++;
       }
       else {
 	p_out++;
       }
+    }
+    if (n->weak_supply_vdd > 0) {
+      p_in++;
+    }
+    if (n->weak_supply_gnd > 0) {
+      p_in++;
     }
 
     if ((p_in * m2->getPitch() > redge) ||(p_out * m2->getPitch() > redge)) {
@@ -841,6 +857,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
       ihash_bucket_t *b;
       b = ihash_lookup (n->bN->cH, (long)n->bN->ports[i].c);
+      if (!b) continue;
+      
       Assert (b, "Hmm:");
       act_booleanized_var_t *v;
       struct act_nl_varinfo *av;
@@ -859,6 +877,10 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 	p_out += m2->getPitch()*s_out;
       }
     }
+
+    /*--- XXX: but this is not the end of the pins... ---*/
+
+    
     LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
     bl->appendBlob (BLOB);
     bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
@@ -1621,8 +1643,9 @@ static double _areacount;
 static void count_inst (void *x, ActId *prefix, Process *p)
 {
   ActStackLayoutPass *ap = (ActStackLayoutPass *)x;
+  LayoutBlob *b;
   
-  if (p->getprs()) {
+  if ((b = ap->getLayout (p))) {
     /* there is a circuit */
     
     LayoutBlob *b;

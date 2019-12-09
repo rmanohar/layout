@@ -67,6 +67,7 @@ int main (int argc, char **argv)
   FILE *fp;
   double area_multiplier;
   int report_area = 0;
+  int share_staticizers = 0;
 
   area_multiplier = 1.4;
   
@@ -78,8 +79,12 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "c:p:o:sPAa:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sSPAa:")) != -1) {
     switch (ch) {
+    case 'S':
+      share_staticizers = 1;
+      break;
+      
     case 'A':
       report_area = 1;
       break;
@@ -164,20 +169,27 @@ int main (int argc, char **argv)
   /*--- core passes ---*/
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
+
   ActStackLayoutPass *lp = new ActStackLayoutPass (a);
 
-  lp->run (p);
+  ActNetlistPass *netinfo;
+  netinfo = dynamic_cast<ActNetlistPass *>(a->pass_find ("prs2net"));
+
+  if (share_staticizers) {
+    netinfo->enableSharedStat();
+  }
+  netinfo->run (p);
 
   /* --- emit SPICE netlist, if requested --- */
   if (do_spice) {
-    ActNetlistPass *netinfo;
     snprintf (buf, 1024, "%s.sp", outname);
     FILE *sp = fopen (buf, "w");
     if (!sp) { fatal_error ("Could not open file `%s'", buf); }
-    netinfo = dynamic_cast<ActNetlistPass *>(a->pass_find ("prs2net"));
     netinfo->Print (sp, p);
     fclose (sp);
   }
+
+  lp->run (p);
 
   ActNamespace *cell_ns = a->findNamespace ("cell");
   Assert (cell_ns, "No cell namespace? No circuits?!");
@@ -252,7 +264,7 @@ int main (int argc, char **argv)
   ActBooleanizePass *boolinfo;
   boolinfo = dynamic_cast<ActBooleanizePass *> (a->pass_find ("booleanize"));
   boolinfo->createNets (p);
-
+  
   /* --- print out def file --- */
   snprintf (buf, 1024, "%s.def", outname);
   fp = fopen (buf, "w+");

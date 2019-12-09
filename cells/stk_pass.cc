@@ -1155,6 +1155,7 @@ int ActStackPass::run (Process *p)
 	}
       }
     }
+    _createstacks (p);
   }
   else {
     _createstacks (p);
