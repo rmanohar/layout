@@ -949,9 +949,9 @@ int ActStackLayoutPass::init ()
   layoutmap = new std::map<Process *, LayoutBlob *>();
 
   net_lambda = config_get_real ("net.lambda");
-  lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale);
+  lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale + 0.5);
 
-  if (lambda_to_scale*Technology::T->scale != net_lambda*1e9) {
+  if (fabs(lambda_to_scale*Technology::T->scale - net_lambda*1e9) > 0.001) {
     warning ("Lambda (%g) and technology scale factor (%g) are not integer multiples; rounding down", net_lambda, Technology::T->scale);
   }
 
