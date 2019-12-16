@@ -27,6 +27,7 @@
 #include <config.h>
 #include <string>
 #include <math.h>
+#include <string.h>
 
 static unsigned long snap_to (unsigned long w, unsigned long pitch)
 {
