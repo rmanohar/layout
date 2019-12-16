@@ -25,7 +25,6 @@
 #include <act/iter.h>
 #include <act/passes.h>
 #include <config.h>
-#include <string>
 #include <math.h>
 #include <string.h>
 
@@ -1423,115 +1422,6 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
 
   return 1;
 }
-
-
-#ifdef INTEGRATED_PLACER
-int ActStackLayoutPass::createBlocks (circuit_t *ckt, Process *p)
-{
-  int padx = 0;
-  int pady = 0;
-  netlist_t *n;
-  if (!completed ()) {
-    return 0;
-  }
-
-  if (!p) {
-    return 0;
-  }
-
-  LayoutBlob *blob = (*layoutmap)[p];
-  if (!blob) {
-    return 0;
-  }
-
-  n = stk->getNL (p);
-  if (!n) {
-    return 0;
-  }
-
-  char tmp[1024];
-  a->msnprintfproc (tmp, 1024, p);
-  
-  long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
-
-  if (bllx > burx || blly > bury) return 0;
-
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
-
-  std::string cktstr(tmp);
-  ckt->add_block_type (cktstr, (burx - bllx)/m2->getPitch(),
-		       (bury - blly)/m1->getPitch());
-
-  /* -- pins -- */
-
-  long rllx, rlly, rurx, rury;
-  BLOB->getBBox (&rllx, &rlly, &rurx, &rury);
-
-  int p_in = 0;
-  int p_out = 0;
-  int s_in = 1;
-  int s_out = 1;
-
-  for (int i=0; i < A_LEN (n->bN->ports); i++) {
-    if (n->bN->ports[i].omit) continue;
-    if (n->bN->ports[i].input) {
-      p_in++;
-    }
-    else {
-      p_out++;
-    }
-  }
-
-  int xgap = (rllx - bllx);
-  int ygap = (rlly - blly);
-
-  if (p_in > 0) {
-    while ((xgap + m2->getPitch() + p_in * s_in * m2->getPitch()) <=
-	   (burx - xgap)) {
-      s_in++;
-    }
-    s_in--;
-  }
-
-  if (p_out > 0) {
-    while ((xgap + m2->getPitch() + p_out * s_out * m2->getPitch()) <=
-	   (burx - xgap)) {
-      s_out++;
-    }
-    s_out--;
-  }
-
-  p_in = m2->getPitch() + xgap;
-  p_out = m2->getPitch() + xgap;
-
-  for (int i=0; i < A_LEN (n->bN->ports); i++) {
-    if (n->bN->ports[i].omit) continue;
-
-    ActId *id = n->bN->ports[i].c->toid();
-    id->sPrint (tmp, 1024);
-    char tmp2[1024];
-    a->msnprintf (tmp2, 1024, "%s", tmp);
-    delete id;
-
-    std::string pinname(tmp2);
-
-    if (n->bN->ports[i].input) {
-      ckt->add_pin_to_block (cktstr, pinname, p_in/m2->getPitch(),
-			     (bury - blly - ygap)/m1->getPitch());
-      p_in += m2->getPitch()*s_in;
-    }
-    else {
-      ckt->add_pin_to_block (cktstr, pinname, p_out/m2->getPitch(),
-			     (ygap + 1)/m1->getPitch());
-      p_out += m2->getPitch()*s_out;
-    }
-  }
-
-  return 1;
-}
-#endif
 
 
 void ActStackLayoutPass::emitLEFHeader (FILE *fp)

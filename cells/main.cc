@@ -35,7 +35,6 @@
 #include "stk_pass.h"
 #include "stk_layout.h"
 #include "geom.h"
-#include "stacks.h"
 
 void usage (char *name)
 {

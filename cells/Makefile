@@ -32,13 +32,7 @@ SRCS=$(OBJS:.o=.cc)
 
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
-#DEPEND_FLAGS += -DINTEGRATED_PLACER
-#CFLAGS +=-I. -std=c++11 -DINTEGRATED_PLACER
-
 $(EXE): $(OBJS) $(ACTPASSDEPEND)
-	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) $(LIBACTPASS) # -L. -lplacer 
-
-#$(EXE): $(OBJS)  $(ACTPASSDEPEND)
-#	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) $(LIBACTPASS)
+	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) $(LIBACTPASS)
 
 -include Makefile.deps

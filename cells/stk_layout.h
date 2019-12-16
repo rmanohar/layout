@@ -28,11 +28,6 @@
 #include <unordered_set>
 #include <hash.h>
 
-#ifdef INTEGRATED_PLACER
-#include "placer.h"
-#endif
-
-
 /* lef/def conversion factor to microns */
 #define MICRON_CONVERSION 2000
 
@@ -50,13 +45,10 @@ class ActStackLayoutPass : public ActPass {
   int maxHeight (Process *p = NULL);
 
   LayoutBlob *getLayout (Process *p = NULL);
-  int emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect = 0);
-  
-#ifdef INTEGRATED_PLACER
-  int createBlocks (circuit_t *ckt, Process *p);
-#endif
 
   void emitLEFHeader (FILE *fp);
+  int emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect = 0);
+  
   void emitDEFHeader (FILE *fp, Process *p);
   void emitDEF (FILE *fp, Process *p, double pad = 1.4, int do_pins = 1);
 
