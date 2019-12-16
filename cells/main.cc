@@ -48,7 +48,8 @@ void usage (char *name)
   fprintf (stderr, " -a <mult>: use <mult> as the area multiplier for the DEF fie (default 1.4)\n");
   fprintf (stderr, " -c <cell>: Read in the <cell> ACT file as a starting point for cells,\n\toverwriting it with an updated version with any new cells\n");
   fprintf (stderr, " -S : share staticizers\n");
-  fprintf (stderr, " -A : report area\n");
+  //fprintf (stderr, " -A : report area\n");
+  fprintf (stderr, " -R : generate report\n");
   fprintf (stderr, "\n");
   exit (1);
 }
@@ -66,7 +67,7 @@ int main (int argc, char **argv)
   char buf[1024];
   FILE *fp;
   double area_multiplier;
-  int report_area = 0;
+  int report = 0;
   int share_staticizers = 0;
 
   area_multiplier = 1.4;
@@ -79,14 +80,14 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "c:p:o:sSPAa:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sSPRa:")) != -1) {
     switch (ch) {
     case 'S':
       share_staticizers = 1;
       break;
       
-    case 'A':
-      report_area = 1;
+    case 'R':
+      report = 1;
       break;
       
     case 'a':
@@ -212,6 +213,10 @@ int main (int argc, char **argv)
   }
   lp->emitWellHeader (fpcell);
 
+
+  lp->emitLEF (fp, fpcell, p, 1);
+
+#if 0  
   /* -- walk through cells, emitting 
        1. LEF files for any cell layout
        2. .rect files for those cells
@@ -254,6 +259,8 @@ int main (int argc, char **argv)
       fclose (tfp);
     }
   }
+#endif
+  
   fclose (fp);
   fclose (fpcell);
 
@@ -274,17 +281,18 @@ int main (int argc, char **argv)
   lp->emitDEF (fp, p, area_multiplier, do_pins);
   fclose (fp);
 
-  if (report_area) {
+  if (report) {
     double a = lp->getArea();
     a *= Technology::T->scale/1000.0;
     a *= Technology::T->scale/1000.0;
     if (a > 1e4) {
       a /= 1e6;
-      printf ("Area: %.3g mm^2\n", a);
+      printf ("Total Area: %.3g mm^2\n", a);
     }
     else {
-      printf ("Area: %.3g um^2\n", a);
+      printf ("Total Area: %.3g um^2\n", a);
     }
+    lp->reportStats (p);
   }
 
   /* -- dump updated cells file, if necessary -- */

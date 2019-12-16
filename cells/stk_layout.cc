@@ -1008,27 +1008,70 @@ int ActStackLayoutPass::haveRect (Process *p)
   }
 }
 
-int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
+int ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
 {
-  int padx = 0;
-  int pady = 0;
-  netlist_t *n;
   if (!completed ()) {
     return 0;
   }
 
+  visited = new std::unordered_set<Process *>();
+
+  int ret = _emitLEF (fp, fpcell, p, dorect);
+
+  
+  delete visited;
+
+  return ret;
+}
+
+int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
+{
+  Scope *sc;
+  int ret;
+
+  /* now: see if process has been emitted already */
+  visited->insert (p);
+  
   if (!p) {
-    return 0;
+    ActNamespace *g = ActNamespace::Global();
+    sc = g->CurScope();
   }
+  else {
+    sc = p->CurScope();
+  }
+  ActInstiter i(sc);
+
+  ret = 0;
+
+  /* emit sub-circuits */
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (TypeFactory::isProcessType (vx->t)) {
+      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
+      if (x->isExpanded()) {
+	if (visited->find (x) == visited->end()) {
+	  if (_emitLEF (fp, fpcell, x, dorect)) {
+	    ret = 1;
+	  }
+	}
+      }
+    }
+  }
+
+  /* emit self */
+  
+  int padx = 0;
+  int pady = 0;
+  netlist_t *n;
 
   LayoutBlob *blob = (*layoutmap)[p];
   if (!blob) {
-    return 0;
+    return ret;
   }
 
   n = stk->getNL (p);
   if (!n) {
-    return 0;
+    return ret;
   }
 
   RoutingMat *m1 = Technology::T->metal[0];
@@ -1038,8 +1081,33 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
 
   if (bllx > burx || blly > bury) {
     /* no layout */
-    return 0;
+    return ret;
   }
+
+  /* if this has weak gates only, skip it... 
+     need to systematize this to synthesize new ports 
+  */
+  {
+    node_t *nd;
+    for (nd = n->hd; nd; nd = nd->next) {
+      listitem_t *li;
+      edge_t *ed;
+      for (li = list_first (nd->e); li; li = list_next (li)) {
+	ed = (edge_t *) list_value (li);
+	if (!ed->keeper)
+	  break;
+      }
+      if (li) {
+	break;
+      }
+    }
+    if (!nd) {
+      return 0;
+    }
+  }
+
+
+
 
   for (int lef=0; lef < 2; lef++) {
 
@@ -1180,7 +1248,26 @@ int ActStackLayoutPass::emitLEF (FILE *fp, Process *p)
   fprintf (fp, "\n");
 
   }
+
+  fprintf (fp, "\n");
   
+
+  if (fpcell) {
+    emitWellLEF (fpcell, p);
+  }
+
+  if (dorect) {
+    FILE *tfp;
+    char cname[10240];
+    int len;
+
+    a->msnprintfproc (cname, 10240, p);
+    len = strlen (cname);
+    snprintf (cname + len, 10240-len, ".rect");
+    tfp = fopen (cname, "w");
+    emitRect (tfp, p);
+    fclose (tfp);
+  }
 
   return 1;
 }
@@ -1331,7 +1418,7 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
 
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);
-  fprintf (fp, "\n");
+  fprintf (fp, "\n\n");
 
   return 1;
 }
@@ -1579,7 +1666,7 @@ int ActStackLayoutPass::_maxHeight (Process *p)
     if (TypeFactory::isProcessType (vx->t)) {
       Process *x = dynamic_cast<Process *> (vx->t->BaseType());
       if (x->isExpanded()) {
-	if (visited->insert (x).second == false) {
+	if (visited->find (x) == visited->end()) {
 	  int tmp = _maxHeight (x);
 	  if (tmp > maxval) {
 	    maxval = tmp;
@@ -1647,12 +1734,10 @@ static void count_inst (void *x, ActId *prefix, Process *p)
   
   if ((b = ap->getLayout (p))) {
     /* there is a circuit */
-    
-    LayoutBlob *b;
     long llx, lly, urx, ury;
     _instcount++;
-    b = ap->getLayout (p);
     Assert (b, "What are we doing?");
+    b->incCount();
     b->calcBoundary (&llx, &lly, &urx, &ury);
     _areacount += (urx - llx + 1)*(ury - lly + 1);
   }
@@ -1822,6 +1907,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   ap->setCookie (this);
   ap->setInstFn (count_inst);
   ap->run (p);
+  count_inst (this, NULL, p); // oops!
 
   _total_instances = _instcount;
   _total_area = _areacount;
@@ -1953,3 +2039,102 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   fprintf (fp, "NETS %12lu ;\n", netcount);
   fseek (fp, 0, SEEK_END);
 }
+
+
+
+
+/*
+ * Layout generation statistics
+ *
+ */
+void ActStackLayoutPass::reportStats (Process *p)
+{
+  if (!completed ()) {
+    return;
+  }
+
+  visited = new std::unordered_set<Process *>();
+
+  _reportStats (p);
+
+  
+  delete visited;
+
+  return;
+}
+
+
+void ActStackLayoutPass::_reportStats(Process *p)
+{
+  Scope *sc;
+
+  /* now: see if process has been emitted already */
+  visited->insert (p);
+  
+  if (!p) {
+    ActNamespace *g = ActNamespace::Global();
+    sc = g->CurScope();
+  }
+  else {
+    sc = p->CurScope();
+  }
+  ActInstiter i(sc);
+
+  /* emit sub-circuits */
+  for (i = i.begin(); i != i.end(); i++) {
+    ValueIdx *vx = (*i);
+    if (TypeFactory::isProcessType (vx->t)) {
+      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
+      if (x->isExpanded()) {
+	if (visited->find (x) == visited->end()) {
+	  _reportStats (x);
+	}
+      }
+    }
+  }
+
+  LayoutBlob *blob = (*layoutmap)[p];
+  if (!blob) {
+    return;
+  }
+  long bllx, blly, burx, bury;
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  if (bllx > burx || blly > bury) return;
+
+  char *tmp = p->getns()->Name();
+  printf ("--- Cell %s::%s ---\n", tmp, p->getName());
+  FREE (tmp);
+
+  unsigned long area = (burx-bllx+1)*(bury-blly+1);
+  printf ("  count=%lu; ", blob->getCount());
+  printf ("cell_area=%.3g um^2; ", area*Technology::T->scale/1000.0*
+	  Technology::T->scale/1000.0);
+  printf ("area: %.2f%%\n", (area*blob->getCount()*100.0/getArea()));
+
+  netlist_t *nl = stk->getNL (p);
+  node_t *n;
+  unsigned long ncount = 0;
+  unsigned long ecount = 0;
+  unsigned long keeper = 0;
+  for (n = nl->hd; n; n = n->next) {
+    ncount++;
+    listitem_t *li;
+    edge_t *e;
+    for (li = list_first (n->e); li; li = list_next (li)) {
+      e = (edge_t *) list_value (li);
+      if (e->keeper) {
+	keeper++;
+      }
+      else {
+	ecount++;
+      }
+    }
+  }
+  ecount /= 2;
+  keeper /= 2;
+  
+  printf ("  nodes=%lu; ", ncount);
+  printf ("fets: std=%lu; ", ecount);
+  printf ("keeper=%lu\n", keeper);
+}
+  

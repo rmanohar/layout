@@ -1265,6 +1265,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   edges[1] = NULL;
   edges[2] = NULL;
   edges[3] = NULL;
+  count = 0;
   
   switch (t) {
   case BLOB_BASE:

@@ -338,6 +338,8 @@ private:
 #define LAYOUT_EDGE_BOTTOM 3
 
   LayoutEdgeAttrib *edges[4];	// 0 = l, 1 = t, 2 = r, 3 = b
+
+  unsigned long count;
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
@@ -388,6 +390,13 @@ public:
   */
   int GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
 		    int *d1, int *d2);
+
+
+  /**
+   * Stats 
+   */
+  void incCount () { count++; }
+  unsigned long getCount () { return count; }
   
 };
 

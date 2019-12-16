@@ -50,7 +50,7 @@ class ActStackLayoutPass : public ActPass {
   int maxHeight (Process *p = NULL);
 
   LayoutBlob *getLayout (Process *p = NULL);
-  int emitLEF (FILE *fp, Process *p);
+  int emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect = 0);
   
 #ifdef INTEGRATED_PLACER
   int createBlocks (circuit_t *ckt, Process *p);
@@ -69,6 +69,8 @@ class ActStackLayoutPass : public ActPass {
 
   double getArea () { return _total_area; }
 
+  void reportStats(Process *p);
+
  private:
   int init ();
   void cleanup();
@@ -76,6 +78,8 @@ class ActStackLayoutPass : public ActPass {
   int _maxHeight (Process *p);
   void _createlayout (Process *p);
   void _createlocallayout (Process *p);
+  int _emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect);
+  void _reportStats(Process *p);
 
   ActStackPass *stk;
 
