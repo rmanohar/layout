@@ -72,6 +72,7 @@ int main (int argc, char **argv)
   area_multiplier = 1.4;
   
   Act::Init (&argc, &argv);
+  Act::config_info ("prs2net.conf");
   config_read ("prs2net.conf");
   Layout::Init();
   
@@ -211,55 +212,7 @@ int main (int argc, char **argv)
     fatal_error ("Could not open file `%s' for writing", buf);
   }
   lp->emitWellHeader (fpcell);
-
-
   lp->emitLEF (fp, fpcell, p, 1);
-
-#if 0  
-  /* -- walk through cells, emitting 
-       1. LEF files for any cell layout
-       2. .rect files for those cells
-  -- */
-  ActTypeiter it(cell_ns);
-  for (it = it.begin(); it != it.end(); it++) {
-    Type *u = (*it);
-    Process *p = dynamic_cast<Process *>(u);
-    
-    if (!p) continue;
-    if (!p->isCell()) continue;
-    if (!p->isExpanded()) continue;
-
-    if (!p->getprs()) {
-      /* no circuits */
-      continue;
-    }
-    if (!lp->haveRect (p)) {
-      continue;
-    }
-
-    /* append to LEF file */
-    lp->emitLEF (fp, p);
-    fprintf (fp, "\n");
-
-    lp->emitWellLEF (fpcell, p);
-    fprintf (fpcell, "\n");
-    
-    /* generate .rect file */
-    {
-      FILE *tfp;
-      char cname[10240];
-      int len;
-
-      a->msnprintfproc (cname, 10240, p);
-      len = strlen (cname);
-      snprintf (cname + len, 10240-len, ".rect");
-      tfp = fopen (cname, "w");
-      lp->emitRect (tfp, p);
-      fclose (tfp);
-    }
-  }
-#endif
-  
   fclose (fp);
   fclose (fpcell);
 
