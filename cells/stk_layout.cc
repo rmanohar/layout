@@ -51,7 +51,9 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   Assert (stk, "Hmm too...");
 
   _total_area = -1;
+  _total_stdcell_area = -1;
   _total_instances = -1;
+  _maxht = -1;
 }
 
 void ActStackLayoutPass::cleanup()
@@ -1106,9 +1108,6 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
     }
   }
 
-
-
-
   for (int lef=0; lef < 2; lef++) {
 
   if (lef != 0) { fprintf (fp, "\n"); }
@@ -1547,7 +1546,7 @@ int ActStackLayoutPass::_maxHeight (Process *p)
   b = (*layoutmap)[p];
   if (b) {
     long llx, lly, urx, ury;
-    b->getBBox (&llx, &lly, &urx, &ury);
+    b->calcBoundary (&llx, &lly, &urx, &ury);
     maxval = (ury - lly + 1);
   }
   
@@ -1589,7 +1588,7 @@ int ActStackLayoutPass::maxHeight (Process *p)
       if (TypeFactory::isProcessType (vx->t)) {
 	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
 	if (x->isExpanded()) {
-	  if (visited->insert (x).second == false) {
+	  if (visited->find (x) == visited->end()) {
 	    int tmp = _maxHeight (x);
 	    if (tmp > maxval) {
 	      maxval = tmp;
@@ -1617,6 +1616,8 @@ int ActStackLayoutPass::maxHeight (Process *p)
  */
 static int _instcount;
 static double _areacount;
+static double _areastdcell;
+static int _maximum_height;
 
 static void count_inst (void *x, ActId *prefix, Process *p)
 {
@@ -1631,6 +1632,7 @@ static void count_inst (void *x, ActId *prefix, Process *p)
     b->incCount();
     b->calcBoundary (&llx, &lly, &urx, &ury);
     _areacount += (urx - llx + 1)*(ury - lly + 1);
+    _areastdcell += (urx - llx + 1)*_maximum_height;
   }
 }
 
@@ -1779,6 +1781,8 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   fprintf (fp, " ;\n");
   
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
+
+  _maxht = maxHeight (p);
 }
 
 void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
@@ -1795,6 +1799,8 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 
   _instcount = 0;
   _areacount = 0;
+  _areastdcell = 0;
+  _maximum_height = _maxht;
   ap->setCookie (this);
   ap->setInstFn (count_inst);
   ap->run (p);
@@ -1802,8 +1808,10 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 
   _total_instances = _instcount;
   _total_area = _areacount;
+  _total_stdcell_area = _areastdcell;
 
   _total_area *= pad;
+  _total_stdcell_area *= pad;
 
   double side = sqrt (_total_area);
 

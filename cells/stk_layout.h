@@ -60,6 +60,7 @@ class ActStackLayoutPass : public ActPass {
   int haveRect (Process *p);
 
   double getArea () { return _total_area; }
+  double getStdCellArea() { return _total_stdcell_area; }
 
   void reportStats(Process *p);
 
@@ -83,6 +84,8 @@ class ActStackLayoutPass : public ActPass {
   /* temporary variables */
   int _total_instances;
   double _total_area;
+  double _total_stdcell_area;
+  int _maxht;
 
   std::map<Process *, LayoutBlob *> *layoutmap;
   std::unordered_set<Process *> *visited;

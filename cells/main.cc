@@ -282,14 +282,22 @@ int main (int argc, char **argv)
 
   if (report) {
     double a = lp->getArea();
+    double as = lp->getStdCellArea();
     a *= Technology::T->scale/1000.0;
     a *= Technology::T->scale/1000.0;
+    as *= Technology::T->scale/1000.0;
+    as *= Technology::T->scale/1000.0;
     if (a > 1e4) {
       a /= 1e6;
+      as /= 1e6;
       printf ("Total Area: %.3g mm^2\n", a);
+      printf ("Total StdCell Area: %.3g mm^2 (%.2g%%)\n", as,
+	      (as-a)/a*100.0);
     }
     else {
       printf ("Total Area: %.3g um^2\n", a);
+      printf ("Total StdCell Area: %.3g mm^2 (%.2g%%)\n", as,
+	      (as-a)/a*100.0);
     }
     lp->reportStats (p);
   }
