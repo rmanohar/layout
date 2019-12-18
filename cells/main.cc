@@ -249,7 +249,7 @@ int main (int argc, char **argv)
     }
     else {
       printf ("Total Area: %.3g um^2\n", a);
-      printf ("Total StdCell Area: %.3g mm^2 (%.2g%%)\n", as,
+      printf ("Total StdCell Area: %.3g um^2 (%.2g%%)\n", as,
 	      (as-a)/a*100.0);
     }
     lp->reportStats (p);
