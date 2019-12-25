@@ -18,7 +18,7 @@
 #  Boston, MA  02110-1301, USA.
 #
 #-------------------------------------------------------------------------
-EXE=stk.$(EXT)
+EXE=act2lef.$(EXT)
 
 TARGETS=$(EXE)
 TARGETCONF=layout.conf

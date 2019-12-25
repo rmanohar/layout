@@ -1428,7 +1428,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
   double scale = Technology::T->scale/1000.0;
   
   /* -- lef header -- */
-  fprintf (fp, "VERSION 5.8 ;\n\n");
+  fprintf (fp, "VERSION 5.6 ;\n\n");
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "UNITS\n");
