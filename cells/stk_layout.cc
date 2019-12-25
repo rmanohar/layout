@@ -1772,7 +1772,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
 {
   /* -- def header -- */
-  fprintf (fp, "VERSION 5.8 ;\n\n");
+  fprintf (fp, "VERSION 5.6 ;\n\n");
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "DESIGN ");
