@@ -1627,10 +1627,13 @@ static void count_inst (void *x, ActId *prefix, Process *p)
   if ((b = ap->getLayout (p))) {
     /* there is a circuit */
     long llx, lly, urx, ury;
-    _instcount++;
-    Assert (b, "What are we doing?");
-    b->incCount();
+
     b->calcBoundary (&llx, &lly, &urx, &ury);
+    if ((llx > urx) || (lly > ury)) return;
+    
+    b->incCount();
+    _instcount++;
+    
     _areacount += (urx - llx + 1)*(ury - lly + 1);
     _areastdcell += (urx - llx + 1)*_maximum_height;
   }
@@ -1640,12 +1643,21 @@ static void count_inst (void *x, ActId *prefix, Process *p)
  * Flat instance dump
  */
 static Act *global_act;
+static ActStackLayoutPass *_alp;
+
 static void dump_inst (void *x, ActId *prefix, Process *p)
 {
   FILE *fp = (FILE *)x;
   char buf[10240];
+  LayoutBlob *b;
+  
 
-  if (p->getprs()) {
+  if ((b = _alp->getLayout (p))) {
+    long llx, lly, urx, ury;
+    
+    b->calcBoundary (&llx, &lly, &urx, &ury);
+    if ((llx > urx) || (lly > ury)) return;
+    
     /* FORMAT: 
          - inst2591 NAND4X2 ;
          - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
@@ -1867,6 +1879,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   ap->setCookie (fp);
   ap->setInstFn (dump_inst);
   global_act = a;
+  _alp = this;
   ap->run (p);
   global_act = NULL;
   fprintf (fp, "END COMPONENTS\n\n");
