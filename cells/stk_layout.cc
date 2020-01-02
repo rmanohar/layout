@@ -1132,8 +1132,7 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
 
   double scale = Technology::T->scale/1000.0;
 
-  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale,
-	   (bury - blly + (lef == 0 ? 0 : 4*m2->getPitch()))*scale);
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx + (lef == 0 ? 0 : 4*m2->getPitch()))*scale, (bury - blly )*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 
