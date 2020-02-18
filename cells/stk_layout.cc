@@ -801,6 +801,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       tedge += m1->getPitch();
     }
 
+    int found_vdd = 0;
+    int found_gnd = 0;
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
 
@@ -819,7 +821,45 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       else {
 	p_out++;
       }
+
+      act_booleanized_var_t *bv = (act_booleanized_var_t *)b->v;
+      struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
+      Assert (av, "Hmm");
+
+      if (av->n == n->Vdd) {
+	found_vdd = 1;
+      }
+      if (av->n == n->GND) {
+	found_gnd = 1;
+      }
     }
+    for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
+      ihash_bucket_t *b;
+      
+      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+      p_in++;
+
+      act_booleanized_var_t *bv = (act_booleanized_var_t *)b->v;
+      struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
+      Assert (av, "Hmm");
+
+      if (av->n == n->Vdd) {
+	found_vdd = 1;
+      }
+      if (av->n == n->GND) {
+	found_gnd = 1;
+      }
+    }
+
+    if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
+      p_in++;
+      found_vdd = 1;
+    }
+    if (!found_vdd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
+      p_in++;
+      found_gnd = 1;
+    }
+    
     if (n->weak_supply_vdd > 0) {
       p_in++;
     }
@@ -854,6 +894,8 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
     Layout *pins = new Layout(n);
 
+    found_vdd = 0;
+    found_gnd = 0;
     for (int i=0; i < A_LEN (n->bN->ports); i++) {
       if (n->bN->ports[i].omit) continue;
 
@@ -878,6 +920,53 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 	pins->DrawMetalPin (1, bllx + p_out, blly + m1->getPitch(), w, w, av->n, 1);
 	p_out += m2->getPitch()*s_out;
       }
+
+      if (av->n == n->Vdd) {
+	found_vdd = 1;
+      }
+      if (av->n == n->GND) {
+	found_gnd = 1;
+      }
+    }
+
+    /* globals */
+    for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
+      ihash_bucket_t *b;
+      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+      
+      Assert (b, "Hmm:");
+
+      p_in++;
+      
+      act_booleanized_var_t *bv = (act_booleanized_var_t *)b->v;
+      struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
+      Assert (av, "Hmm");
+
+      int w = m2->minWidth ();
+      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n, 0);
+      p_in += m2->getPitch()*s_in;
+
+      if (av->n == n->Vdd) {
+	found_vdd = 1;
+      }
+      if (av->n == n->GND) {
+	found_gnd = 1;
+      }
+    }
+    if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
+      p_in++;
+      found_vdd = 1;
+      int w = m2->minWidth ();
+      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
+      p_in += m2->getPitch()*s_in;
+      
+    }
+    if (!found_vdd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
+      p_in++;
+      found_gnd = 1;
+      int w = m2->minWidth ();
+      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
+      p_in += m2->getPitch()*s_in;
     }
 
     /*--- XXX: but this is not the end of the pins... ---*/
@@ -1026,6 +1115,75 @@ int ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
   return ret;
 }
 
+static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
+			  const char *sigtype, LayoutBlob *blob,
+			  node_t *signode)
+{
+  long bllx, blly, burx, bury;
+  double scale = Technology::T->scale/1000.0;
+
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  
+  fprintf (fp, "    PIN ");
+  a->mfprintf (fp, "%s\n", name);
+
+  fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
+  fprintf (fp, "        USE %s ;\n", sigtype);
+
+  fprintf (fp, "        PORT\n");
+
+  /* -- find all pins of this name! -- */
+  TransformMat mat;
+  mat.applyTranslate (-bllx, -blly);
+  list_t *tiles = blob->search (signode, &mat);
+  listitem_t *tli;
+  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+    listitem_t *xi;
+    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+      Layer *lname = (Layer *) list_value (xi);
+      xi = list_next (xi);
+      Assert (xi, "Hmm");
+	
+      if (!lname->isMetal()) continue;
+      
+      list_t *actual_tiles = (list_t *) list_value (xi);
+      listitem_t *ti;
+      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	long tllx, tlly, turx, tury;
+	Tile *tmp = (Tile *) list_value (ti);
+	
+	/* only use pin tiles */
+	if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
+	  
+	  
+	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	if (tllx > turx) {
+	  long x = tllx;
+	  tllx = turx;
+	  turx = x;
+	}
+	  
+	if (tlly > tury) {
+	  long x = tlly;
+	  tlly = tury;
+	  tury = x;
+	}
+	
+	fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
+	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		 scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
+      }
+    }
+  }
+  fprintf (fp, "        END\n");
+  fprintf (fp, "    END ");
+  a->mfprintf (fp, "%s", name);
+  fprintf (fp, "\n");
+}
+
 int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
 {
   Scope *sc;
@@ -1137,23 +1295,21 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
   fprintf (fp, "    SITE CoreSite ;\n");
 
   /* find pins */
+  int found_vdd = 0;
+  int found_gnd = 0;
   for (int i=0; i < A_LEN (n->bN->ports); i++) {
     if (n->bN->ports[i].omit) continue;
 
+    /* generate name */
     char tmp[1024];
     ActId *id = n->bN->ports[i].c->toid();
-    fprintf (fp, "    PIN ");
     id->sPrint (tmp, 1024);
-    a->mfprintf (fp, "%s\n", tmp);
     delete id;
 
-    fprintf (fp, "        DIRECTION %s ;\n",
-	     n->bN->ports[i].input ? "INPUT" : "OUTPUT");
-    fprintf (fp, "        USE ");
-
-    ihash_bucket_t *b;
+    /* and signal type + node pointer */
     const char *sigtype;
     sigtype = "SIGNAL";
+    ihash_bucket_t *b;
     b = ihash_lookup (n->bN->cH, (long)n->bN->ports[i].c);
     Assert (b, "What on earth");
     act_booleanized_var_t *v;
@@ -1163,65 +1319,64 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
     Assert (av, "Huh");
     if (av->n == n->Vdd) {
       sigtype = "POWER";
+      found_vdd = 1;
     }
     else if (av->n == n->GND) {
       sigtype = "GROUND";
+      found_gnd = 1;
     }
-    fprintf (fp, "%s ;\n", sigtype);
-
-    fprintf (fp, "        PORT\n");
-
-    /* -- find all pins of this name! -- */
-    TransformMat mat;
-    mat.applyTranslate (-bllx, -blly);
-    list_t *tiles = blob->search (av->n, &mat);
-    listitem_t *tli;
-    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-      listitem_t *xi;
-      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-	Layer *lname = (Layer *) list_value (xi);
-	xi = list_next (xi);
-	Assert (xi, "Hmm");
-	
-	if (!lname->isMetal()) continue;
-	
-	list_t *actual_tiles = (list_t *) list_value (xi);
-	listitem_t *ti;
-	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	  long tllx, tlly, turx, tury;
-	  Tile *tmp = (Tile *) list_value (ti);
-
-	  /* only use pin tiles */
-	  if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
-	  
-	  
-	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-
-	  if (tllx > turx) {
-	    long x = tllx;
-	    tllx = turx;
-	    turx = x;
-	  }
-	  
-	  if (tlly > tury) {
-	    long x = tlly;
-	    tlly = tury;
-	    tury = x;
-	  }
-
-	  fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
-	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
-		   scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
-	}
-      }
-    }
-    fprintf (fp, "        END\n");
-    fprintf (fp, "    END ");
-    a->mfprintf (fp, "%s", tmp);
-    fprintf (fp, "\n");
+    emit_one_pin (a, fp, tmp, n->bN->ports[i].input, sigtype, blob, av->n);
   }
+
+  /* add globals as input pins */
+  for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
+    /* generate name */
+    char tmp[1024];
+    ActId *id = n->bN->used_globals[i]->toid();
+    id->sPrint (tmp, 1024);
+    delete id;
+
+    /* and signal type + node pointer */
+    const char *sigtype;
+    sigtype = "SIGNAL";
+    ihash_bucket_t *b;
+    b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+    Assert (b, "What on earth");
+    act_booleanized_var_t *v;
+    struct act_nl_varinfo *av;
+    v = (act_booleanized_var_t *) b->v;
+    av = (struct act_nl_varinfo *)v->extra;
+    Assert (av, "Huh");
+    if (av->n == n->Vdd) {
+      found_vdd = 1;
+      sigtype = "POWER";
+    }
+    else if (av->n == n->GND) {
+      found_gnd = 1;
+      sigtype = "GROUND";
+    }
+    emit_one_pin (a, fp, tmp, 1 /* input */, sigtype, blob, av->n);
+  }
+
+  /* check Vdd/GND */
+  if (!found_vdd && n->Vdd) {
+    found_vdd = 1;
+    if (n->Vdd->e && list_length (n->Vdd->e) > 0) {
+      emit_one_pin (a, fp, config_get_string ("net.global_vdd"),
+		    1, "POWER", blob, n->Vdd);
+
+    }
+  }
+
+  if (!found_gnd && n->GND) {
+    found_gnd = 1;
+    if (n->GND->e && list_length (n->GND->e) > 0) {
+      emit_one_pin (a, fp, config_get_string ("net.global_gnd"),
+		    1, "GROUND", blob, n->GND);
+
+    }
+  }
+  
 
   /* XXX: add obstructions for metal layers; in reality we need to
      add the routed metal and then grab that here */
