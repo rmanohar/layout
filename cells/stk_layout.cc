@@ -1133,7 +1133,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       p_in += m2->getPitch()*s_in;
       
     }
-    if (!found_vdd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
+    if (!found_gnd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
       p_in++;
       found_gnd = 1;
       int w = m2->minWidth ();
