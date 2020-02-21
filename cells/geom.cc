@@ -1250,7 +1250,39 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
       ury = tmp->getury();
     }
     
-    fprintf (fp, " %ld %ld %ld %ld\n", llx, lly, urx+1, ury+1);
+    fprintf (fp, " %ld %ld %ld %ld", llx, lly, urx+1, ury+1);
+
+    /*-- now if there is a fet to the right or the left then print it! --*/
+    if (tmp->net) {
+      Tile *tllx, *turx;
+      int fet_left, fet_right;
+      tllx = tmp->llxTile();
+      turx = tmp->urxTile();
+      
+      if (tllx && !tllx->isSpace() && TILE_ATTR_ISFET (tllx->getAttr())) {
+	fet_left = 1;
+      }
+      else {
+	fet_left = 0;
+      }
+      if (turx && !turx->isSpace() && TILE_ATTR_ISFET (turx->getAttr())) {
+	fet_right = 1;
+      }
+      else {
+	fet_right = 0;
+      }
+
+      if (fet_left && fet_right) {
+	fprintf (fp, " center");
+      }
+      else if (fet_right) {
+	fprintf (fp, " left");
+      }
+      else if (fet_left) {
+	fprintf (fp, " right");
+      }
+    }
+    fprintf (fp, "\n");
   }    
   list_free (l);
 }

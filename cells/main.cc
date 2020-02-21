@@ -74,6 +74,13 @@ int main (int argc, char **argv)
   Act::Init (&argc, &argv);
   Act::config_info ("prs2net.conf");
   config_read ("prs2net.conf");
+  {
+    char *tmpfile = config_file_name ("macros.conf");
+    if (tmpfile) {
+      FREE (tmpfile);
+      config_read ("macros.conf");
+    }
+  }
   Layout::Init();
   
   if (Technology::T->nmetals < 2) {

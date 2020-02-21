@@ -137,6 +137,11 @@ class Tile {
 	       long _llx, long _lly,
 	       unsigned long wx, unsigned long wy);
 
+  Tile *llxTile() { return ll.x; }
+  Tile *urxTile() { return ur.x; }
+  Tile *llyTile() { return ll.y; }
+  Tile *uryTile() { return ur.y; }
+
   long geturx() { return nextx()-1; }
   long getury() { return nexty()-1; }
   long getllx() { return llx; }

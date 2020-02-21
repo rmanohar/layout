@@ -28,177 +28,6 @@
 #include <math.h>
 #include <string.h>
 
-#include <pwd.h>
-#include <ctype.h>
-
-
-static int first = 1;
-
-static 
-struct pathlist {
-  char *path;
-  struct pathlist *next;
-} *hd = NULL, *tl;
-
-static
-char *expand (char *s)
-{
-  const char *path;
-  char *t;
-  char *ret;
-  struct passwd *pwd;
-
-  if (s[0] == '~' && *(s+1) == '/') {
-    path = getenv ("HOME");
-    if (!path) path = "";
-    MALLOC (ret, char, strlen (s) + strlen(path)+ 5);
-    strcpy (ret, path);
-    strcat (ret, s+1);
-  }
-  else if (s[0] == '~') {
-    t = s+1;
-    while (*t && *t != '/') t++;
-    if (!*t) fatal_error ("Invalid pathname!");
-    *t = '\0';
-    if (strcmp (s+1, "cad") == 0 && getenv ("CAD_HOME"))
-      path = getenv ("CAD_HOME");
-    else {
-      pwd  = getpwnam (s+1);
-      if (pwd->pw_dir == NULL) path = "";
-      else path = pwd->pw_dir;
-    }
-    *t = '/';
-    MALLOC (ret, char, strlen (t) + strlen (path) + 6);
-    strcpy (ret, path);
-    strcat (ret, t);
-  }
-  else {
-    MALLOC (ret, char, strlen (s) + 6);
-    strcpy (ret, s);
-  }
-  return ret;
-}
-
-static int addpath (char *s, int i)
-{
-  char *t;
-  char c;
-
-  if (s[i] == '"') i++;
-  i--;
-  do {
-    i++;
-    t = s+i;
-    while (s[i] && !isspace(s[i]) && s[i] != '"' && s[i] != ':')
-      i++;
-    if (t != s+i) {
-      c = s[i];
-      s[i] = '\0';
-      if (!hd) {
-	MALLOC (hd, struct pathlist, 1);
-	tl = hd;
-	tl->next = NULL;
-      }
-      else {
-	MALLOC (tl->next, struct pathlist, 1);
-	tl = tl->next;
-	tl->next = NULL;
-      }
-      MALLOC (tl->path, char, strlen (t)+1);
-      strcpy (tl->path, t);
-      s[i] = c;
-    }
-  } while (s[i] == ':');
-  if (s[i] == '"') i++;
-  return i;
-}
-
-
-/*
- * Initialize the search path
- */
-static void _path_init (void)
-{
-  char buf[2];
-  char *env;
-  char *file;
-
-  if (first) {
-    /* first thing in the search path is the current directory */
-    buf[0] = '.';
-    buf[1] = '\0';
-    addpath (buf, 0);
-
-    /* next thing in the search path is $ACT_PATH */
-    env = getenv ("ACT_PATH");
-    if (env)
-      addpath (env, 0);
-    
-    /* last item in the search path is $ACT_HOME */
-    env = getenv ("ACT_HOME");
-    if (env) {
-      addpath (env,0);
-    }
-  }
-  first = 0;
-}
-
-/*------------------------------------------------------------------------
- *
- *  lef_path_open --
- *
- *    Search through $ACT_PATH and $ACT_HOME/act to find a path name
- * where the file is located.
- *
- *------------------------------------------------------------------------
- */
-static char *lef_path_open (char *name)
-{
-  struct pathlist *p;
-  char *file, *trial;
-  FILE *fp;
-
-  _path_init ();
-
-  p = hd;
-  trial = expand(name);
-
-  if ((fp = fopen (trial, "r"))) {
-    fclose (fp);
-    return trial;
-  }
-  FREE (trial);
-  MALLOC (file, char, strlen (name) + 5);
-  sprintf (file, "%s.lef", trial);
-  if ((fp = fopen (file, "r"))) {
-    fclose (fp);
-    return file;
-  }
-  while (p) {
-    MALLOC (file, char, strlen (p->path)+strlen(name)+11);
-    strcpy (file, p->path);
-    strcat (file, "/lef/");
-    strcat (file, name);
-    trial = expand (file);
-    FREE (file);
-    fp = fopen (trial, "r");
-    if (fp) { 
-      fclose (fp);
-      return trial;
-    }
-    strcat (trial, ".lef");
-    fp = fopen (trial, "r");
-    if (fp) {
-      fclose (fp);
-      return trial;
-    }
-    FREE (trial);
-    p = p->next;
-  }
-  return NULL;
-}
-
-
 
 static unsigned long snap_to (unsigned long w, unsigned long pitch)
 {
@@ -1409,19 +1238,30 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
   if (n->bN->isempty) {
     /* blackbox */
     FILE *bfp;
+    int l;
     char name[10240];
 
     a->msnprintfproc (name, 10240, p);
-    char *tpath = lef_path_open (name);
-    if (!tpath) {
-      fatal_error ("Could not find LEF file for black box module `%s'", name);
-    }
-
-    bfp = fopen (tpath, "r");
+    l = strlen (name);
+    snprintf (name + l, 10240-l, ".lef");
+    bfp = fopen (name, "r");
     if (!bfp) {
-      fatal_error ("Could not open file `%s'", tpath);
+      const char *s;
+      
+      sprintf (name, "macros.lef.");
+      a->msnprintfproc (name + 11, 10240 - 11, p);
+      if (!config_exists (name)) {
+	fatal_error ("Could not find macro configuration string `%s'", name);
+      }
+      s = config_get_string (name);
+      bfp = fopen (s, "r");
+      if (!bfp) {
+	fatal_error ("Could not find LEF file `%s'", s);
+      }
     }
-    FREE (tpath);
+    if (!bfp) {
+      fatal_error ("Could not find macro LEF for black box `%s'", name);
+    }
     while (!feof (bfp)) {
       long sz;
       sz = fread (name, 1, 10240, bfp);
