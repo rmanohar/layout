@@ -251,8 +251,8 @@ int main (int argc, char **argv)
       a /= 1e6;
       as /= 1e6;
       printf ("Total Area: %.3g mm^2\n", a);
-      printf ("Total StdCell Area: %.3g mm^2 (%.2g%%)\n", as,
-	      (as-a)/a*100.0);
+      printf ("Total StdCell Area: %.3g mm^2 (%.2g%%) [height=%d]\n", as,
+	      (as-a)/a*100.0, lp->getStdCellHeight());
     }
     else {
       printf ("Total Area: %.3g um^2\n", a);

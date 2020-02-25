@@ -61,6 +61,7 @@ class ActStackLayoutPass : public ActPass {
 
   double getArea () { return _total_area; }
   double getStdCellArea() { return _total_stdcell_area; }
+  int getStdCellHeight() { return _maxht; }
 
   void reportStats(Process *p);
 

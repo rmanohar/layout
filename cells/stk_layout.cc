@@ -1030,6 +1030,9 @@ int ActStackLayoutPass::run (Process *p)
   }
 
   _finished = 2;
+
+  _maxht = maxHeight (p);
+
   return 1;
 }
 
@@ -1987,8 +1990,6 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   fprintf (fp, " ;\n");
   
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
-
-  _maxht = maxHeight (p);
 }
 
 void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
