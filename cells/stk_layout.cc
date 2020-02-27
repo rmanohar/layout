@@ -937,8 +937,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       
       Assert (b, "Hmm:");
 
-      p_in++;
-      
       act_booleanized_var_t *bv = (act_booleanized_var_t *)b->v;
       struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
       Assert (av, "Hmm");
@@ -955,7 +953,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       }
     }
     if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
-      p_in++;
       found_vdd = 1;
       int w = m2->minWidth ();
       pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
@@ -963,7 +960,6 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
       
     }
     if (!found_gnd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
-      p_in++;
       found_gnd = 1;
       int w = m2->minWidth ();
       pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
