@@ -1708,6 +1708,7 @@ void ActStackLayoutPass::emitWellHeader (FILE *fp)
 	if (w->maxPlugDist() > 0) {
 	  fprintf (fp, "    MAXPLUGDIST %.6f ;\n", w->maxPlugDist()*scale);
 	}
+	fprintf (fp, "    OVERHANG %.6f ;\n", w->getOverhang()*scale);
 	fprintf (fp, "END %s\n\n", w->getName());
       }
     }
