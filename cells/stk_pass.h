@@ -81,14 +81,10 @@ class ActStackPass : public ActPass {
   int isEmpty (list_t *stk); 
 
  private:
-  int init ();
-  void cleanup();
-
-  void _createstacks (Process *p);
+  void *local_op (Process *p, int mode = 0);
+  void free_local (void *);
 
   ActNetlistPass *nl;
-
-  std::map<Process *, list_t *> *stkmap;
 };
 
 

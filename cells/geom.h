@@ -75,7 +75,7 @@ Order:
 
 #define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
 #define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
-#define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WELL_OFFSET)
+#define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WDIFF_OFFSET)
 #define TILE_ATTR_ISROUTE(x) ((x) == 0)
 
 
@@ -236,6 +236,7 @@ public:
 
   int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy, void *net);
   int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawWellDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
   int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
   int DrawDiffBBox (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
 
@@ -372,6 +373,13 @@ public:
   list_t *search (void *net, TransformMat *m = NULL);
   list_t *search (int type, TransformMat *m = NULL); // this is for
 						     // base layers
+
+  /* 
+   * Uses the return value from the search function and returns its
+   * bounding box
+   */
+  static void searchBBox (list_t *slist, long *bllx, long *blly, long *burx,
+			  long *bury);
 
   /**
    *  Calculate the placement boundary for the LayoutBlob; this

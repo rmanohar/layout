@@ -46,34 +46,45 @@ class ActStackLayoutPass : public ActPass {
 
   LayoutBlob *getLayout (Process *p = NULL);
 
+  /* this is mode 1 */
   void emitLEFHeader (FILE *fp);
-  int emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect = 0);
-  
+  void emitWellHeader (FILE *fp);
+  void emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect = 0);
+
   void emitDEFHeader (FILE *fp, Process *p);
   void emitDEF (FILE *fp, Process *p, double pad = 1.4, int do_pins = 1);
 
-  /* well information */
-  void emitWellHeader (FILE *fp);
-  int emitWellLEF (FILE *fp, Process *p);
-  
   int emitRect (FILE *fp, Process *p);
   int haveRect (Process *p);
 
   double getArea () { return _total_area; }
   double getStdCellArea() { return _total_stdcell_area; }
-  int getStdCellHeight() { return _maxht; }
+  int getStdCellHeight() { if (_maxht == -1) { _maxht = maxHeight (NULL); } return _maxht; }
 
+  /* this is mode 2 */
   void reportStats(Process *p);
 
- private:
-  int init ();
-  void cleanup();
 
+ private:
+  void *local_op (Process *p, int mode = 0);
+  void free_local (void *v);
+  
   int _maxHeight (Process *p);
-  void _createlayout (Process *p);
-  void _createlocallayout (Process *p);
-  int _emitLEF (FILE *fp, FILE *fpcell, Process *p, int do_rect);
-  void _reportStats(Process *p);
+
+  /* mode 0 */
+  LayoutBlob *_createlocallayout (Process *p);
+
+  /* mode 1 */
+  int _emitlocalLEF (Process *p);
+  void _emitlocalRect (Process *p);
+  void _emitLocalWellLEF (FILE *fp, Process *p);
+
+  /* mode 2 */
+  void _reportLocalStats(Process *p);
+
+  /* welltap */
+  LayoutBlob **wellplugs;
+  netlist_t *dummy_netlist;	// dummy netlist 
 
   ActStackPass *stk;
 
@@ -88,7 +99,10 @@ class ActStackLayoutPass : public ActPass {
   double _total_stdcell_area;
   int _maxht;
 
-  std::map<Process *, LayoutBlob *> *layoutmap;
+  /* arguments */
+  FILE *_fp, *_fpcell;
+  int _do_rect;
+
   std::unordered_set<Process *> *visited;
 };
 

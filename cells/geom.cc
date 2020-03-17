@@ -160,7 +160,7 @@ Layout::Layout(netlist_t *_n)
   nflavors = sz;
   nmetals = Technology::T->nmetals;
 
-  base->allocOther (sz*4);
+  base->allocOther (sz*6);
   for (int i=0; i < sz; i++) {
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, FET_OFFSET),
 		    Technology::T->fet[EDGE_NFET][i]);
@@ -171,6 +171,11 @@ Layout::Layout(netlist_t *_n)
 		    Technology::T->diff[EDGE_NFET][i]);
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, DIFF_OFFSET),
 		    Technology::T->diff[EDGE_PFET][i]);
+
+    base->setOther (TOTAL_OFFSET(i, EDGE_NFET, WDIFF_OFFSET),
+		    Technology::T->welldiff[EDGE_NFET][i]);
+    base->setOther (TOTAL_OFFSET(i, EDGE_PFET, WDIFF_OFFSET),
+		    Technology::T->welldiff[EDGE_PFET][i]);
   }
 
   Layer *prev = base;
@@ -1075,6 +1080,23 @@ int Layout::DrawDiff (int flavor /* fet flavor */, int type /* n or p */,
   return base->Draw (llx, lly, wx, wy, net, attr);
 }
 
+int Layout::DrawWellDiff (int flavor /* fet flavor */, int type /* n or p */,
+			  long llx, long lly, unsigned long wx, unsigned long wy,
+			  void *net)
+{
+  int attr = 1 + TOTAL_OFFSET (flavor, type, WDIFF_OFFSET);
+  
+  if (flavor < 0 || flavor >= nflavors) return 0;
+
+#if 0  
+  Assert (TILE_ATTR_TO_TYPE (attr) == type, "what?");
+  Assert (TILE_ATTR_TO_OFF (attr) == WDIFF_OFFSET, "What?");
+  Assert (TILE_ATTR_TO_FLAV (attr) == flavor, "What?");
+#endif  
+
+  return base->Draw (llx, lly, wx, wy, net, attr);
+}
+
 
 int Layout::DrawFet (int flavor, int type,
 		     long llx, long lly, unsigned long wx, unsigned long wy,
@@ -1952,4 +1974,82 @@ int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
   *d1 = 0;
   *d2 = 0;
   return 2;
+}
+
+
+LayoutBlob::~LayoutBlob ()
+{
+  /* XXX do something here! */
+}
+
+
+void LayoutBlob::searchBBox (list_t *slist, long *bllx, long *blly,
+			     long *burx, long *bury)
+{
+  long wllx, wlly, wurx, wury;
+  int init = 0;
+
+  listitem_t *tli;
+  for (tli = list_first (slist); tli; tli = list_next (tli)) {
+    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+
+    /* a transform matrix + list of (layer,tile-list) pairs */
+    listitem_t *xi;
+    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+      Layer *name = (Layer *) list_value (xi);
+      xi = list_next (xi);
+      Assert (xi, "What?");
+      
+      list_t *actual_tiles = (list_t *) list_value (xi);
+      listitem_t *ti;
+
+      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	long tllx, tlly, turx, tury;
+	Tile *tmp = (Tile *) list_value (ti);
+
+	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	if (tllx > turx) {
+	  long x = tllx;
+	  tllx = turx;
+	  turx = x;
+	}
+	  
+	if (tlly > tury) {
+	  long x = tlly;
+	  tlly = tury;
+	  tury = x;
+	}
+	
+	if (!init) {
+	  wllx = tllx;
+	  wlly = tlly;
+	  wurx = turx;
+	  wury = tury;
+	  init = 1;
+	}
+	else {
+	  wllx = MIN(wllx, tllx);
+	  wlly = MIN(wlly, tlly);
+	  wurx = MAX(wurx, turx);
+	  wury = MAX(wury, tury);
+	}
+      }
+    }
+  }
+  if (!init) {
+    *bllx = 0;
+    *blly = 0;
+    *burx = -1;
+    *bury = -1;
+  }
+  else {
+    wurx ++;
+    wury ++;
+    *bllx = wllx;
+    *blly = wlly;
+    *burx = wurx;
+    *bury = wury;
+  }
 }

@@ -39,8 +39,6 @@ static unsigned long snap_to (unsigned long w, unsigned long pitch)
 
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
-  layoutmap = NULL;
-  
   if (!a->pass_find ("net2stk")) {
     stk = new ActStackPass (a);
   }
@@ -55,23 +53,21 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   _total_stdcell_area = -1;
   _total_instances = -1;
   _maxht = -1;
-}
 
-void ActStackLayoutPass::cleanup()
-{
-  if (layoutmap) {
-    std::map<Process *, LayoutBlob *>::iterator it;
-    for (it = (*layoutmap).begin(); it != (*layoutmap).end(); it++) {
-      /* something here */
-    }
-    delete layoutmap;
+  double net_lambda;
+  net_lambda = config_get_real ("net.lambda");
+  lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale + 0.5);
+
+  if (fabs(lambda_to_scale*Technology::T->scale - net_lambda*1e9) > 0.001) {
+    warning ("Lambda (%g) and technology scale factor (%g) are not integer multiples; rounding down", net_lambda, Technology::T->scale);
   }
+
+  wellplugs = NULL;
+  dummy_netlist = NULL;
 }
 
-ActStackLayoutPass::~ActStackLayoutPass()
-{
-  cleanup();
-}
+
+ActStackLayoutPass::~ActStackLayoutPass() { }
 
 #define EDGE_FLAGS_LEFT 0x1
 #define EDGE_FLAGS_RIGHT 0x2
@@ -688,9 +684,36 @@ static BBox print_singlestack (Layout *L, list_t *l)
 }
 
 
+void *ActStackLayoutPass::local_op (Process *p, int mode)
+{
+  if (mode == 0) {
+    return _createlocallayout (p);
+  }
+  else if (mode == 1) {
+    _emitlocalLEF (p);
+  }
+  else if (mode == 2) {
+    _reportLocalStats (p);
+  }
+  return getMap (p);
+}
+
+void ActStackLayoutPass::free_local (void *v)
+{
+  LayoutBlob *b = (LayoutBlob *)v;
+  if (b) {
+    delete b;
+  }
+}
 
 
-void ActStackLayoutPass::_createlocallayout (Process *p)
+/*
+ *
+ * Convert transistors stacks into groups and generate layout geometry
+ * for the local circuits within the process
+ *
+ */
+LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 {
   list_t *stks;
   BBox b;
@@ -699,8 +722,7 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
   stks = stk->getStacks (p);
   if (!stks || list_length (stks) == 0) {
-    (*layoutmap)[p] = NULL;
-    return;
+    return NULL;
   }
 
   listitem_t *li;
@@ -774,6 +796,10 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
 
   /* --- add pins --- */
   netlist_t *n = stk->getNL (p);
+
+  if (!dummy_netlist && n->psc && n->nsc) {
+    dummy_netlist = n;
+  }
 
   long bllx, blly, burx, bury;
   BLOB->getBBox (&bllx, &blly, &burx, &bury);
@@ -975,80 +1001,81 @@ void ActStackLayoutPass::_createlocallayout (Process *p)
     BLOB = bl;
   }
 
-  (*layoutmap)[p] = BLOB;
-}
-
-
-void ActStackLayoutPass::_createlayout (Process *p)
-{
-  if (layoutmap->find (p) != layoutmap->end()) {
-    return;
-  }
-
-  ActInstiter i(p->CurScope ());
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (TypeFactory::isProcessType (vx->t)) {
-      Process *x = dynamic_cast<Process *> (vx->t->BaseType());
-      if (x->isExpanded()) {
-	_createlayout (x);
-      }
-    }
-  }
-  _createlocallayout (p);
+  return BLOB;
 }
 
 
 int ActStackLayoutPass::run (Process *p)
 {
-  init ();
+  int ret = ActPass::run (p);
 
-  if (!rundeps (p)) {
-    return 0;
+  if (!dummy_netlist) {
+    fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
   }
+  
+  /* create welltap cells */
+  int ntaps = config_get_table_size ("act.dev_flavors");
+  MALLOC (wellplugs, LayoutBlob *, ntaps);
+  for (int flavor=0; flavor < ntaps; flavor++) {
+    Layout *l;
+    DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
+    DiffMat *pplusdiff = Technology::T->welldiff[EDGE_PFET][flavor];
 
-  if (!p) {
-    ActNamespace *g = ActNamespace::Global();
-    ActInstiter i(g->CurScope());
-
-    for (i = i.begin(); i != i.end(); i++) {
-      ValueIdx *vx = (*i);
-      if (TypeFactory::isProcessType (vx->t)) {
-	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-	if (x->isExpanded()) {
-	  _createlayout (x);
-	}
-      }
+    /* no well tap */
+    if (!nplusdiff && !pplusdiff) {
+      wellplugs[flavor] = NULL;
+      continue;
     }
+    
+    DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
+    DiffMat *pdiff = Technology::T->diff[EDGE_PFET][flavor];
+
+    int diffspace = ndiff->getOppDiffSpacing (flavor);
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    
+    l = new Layout (dummy_netlist);
+
+    if (nplusdiff) {
+      l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->getWidth (),
+		       nplusdiff->getWidth(), dummy_netlist->nsc);
+    }
+    if (pplusdiff) {
+      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - pplusdiff->getWidth(),
+		       pplusdiff->getWidth(), pplusdiff->getWidth(),
+		       dummy_netlist->psc);
+    }
+    /* add pins */
+    RoutingMat *m1 = Technology::T->metal[0];
+    RoutingMat *m2 = Technology::T->metal[1];
+
+    long bllx, blly, burx, bury;
+    l->getBBox (&bllx, &blly, &burx, &bury);
+
+    int tedge;
+    tedge = snap_to (bury - blly + 1, m1->getPitch());
+    while (blly + tedge - m2->minWidth() <=
+	   blly + m1->getPitch() + m2->minWidth()) {
+      tedge += m1->getPitch();
+    }
+
+    p = m2->getPitch();
+    Layout *pins = new Layout (dummy_netlist);
+    int w = m2->minWidth();
+    pins->DrawMetalPin (1, bllx + p, blly + tedge - w, w, w,
+			dummy_netlist->nsc, 0);
+
+    pins->DrawMetalPin (1, bllx + p, blly + m1->getPitch(), w, w,
+			dummy_netlist->psc, 0);
+
+    wellplugs[flavor] = new LayoutBlob (BLOB_MERGE);
+    wellplugs[flavor]->appendBlob (new LayoutBlob (BLOB_BASE, l));
+    wellplugs[flavor]->appendBlob (new LayoutBlob (BLOB_BASE, pins));
   }
-  else {
-    _createlayout (p);
-  }
 
-  _finished = 2;
-
-  _maxht = maxHeight (p);
-
-  return 1;
+  return ret;
 }
 
-int ActStackLayoutPass::init ()
-{
-  double net_lambda;
-  cleanup();
-
-  layoutmap = new std::map<Process *, LayoutBlob *>();
-
-  net_lambda = config_get_real ("net.lambda");
-  lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale + 0.5);
-
-  if (fabs(lambda_to_scale*Technology::T->scale - net_lambda*1e9) > 0.001) {
-    warning ("Lambda (%g) and technology scale factor (%g) are not integer multiples; rounding down", net_lambda, Technology::T->scale);
-  }
-
-  _finished = 1;
-  return 1;
-}
 
 int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
 {
@@ -1059,7 +1086,7 @@ int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
     return 0;
   }
 
-  LayoutBlob *blob = (*layoutmap)[p];
+  LayoutBlob *blob = getLayout (p);
   if (!blob) {
     return 0;
   }
@@ -1090,7 +1117,7 @@ int ActStackLayoutPass::haveRect (Process *p)
     return 0;
   }
 
-  LayoutBlob *blob = (*layoutmap)[p];
+  LayoutBlob *blob = getLayout (p);
   if (!blob) {
     return 0;
   }
@@ -1099,22 +1126,29 @@ int ActStackLayoutPass::haveRect (Process *p)
   }
 }
 
-int ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
+static void emit_header (FILE *fp, const char *name, LayoutBlob *blob)
 {
-  if (!completed ()) {
-    return 0;
-  }
-
-  visited = new std::unordered_set<Process *>();
-
-  int ret = _emitLEF (fp, fpcell, p, dorect);
-
+  double scale = Technology::T->scale/1000.0;
   
-  delete visited;
+  fprintf (fp, "MACRO %s\n", name);
+  fprintf (fp, "    CLASS CORE ;\n");
+  fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
+  fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
-  return ret;
+  long bllx, blly, burx, bury;
+  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale, (bury - blly )*scale);
+  fprintf (fp, "    SYMMETRY X Y ;\n");
+  fprintf (fp, "    SITE CoreSite ;\n");
 }
 
+
+static void emit_footer (FILE *fp, const char *name)
+{
+  fprintf (fp, "END %s\n\n", name);
+}
+			 
 static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 			  const char *sigtype, LayoutBlob *blob,
 			  node_t *signode)
@@ -1184,57 +1218,115 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   fprintf (fp, "\n");
 }
 
-int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect)
+
+void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
+				  Process *p, int do_rect)
 {
-  Scope *sc;
-  int ret;
-
-  /* now: see if process has been emitted already */
-  visited->insert (p);
-  
-  if (!p) {
-    ActNamespace *g = ActNamespace::Global();
-    sc = g->CurScope();
+  if (!completed ()) {
+    return;
   }
-  else {
-    sc = p->CurScope();
-  }
-  ActInstiter i(sc);
+  /* pass arguments */
+  _fp = fp;
+  _fpcell = fpcell;
+  _do_rect = do_rect;
 
-  ret = 0;
+  run_recursive (p, 1);
 
-  /* emit sub-circuits */
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (TypeFactory::isProcessType (vx->t)) {
-      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-      if (x->isExpanded()) {
-	if (visited->find (x) == visited->end()) {
-	  if (_emitLEF (fp, fpcell, x, dorect)) {
-	    ret = 1;
+  /* emit lef for the welltap cells */
+  double scale = Technology::T->scale/1000.0;
+  for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+    if (wellplugs[i]) {
+      LayoutBlob *b = wellplugs[i];
+      char name[1024];
+
+      snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
+      emit_header (fp, name, b);
+
+      emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->psc);
+      emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->nsc);
+
+      emit_footer (fp, name);
+
+      long bllx, blly, burx, bury;
+      TransformMat mat;
+      b->calcBoundary (&bllx, &blly, &burx, &bury);
+      mat.applyTranslate (-bllx, -blly);
+
+      if (fpcell) {
+	/* emit local well lef */
+	WellMat *w;
+	DiffMat *d;
+
+	fprintf (fpcell, "MACRO %s\n", name);
+	fprintf (fpcell, "   VERSION %s\n", name);
+	fprintf (fpcell, "   PLUG\n");
+
+	for (int j=0; j < 2; j++) {
+	  w = Technology::T->well[j][i];
+	  d = Technology::T->welldiff[j][i];
+	  if (w) {
+	    long wllx, wlly, wurx, wury;
+	    list_t *tiles = b->search (TILE_FLGS_TO_ATTR(i,j,
+							 WDIFF_OFFSET), &mat);
+	    LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
+	    list_free (tiles);
+
+	    if (wllx <= wurx) {
+	      fprintf (fpcell, "   LAYER %s ;\n", w->getName());
+	      wllx -= w->getOverhangWelldiff();
+	      wlly -= w->getOverhangWelldiff();
+	      wurx += w->getOverhangWelldiff();
+	      wury += w->getOverhangWelldiff();
+	      fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
+		       wllx*scale, wlly*scale, wurx*scale, wury*scale);
+	      fprintf (fpcell, "   END\n");
+	    }
 	  }
 	}
+	fprintf (fpcell, "   END VERSION\n");
+	fprintf (fpcell, "END %s\n", name);
+      }
+      if (do_rect) {
+	/* emit rectangles */
+	strcat (name, ".rect");
+	FILE *tfp = fopen (name, "w");
+	b->PrintRect (tfp, &mat);
+	fclose (tfp);
       }
     }
   }
 
-  /* emit self */
+
+}
+
+/*
+ *
+ * Emit LEF corresponding to this process, adding it to the file
+ * specified by the file pointer fp
+ *
+ */
+int ActStackLayoutPass::_emitlocalLEF (Process *p)
+{
+  FILE *fp = _fp;
+  FILE *fpcell = _fpcell;
+  int do_rect = _do_rect;
   
+  /* emit self */
   int padx = 0;
   int pady = 0;
   netlist_t *n;
 
-  LayoutBlob *blob = (*layoutmap)[p];
+  LayoutBlob *blob = getLayout (p);
   if (!blob) {
-    return ret;
+    return 0;
   }
 
   n = stk->getNL (p);
   if (!n) {
-    return ret;
+    return 0;
   }
 
-  if (n->bN->isempty) {
+  if (p->isBlackBox()) {
     /* blackbox */
     FILE *bfp;
     int l;
@@ -1280,7 +1372,7 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
 
   if (bllx > burx || blly > bury) {
     /* no layout */
-    return ret;
+    return 1;
   }
 
   /* if this has weak gates only, skip it... 
@@ -1305,34 +1397,12 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
     }
   }
 
-  for (int lef=0; lef < 2; lef++) {
-
-  if (lef != 0) { fprintf (fp, "\n"); }
-
-  fprintf (fp, "MACRO ");
-  a->mfprintfproc (fp, p);
-  if (lef == 1) {
-    fprintf (fp, "_plug");
-  }
-  
-  fprintf (fp, "\n");
-
-  fprintf (fp, "    CLASS CORE ;\n");
-  fprintf (fp, "    FOREIGN ");
-  a->mfprintfproc (fp, p);
-  if (lef == 1) {
-    fprintf (fp, "_plug");
-  }
-
-  fprintf (fp, " %.6f %.6f ;\n", 0.0, 0.0);
-  fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
-
+  char macroname[10240];
   double scale = Technology::T->scale/1000.0;
-
-  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx + (lef == 0 ? 0 : 4*m2->getPitch()))*scale, (bury - blly )*scale);
-  fprintf (fp, "    SYMMETRY X Y ;\n");
-  fprintf (fp, "    SITE CoreSite ;\n");
-
+  
+  a->msnprintfproc (macroname, 10240, p);
+  emit_header (fp, macroname, blob);
+  
   /* find pins */
   int found_vdd = 0;
   int found_gnd = 0;
@@ -1432,59 +1502,54 @@ int ActStackLayoutPass::_emitLEF (FILE *fp, FILE *fpcell, Process *p, int dorect
 	     scale*((rury - blly) - 3*m1->getPitch()));
     fprintf (fp, "    END\n");
   }
-  fprintf (fp, "END ");
-  a->mfprintfproc (fp, p);
-  if (lef == 1) {
-    fprintf (fp, "_plug");
-  }
-  fprintf (fp, "\n");
 
-  }
-
-  fprintf (fp, "\n");
-  
+  emit_footer (fp, macroname);
 
   if (fpcell) {
-    emitWellLEF (fpcell, p);
+    _emitLocalWellLEF (fpcell, p);
   }
-
-  if (dorect) {
-    FILE *tfp;
-    char cname[10240];
-    int len;
-
-    a->msnprintfproc (cname, 10240, p);
-    len = strlen (cname);
-    snprintf (cname + len, 10240-len, ".rect");
-    tfp = fopen (cname, "w");
-    emitRect (tfp, p);
-    fclose (tfp);
+  if (do_rect) {
+    _emitlocalRect (p);
   }
-
   return 1;
 }
 
-int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
+
+void ActStackLayoutPass::_emitlocalRect (Process *p)
+{
+  FILE *tfp;
+  char cname[10240];
+  int len;
+
+  a->msnprintfproc (cname, 10240, p);
+  len = strlen (cname);
+  snprintf (cname + len, 10240-len, ".rect");
+  tfp = fopen (cname, "w");
+  emitRect (tfp, p);
+  fclose (tfp);
+}
+
+/*
+ * Called from LEF generation pass
+ */
+void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
 {
   int padx = 0;
   int pady = 0;
   netlist_t *n;
-  if (!completed ()) {
-    return 0;
-  }
 
   if (!p) {
-    return 0;
+    return;
   }
 
-  LayoutBlob *blob = (*layoutmap)[p];
+  LayoutBlob *blob = getLayout (p);
   if (!blob) {
-    return 0;
+    return;
   }
 
   n = stk->getNL (p);
   if (!n) {
-    return 0;
+    return;
   }
 
   long bllx, blly, burx, bury;
@@ -1492,7 +1557,7 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
 
   if (bllx > burx || blly > bury) {
     /* no layout */
-    return 0;
+    return;
   }
 
   RoutingMat *m1 = Technology::T->metal[0];
@@ -1503,8 +1568,8 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n");
 
-  for (int lef=0; lef < 2; lef++) {
-
+  /*for (int lef=0; lef < 2; lef++)*/ {
+  int lef = 0;
   fprintf (fp, "    VERSION ");
   a->mfprintfproc (fp, p);
   if (lef == 1) {
@@ -1527,75 +1592,15 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
       WellMat *w = Technology::T->well[j][i];
       list_t *tiles = blob->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET), &mat);
       long wllx, wlly, wurx, wury;
-      int init = 0;
 
-      listitem_t *tli;
-      for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-	struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-
-	/* a transform matrix + list of (layer,tile-list) pairs */
-	
-	listitem_t *xi;
-	for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-	  Layer *name = (Layer *) list_value (xi);
-	  xi = list_next (xi);
-	  Assert (xi, "What?");
-
-	  list_t *actual_tiles = (list_t *) list_value (xi);
-	  listitem_t *ti;
-
-	  for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	    long tllx, tlly, turx, tury;
-	    Tile *tmp = (Tile *) list_value (ti);
-
-	    tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	    tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-
-	    if (tllx > turx) {
-	      long x = tllx;
-	      tllx = turx;
-	      turx = x;
-	    }
-	  
-	    if (tlly > tury) {
-	      long x = tlly;
-	      tlly = tury;
-	      tury = x;
-	    }
-	    if (!init) {
-	      wllx = tllx;
-	      wlly = tlly;
-	      wurx = turx;
-	      wury = tury;
-	      init = 1;
-	    }
-	    else {
-	      wllx = MIN(wllx, tllx);
-	      wlly = MIN(wlly, tlly);
-	      wurx = MAX(wurx, turx);
-	      wury = MAX(wury, tury);
-	    }
-	  }
-	}
-      }
-
-      if (init && w) {
-	wurx ++;
-	wury ++;
-	
-	//wllx -= w->getOverhang();
+      LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
+      if (wurx >= wllx) {
+	/* bloat the region based on well overhang */
+	wllx -= w->getOverhang();
 	wlly -= w->getOverhang();
-	//wurx += w->getOverhang();
+	wurx += w->getOverhang();
 	wury += w->getOverhang();
 
-	wllx = 0; // XXX: FIXME MAX(wllx, 0);
-	wlly = MAX(wlly, 0);
-
-	// XXX: FIXME wurx = MIN(wurx, burx - bllx);
-	wurx = burx - bllx + (lef == 0 ? 0 : 4*m2->getPitch());
-	
-	wury = MIN(wury, bury - blly);
-	
 	fprintf (fp, "        LAYER %s ;\n", w->getName());
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
 		 scale*wllx, scale*wlly, scale*wurx, scale*wury);
@@ -1612,7 +1617,7 @@ int ActStackLayoutPass::emitWellLEF (FILE *fp, Process *p)
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n\n");
 
-  return 1;
+  return;
 }
 
 
@@ -1654,6 +1659,92 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     }
     fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
     fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
+
+    RangeTable *maxwidths = NULL;
+
+    switch (mat->complexSpacingMode()) {
+    case -1:
+      /* even in this case, emit a spacing table since the open
+	 source tools don't seem to work otherwise (?)
+      */
+      fprintf (fp, "   SPACINGTABLE\n");
+      fprintf (fp, "      PARALLELRUNLENGTH 0.0\n");
+      fprintf (fp, "      WIDTH 0.0 %.6f ;\n", mat->minSpacing()*scale);
+      break;
+
+    case 0:
+      maxwidths = mat->getRunTable (mat->numRunLength());
+      /* parallel run length */
+      fprintf (fp, "   SPACINGTABLE\n");
+      fprintf (fp, "      PARALLELRUNLENGTH 0.0");
+      for (int k=0; k < mat->numRunLength(); k++) {
+	fprintf (fp, " %.6f", mat->getRunLength(k)*scale);
+      }
+      fprintf (fp, "\n");
+      /* XXX: assumption: widths are always in the range table for
+	 the maximum width parallel run length rules */
+      for (int k=0; k < maxwidths->size(); k++) {
+	int width;
+
+	if (k == 0) {
+	  width = 0;
+	}
+	else {
+	  /* the start of the next range */
+	  width = maxwidths->range_threshold (k-1)+1;
+	}
+	fprintf (fp, "      WIDTH %.6f ", width*scale);
+	for (int l=0; l <= mat->numRunLength(); l++) {
+	  RangeTable *sp = mat->getRunTable (l);
+	  fprintf (fp, " %.6f", (*sp)[width+1]*scale);
+	}
+	if (k == maxwidths->size()-1) {
+	  fprintf (fp, " ;");
+	}
+	fprintf (fp, "\n");
+      }
+      break;
+    case 1:
+      maxwidths = mat->getRunTable (mat->numRunLength()-1);
+      fprintf (fp, "   SPACINGTABLE TWOWIDTHS\n");
+      for (int k=0; k < maxwidths->size(); k++) {
+	int width;
+
+	if (k == 0) {
+	  width = 0;
+	}
+	else {
+	  width = maxwidths->range_threshold (k-1);
+	}
+	
+	RangeTable *sp = mat->getRunTable (k);
+
+	fprintf (fp, "      WIDTH %.6f ", width*scale);
+	if (mat->getRunLength (k) != -1) {
+	  fprintf (fp, "   PRL %.6f ", mat->getRunLength (k)*scale);
+	}
+	else {
+	  fprintf (fp, "              ");
+	}
+	for (int l=0; l < maxwidths->size(); l++) {
+	  if (l == 0) {
+	    width = 0;
+	  }
+	  else {
+	    width = maxwidths->range_threshold (l-1);
+	  }
+	  fprintf (fp, " %.6f", (*sp)[width+1]*scale);
+	}
+	if (k == maxwidths->size()-1) {
+	  fprintf (fp, " ;");
+	}
+	fprintf (fp, "\n");
+      }
+      break;
+    default:
+      fatal_error ("Unknown runlength_mode %d\n", mat->complexSpacingMode());
+      break;
+    }
     fprintf (fp, "   PITCH %.6f %.6f ;\n",
 	     mat->getPitch()*scale, mat->getPitch()*scale);
     fprintf (fp, "END %s\n\n", mat->getName());
@@ -1691,6 +1782,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     
     fprintf (fp, "END %s_C\n\n", vup->getName());
   }
+  
 }
 
 void ActStackLayoutPass::emitWellHeader (FILE *fp)
@@ -1722,7 +1814,7 @@ LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
     return 0;
   }
   if (!p) return NULL;
-  return (*layoutmap)[p];
+  return (LayoutBlob *) getMap (p);
 }
 
 
@@ -1737,7 +1829,7 @@ int ActStackLayoutPass::_maxHeight (Process *p)
 
   visited->insert (p);
 
-  b = (*layoutmap)[p];
+  b = getLayout (p);
   if (b) {
     long llx, lly, urx, ury;
     b->calcBoundary (&llx, &lly, &urx, &ury);
@@ -1796,6 +1888,8 @@ int ActStackLayoutPass::maxHeight (Process *p)
     maxval = _maxHeight (p);
   }
   delete visited;
+  visited = NULL;
+  
   return maxval;
 }
 
@@ -2004,7 +2098,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   _instcount = 0;
   _areacount = 0;
   _areastdcell = 0;
-  _maximum_height = _maxht;
+  _maximum_height = getStdCellHeight ();
   ap->setCookie (this);
   ap->setInstFn (count_inst);
   ap->run (p);
@@ -2153,51 +2247,13 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
  */
 void ActStackLayoutPass::reportStats (Process *p)
 {
-  if (!completed ()) {
-    return;
-  }
-
-  visited = new std::unordered_set<Process *>();
-
-  _reportStats (p);
-
-  
-  delete visited;
-
-  return;
+  run_recursive (p, 2);
 }
 
 
-void ActStackLayoutPass::_reportStats(Process *p)
+void ActStackLayoutPass::_reportLocalStats(Process *p)
 {
-  Scope *sc;
-
-  /* now: see if process has been emitted already */
-  visited->insert (p);
-  
-  if (!p) {
-    ActNamespace *g = ActNamespace::Global();
-    sc = g->CurScope();
-  }
-  else {
-    sc = p->CurScope();
-  }
-  ActInstiter i(sc);
-
-  /* emit sub-circuits */
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (TypeFactory::isProcessType (vx->t)) {
-      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-      if (x->isExpanded()) {
-	if (visited->find (x) == visited->end()) {
-	  _reportStats (x);
-	}
-      }
-    }
-  }
-
-  LayoutBlob *blob = (*layoutmap)[p];
+  LayoutBlob *blob = getLayout (p);
   if (!blob) {
     return;
   }

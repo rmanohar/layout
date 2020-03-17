@@ -249,8 +249,6 @@ int gate_pairs::available_mark()
 
 ActStackPass::ActStackPass(Act *a) : ActPass (a, "net2stk")
 {
-  stkmap = NULL;
-
   if (!a->pass_find ("prs2net")) {
     nl = new ActNetlistPass (a);
   }
@@ -262,22 +260,9 @@ ActStackPass::ActStackPass(Act *a) : ActPass (a, "net2stk")
   Assert (nl, "Hmm too...");
 }
 
-void ActStackPass::cleanup()
-{
-  if (stkmap) {
-    std::map<Process *, list_t *>::iterator it;
-    for (it = (*stkmap).begin(); it != (*stkmap).end(); it++) {
-      list_free (it->second);
-    }
-    delete stkmap;
-  }
-}
-
 
 ActStackPass::~ActStackPass()
-{
-  cleanup();
-}
+{ }
 
 /*
   Compute the # of pfets and # of nfets attached to a node
@@ -684,9 +669,9 @@ netlist_t *ActStackPass::getNL (Process *p)
   return nl->getNL (p);
 }
 
-void ActStackPass::_createstacks (Process *p)
+void *ActStackPass::local_op (Process *proc, int mode)
 {
-  netlist_t *N = nl->getNL (p);
+  netlist_t *N = nl->getNL (proc);
   Assert (N, "What?");
 
   node_t *n;
@@ -695,11 +680,9 @@ void ActStackPass::_createstacks (Process *p)
   int maxedges;
 
   /* check we have already handled this process */
-  if ((*stkmap)[p]) return;
-
 #if 0
   printf ("--------------------------------------------\n");
-  printf ("creating stacks for: %s\n", p->getName());
+  printf ("creating stacks for: %s\n", proc->getName());
 #endif  
 
   /* nodes to be processed */
@@ -1119,62 +1102,13 @@ void ActStackPass::_createstacks (Process *p)
   list_append (retlist, stk_n);
   list_append (retlist, stk_p);
 
-  (*stkmap)[p] = retlist;
-
-  /* now create stacks for components */
-  ActInstiter i(p->CurScope());
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (TypeFactory::isProcessType (vx->t)) {
-      Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-      if (x->isExpanded()) {
-	_createstacks (x);
-      }
-    }
-  }
+  return retlist;
 }
 
 int ActStackPass::run (Process *p)
 {
-  init ();
-
-  if (!rundeps (p)) {
-    return 0;
-  }
-
-  if (!p) {
-    ActNamespace *g = ActNamespace::Global();
-    ActInstiter i(g->CurScope());
-
-    for (i = i.begin(); i != i.end(); i++) {
-      ValueIdx *vx = (*i);
-      if (TypeFactory::isProcessType (vx->t)) {
-	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-	if (x->isExpanded()) {
-	  _createstacks (x);
-	}
-      }
-    }
-    _createstacks (p);
-  }
-  else {
-    _createstacks (p);
-  }
-
-  _finished = 2;
-  return 1;
+  return ActPass::run (p);
 }
-
-int ActStackPass::init ()
-{
-  cleanup();
-
-  stkmap = new std::map<Process *, list_t *>();
-
-  _finished = 1;
-  return 1;
-}
-
 
 list_t *ActStackPass::getStacks(Process *p)
 {
@@ -1183,7 +1117,7 @@ list_t *ActStackPass::getStacks(Process *p)
     warning ("ActStackPass: has not been run yet!");
     return NULL;
   }
-  return (*stkmap)[p];
+  return (list_t *) getMap (p);
 }
 
 
@@ -1202,4 +1136,13 @@ int ActStackPass::isEmpty (list_t *stk)
   if (p && list_length (p) > 0) return 0;
   
   return 1;
+}
+
+void ActStackPass::free_local (void *v)
+{
+  if (v) {
+    list_t *stk = (list_t *)v;
+    /* XXX do something here! */
+    list_free (stk);
+  }
 }
