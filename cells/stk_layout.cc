@@ -1788,6 +1788,11 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 void ActStackLayoutPass::emitWellHeader (FILE *fp)
 {
   double scale = Technology::T->scale/1000.0;
+
+  fprintf (fp, "LAYER LEGALIZER\n");
+  fprintf (fp, "   SAME_DIFF_SPACING %.6f ;\n", Technology::T->getMaxSameDiffSpacing()*scale);
+  fprintf (fp, "   ANY_DIFF_SPACING %.6f ;\n", Technology::T->getMaxDiffSpacing()*scale);
+  fprintf (fp, "END LEGALIZER\n\n");
   
   for (int i=0; i < Technology::T->num_devs; i++) {
     for (int j = 0 ; j < 2; j++) {

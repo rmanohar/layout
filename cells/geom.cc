@@ -1949,7 +1949,7 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
 #endif
 
   /* calculate diff spacing */
-  int diff_spc = Technology::T->getMaxDiffSpacing();
+  int diff_spc = Technology::T->getMaxSameDiffSpacing();
 
   *burx = snap_to (urx - llx + 1 + diff_spc + 2*padx, m2->getPitch());
   *bury = snap_to (ury - lly + 1 + diff_spc + 2*pady, m1->getPitch());
