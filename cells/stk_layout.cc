@@ -1,6 +1,6 @@
 /*************************************************************************
  *
- *  Copyright (c) 2019 Rajit Manohar
+ *  Copyright (c) 2019-2020 Rajit Manohar
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
