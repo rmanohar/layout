@@ -623,7 +623,6 @@ static list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
   list_t *stks;
   list_t *onestk;
   edge_t *e;
-  listitem_t *li;
   node_t *other;
 
   stks = list_new ();
@@ -771,7 +770,6 @@ void *ActStackPass::local_op (Process *proc, int mode)
 	  if (e2->type != EDGE_PFET) continue;
 				      
 	  if (e1->g == e2->g) {
-	    int odd;
 	    /* pairing opportunity */
 	    struct gate_pairs *p, *p2;
 
@@ -889,7 +887,6 @@ void *ActStackPass::local_op (Process *proc, int mode)
 
     for (li = list_first (rawpairs); li; li = list_next (li)) {
       struct gate_pairs *gtmp, *gnew;
-      edge_t *e;
 
       gtmp = (struct gate_pairs *) list_value (li);
       if (gtmp->available_basepair ()) {
@@ -1033,7 +1030,7 @@ void *ActStackPass::local_op (Process *proc, int mode)
     --*/
   for (li = list_first (stks); li; li = list_next (li)) {
     struct gate_pairs *gp;
-    listitem_t *mi;
+
     gp = (struct gate_pairs *) list_value (li);
 
     /* attempt to extend stacks left and right */

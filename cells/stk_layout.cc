@@ -917,8 +917,6 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     p_in = m2->getPitch();
     p_out = m2->getPitch();
 
-    char tmp[1024];
-
     Layout *pins = new Layout(n);
 
     found_vdd = 0;
@@ -1028,9 +1026,10 @@ int ActStackLayoutPass::run (Process *p)
     }
     
     DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
-    DiffMat *pdiff = Technology::T->diff[EDGE_PFET][flavor];
 
     int diffspace = ndiff->getOppDiffSpacing (flavor);
+    /* this is symmetric: pdiff->getOppDiffSpacing (flavor)
+       must be the same */
     int p = +diffspace/2;
     int n = p - diffspace;
     
@@ -1312,8 +1311,6 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   int do_rect = _do_rect;
   
   /* emit self */
-  int padx = 0;
-  int pady = 0;
   netlist_t *n;
 
   LayoutBlob *blob = getLayout (p);
@@ -1534,8 +1531,6 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
  */
 void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
 {
-  int padx = 0;
-  int pady = 0;
   netlist_t *n;
 
   if (!p) {
@@ -1560,8 +1555,6 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
     return;
   }
 
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
   double scale = Technology::T->scale/1000.0;
 
   fprintf (fp, "MACRO ");
@@ -2038,7 +2031,6 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
     ActId *cpy;
     
     Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
-    int ports_exist;
 
     newid = new ActId (vx->getName());
     if (prefix) {

@@ -760,9 +760,6 @@ int Tile::addVirt (int flavor, int type,
   */
   list_t *l = collectRect (_llx, _lly, wx, wy);
 
-  list_t *ml;
-  listitem_t *li;
-
   if (list_isempty (l)) {
     fatal_error ("Tile::collectRect() failed!");
   }
@@ -1453,7 +1450,6 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
       m = *mat;
     }
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
-      long llx, lly, urx, ury;
       if (bl != l.hd) {
 	if (t == BLOB_HORIZ) {
 	  m.applyTranslate (bl->gap, bl->shift);
@@ -1527,6 +1523,10 @@ static void mat_mult (long res[3][3], long a[3][3], long b[3][3])
     for (j=0; j < 3; j++) {
       res[i][j] = tmp[i][j];
     }
+
+  Assert (res[2][0] == 0 &&
+	  res[2][1] == 0 &&
+	  res[2][2] == 1, "Hmm...");
 }
 
 void TransformMat::applyRot90()
@@ -1568,6 +1568,45 @@ void TransformMat::applyTranslate (long dx, long dy)
   translate[1][2] = dy;
 
   mat_mult (m, translate, m);
+}
+
+void TransformMat::inverse (TransformMat *inp)
+{
+  /* invert m */
+  long tmp[3][3];
+
+  /* 
+     Assumes: just rotations and translations.
+     This also means the third row is [ 0 0 1 ]
+  */
+
+  m[0][0] = inp->m[1][1];
+  m[0][1] = -inp->m[0][1];
+  m[1][0] = -inp->m[1][0];
+  m[1][1] = inp->m[0][0];
+
+  m[0][2] = inp->m[0][1]*inp->m[1][2] - inp->m[0][2]*inp->m[1][1];
+  m[1][2] = inp->m[1][0]*inp->m[0][2] - inp->m[0][0]*inp->m[1][2];
+  
+  m[2][0] = 0;
+  m[2][1] = 0;
+  m[2][2] = 1;
+
+
+  /* this assumes the discriminant is 1 */
+
+  /* check */
+  mat_mult (tmp, m, inp->m);
+  for (int i=0; i < 3; i++) {
+    for (int j=0; j < 3; j++) {
+      if (j == i) {
+	Assert (tmp[i][j] == 1, "Hmm");
+      }
+      else {
+	Assert (tmp[i][j] == 0, "Hmm");
+      }
+    }
+  }
 }
 
 
@@ -1846,6 +1885,7 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
     }
   }
   else {
+    tiles = NULL;
     fatal_error ("New blob?");
   }
   return tiles;
@@ -1902,6 +1942,7 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
     }
   }
   else {
+    tiles = NULL;
     fatal_error ("New blob?");
   }
   return tiles;
@@ -1938,10 +1979,10 @@ void LayoutBlob::calcBoundary (long *bllx, long *blly,
 
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
-  RoutingMat *m3 = Technology::T->metal[2];
 
 #if 0  
   if (Technology::T->nmetals < 5) {
+    RoutingMat *m3 = Technology::T->metal[2];
     padx = 2*m2->getPitch();
     pady = 2*m3->getPitch();
     pady = snap_to (pady, m1->getPitch());
@@ -1996,7 +2037,7 @@ void LayoutBlob::searchBBox (list_t *slist, long *bllx, long *blly,
     /* a transform matrix + list of (layer,tile-list) pairs */
     listitem_t *xi;
     for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-      Layer *name = (Layer *) list_value (xi);
+      //Layer *name = (Layer *) list_value (xi);
       xi = list_next (xi);
       Assert (xi, "What?");
       

@@ -166,6 +166,7 @@ public:
   void applyTranslate (long dx, long dy);
   void mirrorLR ();
   void mirrorTB ();
+  void inverse (TransformMat *m);
 
   void apply (long inx, long iny, long *outx, long *outy);
 };
@@ -267,6 +268,8 @@ public:
   void getBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
+
+  void ReadRect (FILE *fp);
 
   list_t *search (void *net);
   list_t *search (int attr);
