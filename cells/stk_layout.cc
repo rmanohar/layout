@@ -1109,12 +1109,16 @@ int ActStackLayoutPass::run (Process *p)
 		       pplusdiff->getWidth(), pplusdiff->getWidth(),
 		       dummy_netlist->psc);
     }
+
+    wellplugs[flavor] = new LayoutBlob (BLOB_BASE, l);
+    wellplugs[flavor] = computeLEFBoundary (wellplugs[flavor]);
+    
     /* add pins */
     RoutingMat *m1 = Technology::T->metal[0];
     RoutingMat *m2 = Technology::T->metal[1];
 
     long bllx, blly, burx, bury;
-    l->getBBox (&bllx, &blly, &burx, &bury);
+    wellplugs[flavor]->getBBox (&bllx, &blly, &burx, &bury);
 
     int tedge;
     tedge = snap_up (bury - blly + 1, m1->getPitch());
@@ -1132,9 +1136,10 @@ int ActStackLayoutPass::run (Process *p)
     pins->DrawMetalPin (1, bllx + p, blly + m1->getPitch(), w, w,
 			dummy_netlist->psc, 0);
 
-    wellplugs[flavor] = new LayoutBlob (BLOB_MERGE);
-    wellplugs[flavor]->appendBlob (new LayoutBlob (BLOB_BASE, l));
-    wellplugs[flavor]->appendBlob (new LayoutBlob (BLOB_BASE, pins));
+    LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
+    bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
+    bl->appendBlob (wellplugs[flavor]);
+    wellplugs[flavor] = computeLEFBoundary (bl);
   }
 
   return ret;
