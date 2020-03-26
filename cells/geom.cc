@@ -1393,6 +1393,10 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       lly = 0;
       urx = -1;
       ury = -1;
+      bloatllx = 0;
+      bloatlly = 0;
+      bloaturx = -1;
+      bloatury = -1;
     }
     break;
 
