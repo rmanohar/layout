@@ -65,7 +65,25 @@ static long snap_dn (long w, unsigned long pitch)
   return w;
 }
 
-  
+static long snap_up_x (long w)
+{
+  return snap_up (w, Technology::T->metal[1]->getPitch());
+}
+
+static long snap_dn_x (long w)
+{
+  return snap_dn (w, Technology::T->metal[1]->getPitch());
+}
+
+static long snap_up_y (long w)
+{
+  return snap_up (w, Technology::T->metal[0]->getPitch());
+}
+
+static long snap_dn_y (long w)
+{
+  return snap_dn (w, Technology::T->metal[0]->getPitch());
+}
 
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
@@ -1044,6 +1062,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     BLOB = bl;
   }
 
+  BLOB = computeLEFBoundary (BLOB);
+
   return BLOB;
 }
 
@@ -1136,7 +1156,7 @@ int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
   }
 
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1180,9 +1200,14 @@ static void emit_header (FILE *fp, const char *name, LayoutBlob *blob)
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+
+#if 0  
+  printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
+#endif
   
-  fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale, (bury - blly )*scale);
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
+	   (burx - bllx + 1)*scale, (bury - blly + 1)*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 }
@@ -1200,7 +1225,7 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   long bllx, blly, burx, bury;
   double scale = Technology::T->scale/1000.0;
 
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
   
   fprintf (fp, "    PIN ");
   a->mfprintf (fp, "%s\n", name);
@@ -1293,7 +1318,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
 
       long bllx, blly, burx, bury;
       TransformMat mat;
-      b->getBBox (&bllx, &blly, &burx, &bury);
+      b->getBloatBBox (&bllx, &blly, &burx, &bury);
       mat.applyTranslate (-bllx, -blly);
 
       if (fpcell) {
@@ -1410,7 +1435,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1532,9 +1557,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   /* XXX: add obstructions for metal layers; in reality we need to
      add the routed metal and then grab that here */
   long rllx, rlly, rurx, rury;
-  blob->getBBox (&rllx, &rlly, &rurx, &rury);
-  if (((rury - rlly) > 6*m1->getPitch()) &&
-      ((rurx - rllx) > 2*m2->getPitch())) {
+  blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
+  if (((rury - rlly+1) > 6*m1->getPitch()) &&
+      ((rurx - rllx+1) > 2*m2->getPitch())) {
     fprintf (fp, "    OBS\n");
     fprintf (fp, "      LAYER %s ;\n", m1->getName());
     fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
@@ -1593,7 +1618,7 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
   }
 
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1875,7 +1900,7 @@ int ActStackLayoutPass::_maxHeight (Process *p)
   b = getLayout (p);
   if (b) {
     long llx, lly, urx, ury;
-    b->getBBox (&llx, &lly, &urx, &ury);
+    b->getBloatBBox (&llx, &lly, &urx, &ury);
     maxval = (ury - lly + 1);
   }
   
@@ -1959,7 +1984,7 @@ static void count_inst (void *x, ActId *prefix, Process *p)
     /* there is a circuit */
     long llx, lly, urx, ury;
 
-    b->getBBox (&llx, &lly, &urx, &ury);
+    b->getBloatBBox (&llx, &lly, &urx, &ury);
     if ((llx > urx) || (lly > ury)) return;
     
     b->incCount();
@@ -1986,7 +2011,7 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   if ((b = _alp->getLayout (p))) {
     long llx, lly, urx, ury;
     
-    b->getBBox (&llx, &lly, &urx, &ury);
+    b->getBloatBBox (&llx, &lly, &urx, &ury);
     if ((llx > urx) || (lly > ury)) return;
     
     /* FORMAT: 
@@ -2300,7 +2325,7 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
     return;
   }
   long bllx, blly, burx, bury;
-  blob->getBBox (&bllx, &blly, &burx, &bury);
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
   if (bllx > burx || blly > bury) return;
 
   char *tmp = p->getns()->Name();
@@ -2347,30 +2372,69 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
 LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
 {
   long llx, lly, urx, ury;
+  long nllx, nlly, nurx, nury;
 
   if (!b) return NULL;
-  
+
   b->getBloatBBox (&llx, &lly, &urx, &ury);
-  
+  if (urx < llx || ury < lly) {
+    return b;
+  }
+
+#if 0
+  printf ("\n");
+  printf ("original: (%ld,%ld) -> (%ld,%ld)\n", llx, lly, urx, ury);
+  printf ("SNAP: %d and %d\n",  Technology::T->metal[1]->getPitch(),
+	  Technology::T->metal[0]->getPitch());
+#endif
+
   Assert (Technology::T->nmetals >= 3, "Hmm");
 
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
+  nllx = snap_dn_x (llx);
+  nurx = snap_up_x (urx+1)-1;
 
-  llx = snap_dn (llx, m2->getPitch());
-  urx = snap_up (urx, m2->getPitch());
-  
-  lly = snap_dn (lly, m1->getPitch());
-  ury = snap_up (ury, m2->getPitch());
+  nlly = snap_dn_y (lly);
+  nury = snap_up_y (ury+1)-1;
 
   LayoutBlob *box = new LayoutBlob (BLOB_BASE, NULL);
-  box->setBBox (llx, lly, urx, ury);
+  box->setBBox (nllx, nlly, nurx, nury);
 
+#if 0
+  printf (" set: (%ld,%ld) -> (%ld,%ld)\n",
+	  nllx, nlly, nurx, nury);
 
+  box->getBloatBBox (&llx, &lly, &urx, &ury);
+  printf ("test: (%ld,%ld) -> (%ld,%ld)\n", llx, lly, urx, ury);
+  if (llx != nllx || lly != nlly ||
+      urx != nurx || ury != nury) {
+    printf ("++++++\n");
+  }
+#endif  
+  
   /* add the boundary to the blob */
   LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
   bl->appendBlob (b);
+
+#if 0
+  bl->getBloatBBox (&llx, &lly, &urx, &ury);
+  printf ("next: (%ld,%ld) -> (%ld,%ld)\n",
+	  llx,lly,urx, ury);
+#endif
+  
   bl->appendBlob (box);
+
+#if 0
+  bl->getBloatBBox (&llx, &lly, &urx, &ury);
+
+  if (nllx != llx || nlly != lly ||
+      nurx != urx || nury != ury) {
+    printf ("*****\n");
+  }
+  printf ("    : (%ld,%ld) -> (%ld,%ld)\n",
+	  llx, lly, urx,ury);
+
+  printf ("SIZE = (%ld, %ld)\n", urx - llx + 1, ury - lly + 1);
+#endif  
   
   return bl;
 }
