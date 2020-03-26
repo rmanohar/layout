@@ -28,6 +28,25 @@
 #define MAX_VALUE (signed long)((1UL << (8*sizeof(long)-1))-1)
 
 
+/*------------------------------------------------------------------------
+ *
+ *  Coordinate system:
+ *
+ *    - integer grid points
+ *    - a tile has llx, lly: these points are *in* the tile
+ *    - a tile has urx, ury: these points are also *in* the tile
+ *
+ *  So the total dimensions of the tile will be:
+ *       (urx - llx + 1) by (ury - lly + 1)
+ *
+ *  An empty tile/bbox is specified by: (0,0) to (-1,-1)
+ *
+ *  Example: (0,0) to (0,0) will be a tile that has one grid point in
+ *  it
+ *
+ *------------------------------------------------------------------------
+ */
+
 /* 
    off field in the macro below 
 */
@@ -191,6 +210,10 @@ protected:
 
   unsigned int bbox:1;		// 1 if bbox below is valid
   long _llx, _lly, _urx, _ury;
+  long _bllx, _blly, _burx, _bury; // bloated bbox
+  /* BBox with spacing on all sides 
+     This bloats the bounding box by the minimum spacing on all sides.
+  */
 
  public:
   Layer (Material *, netlist_t *);
@@ -212,8 +235,8 @@ protected:
   list_t *search (void *net);
   list_t *search (int attr);
 
-  /* type = -1 : all! */
-  void BBox (long *llx, long *lly, long *urx, long *ury, int type = -1);
+  void getBBox (long *llx, long *lly, long *urx, long *ury);
+  void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
@@ -266,6 +289,7 @@ public:
   // THE FET THAT NEEDS THE WELL.
 
   void getBBox (long *llx, long *lly, long *urx, long *ury);
+  void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
@@ -340,6 +364,7 @@ private:
 				// 2 = vert
 
   long llx, lly, urx, ury;	// bounding box
+  long bloatllx, bloatlly, bloaturx, bloatury; // bloated bounding box
 
 #define LAYOUT_EDGE_LEFT 0  
 #define LAYOUT_EDGE_RIGHT 2
@@ -364,6 +389,12 @@ public:
    * @param llxp, llyp, urxp, uryp are used to return the boundary.
    */
   void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
+  void getBloatBBox (long *llxp, long *llyp, long *urxp, long *uryp);
+
+  /**
+   * Set bounding box: only applies to BLOB_BASE with no layout 
+   */
+  void setBBox (long _llx, long _lly, long _urx, long _ury);
 
   /**
    * Returns a list of tiles in the layout that match the net
@@ -383,20 +414,6 @@ public:
    */
   static void searchBBox (list_t *slist, long *bllx, long *blly, long *burx,
 			  long *bury);
-
-  /**
-   *  Calculate the placement boundary for the LayoutBlob; this
-   *  includes padding on the edges, as well as alignment
-   *  constraints: the x-dimension is aligned to the m2 pitch, and the
-   *  y-dimension is aligned to the m1 pitch.
-   *
-   *  If there are 3 or fewer metal layers, space for 2 wires on all
-   *  sides of the layout are added.
-   *
-   *  @param bllx, blly, burx, bury are used to return the boundary
-   *  coordinates.
-   */
-  void calcBoundary (long *bllx, long *blly, long *burx, long *bury);
 
   /**
    *  Calculate the edge alignment between two edge atttributes

@@ -84,7 +84,10 @@ class ActStackLayoutPass : public ActPass {
 
   /* welltap */
   LayoutBlob **wellplugs;
-  netlist_t *dummy_netlist;	// dummy netlist 
+  netlist_t *dummy_netlist;	// dummy netlist
+
+  /* aligned LEF boundary */
+  LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
   ActStackPass *stk;
 

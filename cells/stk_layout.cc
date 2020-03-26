@@ -29,13 +29,43 @@
 #include <string.h>
 
 
-static unsigned long snap_to (unsigned long w, unsigned long pitch)
+static long snap_up (long w, unsigned long pitch)
 {
-  if (w % pitch != 0) {
-    w += pitch - (w % pitch);
+  if (w >= 0) {
+    if (w % pitch != 0) {
+      w += pitch - (w % pitch);
+    }
+  }
+  else {
+    w = -w;
+    if (w % pitch != 0) {
+      w += pitch - (w % pitch);
+      w = w - pitch;
+    }
+    w = -w;
   }
   return w;
 }
+
+static long snap_dn (long w, unsigned long pitch)
+{
+  if (w >= 0) {
+    if (w % pitch != 0) {
+      w -= (w % pitch);
+    }
+  }
+  else {
+    w = -w;
+    if (w % pitch != 0) {
+      w -= (w % pitch);
+      w = w + pitch;
+    }
+    w = -w;
+  }
+  return w;
+}
+
+  
 
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
@@ -794,6 +824,21 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     }
   }
 
+  /* now we need to adjust the boundary of this cell to make sure
+     several alignment restrictions are satisfied.
+     
+     * The y-coordinate for 0 is on a track boundary.
+
+     This means that we have to bloat in the -y and +y direction so
+     that the bounding box is on a track boundary, rather than looking
+     at the total y dimension for bloating.
+    
+     * Any mirroring is legal. This means that we have to have
+       spacing/2 around all the material on all sides.
+  */
+
+  BLOB = computeLEFBoundary (BLOB);
+
   /* --- add pins --- */
   netlist_t *n = stk->getNL (p);
 
@@ -817,8 +862,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     int redge = (burx - bllx + 1);
     int tedge = (bury - blly + 1);
 
-    redge = snap_to (redge, m2->getPitch());
-    tedge = snap_to (tedge, m1->getPitch());
+    redge = snap_up (redge, m2->getPitch());
+    tedge = snap_up (tedge, m1->getPitch());
 
     /* move the top edge if there isn't enough space for two
        rows of pins 
@@ -1052,7 +1097,7 @@ int ActStackLayoutPass::run (Process *p)
     l->getBBox (&bllx, &blly, &burx, &bury);
 
     int tedge;
-    tedge = snap_to (bury - blly + 1, m1->getPitch());
+    tedge = snap_up (bury - blly + 1, m1->getPitch());
     while (blly + tedge - m2->minWidth() <=
 	   blly + m1->getPitch() + m2->minWidth()) {
       tedge += m1->getPitch();
@@ -1091,7 +1136,7 @@ int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
   }
 
   long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1135,7 +1180,7 @@ static void emit_header (FILE *fp, const char *name, LayoutBlob *blob)
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
   long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
   
   fprintf (fp, "    SIZE %.6f BY %.6f ;\n", (burx - bllx)*scale, (bury - blly )*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
@@ -1155,7 +1200,7 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   long bllx, blly, burx, bury;
   double scale = Technology::T->scale/1000.0;
 
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
   
   fprintf (fp, "    PIN ");
   a->mfprintf (fp, "%s\n", name);
@@ -1248,7 +1293,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
 
       long bllx, blly, burx, bury;
       TransformMat mat;
-      b->calcBoundary (&bllx, &blly, &burx, &bury);
+      b->getBBox (&bllx, &blly, &burx, &bury);
       mat.applyTranslate (-bllx, -blly);
 
       if (fpcell) {
@@ -1365,7 +1410,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   RoutingMat *m1 = Technology::T->metal[0];
   RoutingMat *m2 = Technology::T->metal[1];
   long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1548,7 +1593,7 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
   }
 
   long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
 
   if (bllx > burx || blly > bury) {
     /* no layout */
@@ -1830,7 +1875,7 @@ int ActStackLayoutPass::_maxHeight (Process *p)
   b = getLayout (p);
   if (b) {
     long llx, lly, urx, ury;
-    b->calcBoundary (&llx, &lly, &urx, &ury);
+    b->getBBox (&llx, &lly, &urx, &ury);
     maxval = (ury - lly + 1);
   }
   
@@ -1914,7 +1959,7 @@ static void count_inst (void *x, ActId *prefix, Process *p)
     /* there is a circuit */
     long llx, lly, urx, ury;
 
-    b->calcBoundary (&llx, &lly, &urx, &ury);
+    b->getBBox (&llx, &lly, &urx, &ury);
     if ((llx > urx) || (lly > ury)) return;
     
     b->incCount();
@@ -1941,7 +1986,7 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   if ((b = _alp->getLayout (p))) {
     long llx, lly, urx, ury;
     
-    b->calcBoundary (&llx, &lly, &urx, &ury);
+    b->getBBox (&llx, &lly, &urx, &ury);
     if ((llx > urx) || (lly > ury)) return;
     
     /* FORMAT: 
@@ -2255,7 +2300,7 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
     return;
   }
   long bllx, blly, burx, bury;
-  blob->calcBoundary (&bllx, &blly, &burx, &bury);
+  blob->getBBox (&bllx, &blly, &burx, &bury);
   if (bllx > burx || blly > bury) return;
 
   char *tmp = p->getns()->Name();
@@ -2295,3 +2340,37 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
   printf ("keeper=%lu\n", keeper);
 }
   
+
+/*
+  Returns LEF boundary in blob coordinate system
+*/
+LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
+{
+  long llx, lly, urx, ury;
+
+  if (!b) return NULL;
+  
+  b->getBloatBBox (&llx, &lly, &urx, &ury);
+  
+  Assert (Technology::T->nmetals >= 3, "Hmm");
+
+  RoutingMat *m1 = Technology::T->metal[0];
+  RoutingMat *m2 = Technology::T->metal[1];
+
+  llx = snap_dn (llx, m2->getPitch());
+  urx = snap_up (urx, m2->getPitch());
+  
+  lly = snap_dn (lly, m1->getPitch());
+  ury = snap_up (ury, m2->getPitch());
+
+  LayoutBlob *box = new LayoutBlob (BLOB_BASE, NULL);
+  box->setBBox (llx, lly, urx, ury);
+
+
+  /* add the boundary to the blob */
+  LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
+  bl->appendBlob (b);
+  bl->appendBlob (box);
+  
+  return bl;
+}

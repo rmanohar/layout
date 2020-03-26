@@ -1306,6 +1306,33 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
   list_free (l);
 }
 
+void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
+{
+  if (t != BLOB_BASE || base.l) {
+    warning ("LayoutBlob::setBBox(): called on non-empty layout; ignored");
+    return;
+  }
+  if (llx == 0 && lly == 0 && urx == -1 && ury == -1) {
+    llx = _llx;
+    lly = _lly;
+    urx = _urx;
+    ury = _ury;
+  }
+  else {
+    if (_llx > llx || _lly > lly ||
+	_urx < urx || _ury < ury) {
+      fatal_error ("LayoutBlob::setBBox(): shrinking the bounding box is not permitted");
+    }
+  }
+  llx = _llx;
+  lly = _lly;
+  urx = _urx;
+  ury = _ury;
+  bloatllx = _llx;
+  bloatlly = _lly;
+  bloaturx = _urx;
+  bloatury = _ury;
+}
 
 
 LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
@@ -1321,7 +1348,20 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   switch (t) {
   case BLOB_BASE:
     base.l = lptr;
-    lptr->getBBox (&llx, &lly, &urx, &ury);
+    if (lptr) {
+      lptr->getBBox (&llx, &lly, &urx, &ury);
+      lptr->getBloatBBox (&bloatllx, &bloatlly, &bloaturx, &bloatury);
+    }
+    else {
+      llx = 0;
+      lly = 0;
+      urx = -1;
+      ury = -1;
+      bloatllx = 0;
+      bloatlly = 0;
+      bloaturx = -1;
+      bloatury = -1;
+    }
     /* XXX: set edge attributes */
     break;
 
@@ -1343,6 +1383,10 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       lly = bl->b->lly;
       urx = bl->b->urx;
       ury = bl->b->ury;
+      bloatllx = bl->b->bloatllx;
+      bloatlly = bl->b->bloatlly;
+      bloaturx = bl->b->bloaturx;
+      bloatury = bl->b->bloatury;
     }
     else {
       llx = 0;
@@ -1380,6 +1424,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
     lly = b->lly;
     urx = b->urx;
     ury = b->ury;
+    bloatllx = b->bloatllx;
+    bloatlly = b->bloatlly;
+    bloaturx = b->bloaturx;
+    bloatury = b->bloatury;
   }
   else {
     if (t == BLOB_HORIZ) {
@@ -1402,7 +1450,13 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       lly = MIN (lly, b->lly + bl->shift);
       ury = MAX (ury, b->ury + bl->shift);
 
-      urx = urx + gap + (b->urx - b->llx + 1);
+      bloatlly = MIN (bloatlly, b->bloatlly + bl->shift);
+      bloatury = MAX (bloatury, b->bloatury + bl->shift);
+
+      int shiftamt = (bloaturx - llx + 1) + (b->llx - b->bloatllx + 1);
+
+      urx = b->urx + gap + shiftamt;
+      bloaturx = b->bloaturx + gap + shiftamt;
     }
     else if (t == BLOB_VERT) {
       int d1, d2;
@@ -1424,13 +1478,23 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       llx = MIN (llx, b->llx + bl->shift);
       urx = MAX (urx, b->urx + bl->shift);
 
-      ury = ury + gap + (b->ury - b->lly + 1);
+      bloatllx = MIN (bloatllx, b->bloatllx + bl->shift);
+      bloaturx = MAX (bloaturx, b->bloaturx + bl->shift);
+      
+      int shiftamt = (bloatury - lly + 1) + (b->lly - b->bloatlly + 1);
+
+      ury = b->ury + gap + shiftamt;
+      bloatury = b->bloatury + gap + shiftamt;
     }
     else if (t == BLOB_MERGE) {
       llx = MIN (llx, b->llx);
       lly = MIN (lly, b->lly);
       urx = MAX (urx, b->urx);
       ury = MAX (ury, b->ury);
+      bloatllx = MIN (bloatllx, b->bloatllx);
+      bloatlly = MIN (bloatlly, b->bloatlly);
+      bloaturx = MAX (bloaturx, b->bloaturx);
+      bloatury = MAX (bloatury, b->bloatury);
     }
     else {
       fatal_error ("What?");
@@ -1442,7 +1506,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
 {
   if (t == BLOB_BASE) {
-    base.l->PrintRect (fp, mat);
+    if (base.l) {
+      base.l->PrintRect (fp, mat);
+    }
   }
   else if (t == BLOB_HORIZ || t == BLOB_VERT) {
     TransformMat m;
@@ -1460,10 +1526,18 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
       }
       bl->b->PrintRect (fp, &m);
       if (t == BLOB_HORIZ) {
-	m.applyTranslate (bl->b->urx - bl->b->llx + 1, 0);
+	if (bl->next) {
+	  int shiftamt = (bl->b->bloaturx - bl->b->llx + 1)
+	    + (bl->next->b->llx - bl->next->b->bloatllx + 1);
+	  m.applyTranslate (shiftamt, 0);
+	}
       }
       else {
-	m.applyTranslate (0, bl->b->ury - bl->b->lly + 1);
+	if (bl->next) {
+	  int shiftamt = (bl->b->bloatury - bl->b->lly + 1)
+	    + (bl->next->b->lly - bl->next->b->bloatlly + 1);
+	  m.applyTranslate (0, shiftamt);
+	}
       }
     }
   }
@@ -1619,13 +1693,27 @@ void TransformMat::apply (long inx, long iny, long *outx, long *outy)
   Assert (z == 1, "What?");
 }
 
-void Layer::BBox (long *llx, long *lly, long *urx, long *ury, int type)
+void Layer::getBloatBBox (long *llx, long *lly, long *urx, long *ury)
+{
+  if (!bbox) {
+    getBBox (llx, lly, urx, ury);
+  }
+  *llx = _bllx;
+  *lly = _blly;
+  *urx = _burx;
+  *ury = _bury;
+}
+
+void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
 {
   list_t *l;
   long xllx, xlly, xurx, xury;
+  long bxllx, bxlly, bxurx, bxury;
   int first = 1;
+  long bloat;
 
-  if (bbox && type == -1) {
+  if (bbox) {
+    /* cached */
     *llx = _llx;
     *lly = _lly;
     *urx = _urx;
@@ -1639,58 +1727,96 @@ void Layer::BBox (long *llx, long *lly, long *urx, long *ury, int type)
 		    (unsigned long)MAX_VALUE - (MIN_VALUE + 1), (unsigned long)MAX_VALUE - (MIN_VALUE + 1),
 		    l, append_nonspacetile);
 
+  xllx = 0;
+  xlly = 0;
+  xurx = -1;
+  xury = -1;
+  bxllx = 0;
+  bxlly = 0;
+  bxurx = -1;
+  bxury = -1;
+
   while (!list_isempty (l)) {
     Tile *tmp = (Tile *) list_delete_tail (l);
+    long tllx, tlly, turx, tury;
 
     if (tmp->virt && TILE_ATTR_ISDIFF (tmp->getAttr())) {
       /* this is actually a space tile (virtual diff) */
       continue;
     }
 
-    if (type != -1) {
-      int attr;
-      attr = tmp->getAttr ();
-      if (tmp->virt) {
-	if (TILE_ATTR_ISFET (tmp->getAttr())) {
-	  attr = 0; /* routing */
-	}
-      }
-      if (type != attr) continue;
+    tllx = tmp->getllx ();
+    tlly = tmp->getlly ();
+    turx = tmp->geturx ();
+    tury = tmp->getury ();
+
+    /* compute bloat for the tile */
+    if (TILE_ATTR_ISROUTE(tmp->getAttr())) {
+      bloat = ((RoutingMat *)mat)->minSpacing();
     }
-    
+    else if (nother == 0 && TILE_ATTR_ISPIN(tmp->getAttr())) {
+      bloat = ((RoutingMat *)mat)->minSpacing();
+    }
+    else {
+      Material *mo;
+      Assert (nother > 0, "What?");
+      Assert (TILE_ATTR_ISROUTE(tmp->getAttr()) < nother, "What?");
+      mo = other[TILE_ATTR_NONPOLY(tmp->getAttr())];
+      Assert (mo, "What?");
+
+      if (TILE_ATTR_ISFET (tmp->getAttr())) {
+	bloat = ((FetMat *)mo)->getSpacing(0);
+      }
+      else if (TILE_ATTR_ISDIFF(tmp->getAttr()) ||
+	       TILE_ATTR_ISWDIFF(tmp->getAttr())) {
+	bloat = Technology::T->getMaxSameDiffSpacing();
+      }
+      else {
+	fatal_error ("Bad attributes?!");
+      }
+    }
+
+    /* half bloat of min spacing */
+    bloat = (bloat + 1)/2;
+
     if (first) {
-      xllx = tmp->getllx ();
-      xlly = tmp->getlly ();
-      xurx = tmp->geturx ();
-      xury = tmp->getury ();
+      xllx = tllx;
+      xlly = tlly;
+      xurx = turx;
+      xury = tury;
+      bxllx = tllx - bloat;
+      bxlly = tlly - bloat;
+      bxurx = turx + bloat;
+      bxury = tury + bloat;
       first = 0;
     }
     else {
-      xllx = MIN(xllx, tmp->getllx ());
-      xlly = MIN(xlly, tmp->getlly ());
-      xurx = MAX(xurx, tmp->geturx ());
-      xury = MAX(xury, tmp->getury ());
+      xllx = MIN(xllx, tllx);
+      xlly = MIN(xlly, tlly);
+      xurx = MAX(xurx, turx);
+      xury = MAX(xury, tury);
+
+      bxllx = MIN(bxllx, tllx - bloat);
+      bxlly = MIN(bxlly, tlly - bloat);
+      bxurx = MAX(bxurx, turx + bloat);
+      bxury = MAX(bxury, tury + bloat);
     }
   }
-  if (!first) {
-    *llx = xllx;
-    *lly = xlly;
-    *urx = xurx;
-    *ury = xury;
-  }
-  else {
-    *llx = 0;
-    *lly = 0;
-    *urx = -1;
-    *ury = -1;
-  }
-  if (type == -1) {
-    bbox = 1;
-    _llx = *llx;
-    _lly = *lly;
-    _urx = *urx;
-    _ury = *ury;
-  }
+  
+  *llx = xllx;
+  *lly = xlly;
+  *urx = xurx;
+  *ury = xury;
+
+  bbox = 1;
+  _llx = xllx;
+  _lly = xlly;
+  _urx = xurx;
+  _ury = xury;
+  _bllx = bxllx;
+  _blly = bxlly;
+  _burx = bxurx;
+  _bury = bxury;
 }
 
 
@@ -1700,7 +1826,7 @@ void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
   int set;
 
   set = 0;
-  base->BBox (&a, &b, &c, &d);
+  base->getBBox (&a, &b, &c, &d);
   if (a <= c && b <= d) {
     *llx = a;
     *lly = b;
@@ -1709,7 +1835,47 @@ void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
     set = 1;
   }
   for (int i=0; i < nmetals; i++) {
-    metals[i]->BBox (&a, &b, &c, &d);
+    metals[i]->getBBox (&a, &b, &c, &d);
+    if (a <= c && b <= d) {
+      if (set) {
+	*llx = MIN (*llx, a);
+	*lly = MIN (*lly, b);
+	*urx = MAX (*urx, c);
+	*ury = MAX (*ury, d);
+      }
+      else {
+	*llx = a;
+	*lly = b;
+	*urx = c;
+	*ury = d;
+	set = 1;
+      }
+    }
+  }
+  if (!set) {
+    *llx = 0;
+    *lly = 0;
+    *urx = -1;
+    *ury = -1;
+  }
+}
+
+void Layout::getBloatBBox (long *llx, long *lly, long *urx, long *ury)
+{
+  long a, b, c, d;
+  int set;
+
+  set = 0;
+  base->getBloatBBox (&a, &b, &c, &d);
+  if (a <= c && b <= d) {
+    *llx = a;
+    *lly = b;
+    *urx = c;
+    *ury = d;
+    set = 1;
+  }
+  for (int i=0; i < nmetals; i++) {
+    metals[i]->getBloatBBox (&a, &b, &c, &d);
     if (a <= c && b <= d) {
       if (set) {
 	*llx = MIN (*llx, a);
@@ -1742,6 +1908,15 @@ void LayoutBlob::getBBox (long *llxp, long *llyp,
   *llyp = lly;
   *urxp = urx;
   *uryp = ury;
+}
+
+void LayoutBlob::getBloatBBox (long *llxp, long *llyp,
+			       long *urxp, long *uryp)
+{
+  *llxp = bloatllx;
+  *llyp = bloatlly;
+  *urxp = bloaturx;
+  *uryp = bloatury;
 }
 
 
@@ -1843,17 +2018,23 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
     tmat = *m;
   }
   if (t == BLOB_BASE) {
-    tiles = base.l->search (net);
-    if (list_isempty (tiles)) {
-      return tiles;
+    if (base.l) {
+      tiles = base.l->search (net);
+      if (list_isempty (tiles)) {
+	return tiles;
+      }
+      else {
+	struct tile_listentry *tle;
+	NEW (tle, struct tile_listentry);
+	tle->m = tmat;
+	tle->tiles = tiles;
+	tiles = list_new ();
+	list_append (tiles, tle);
+	return tiles;
+      }
     }
     else {
-      struct tile_listentry *tle;
-      NEW (tle, struct tile_listentry);
-      tle->m = tmat;
-      tle->tiles = tiles;
       tiles = list_new ();
-      list_append (tiles, tle);
       return tiles;
     }
   }
@@ -1900,17 +2081,23 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
     tmat = *m;
   }
   if (t == BLOB_BASE) {
-    tiles = base.l->search (type);
-    if (list_isempty (tiles)) {
-      return tiles;
+    if (base.l) {
+      tiles = base.l->search (type);
+      if (list_isempty (tiles)) {
+	return tiles;
+      }
+      else {
+	struct tile_listentry *tle;
+	NEW (tle, struct tile_listentry);
+	tle->m = tmat;
+	tle->tiles = tiles;
+	tiles = list_new ();
+	list_append (tiles, tle);
+	return tiles;
+      }
     }
     else {
-      struct tile_listentry *tle;
-      NEW (tle, struct tile_listentry);
-      tle->m = tmat;
-      tle->tiles = tiles;
       tiles = list_new ();
-      list_append (tiles, tle);
       return tiles;
     }
   }
@@ -1959,47 +2146,6 @@ static unsigned long snap_to (unsigned long w, unsigned long pitch)
 }
 
 
-/*
-  Returns LEF boundary in blob coordinate system
-*/
-void LayoutBlob::calcBoundary (long *bllx, long *blly,
-			       long *burx, long *bury)
-{
-  if (llx > urx || lly > ury) {
-    *bllx = 0;
-    *blly = 0;
-    *burx = -1;
-    *bury = -1;
-    return;
-  }
-
-  Assert (Technology::T->nmetals >= 3, "Hmm");
-
-  long padx = 0, pady = 0;
-
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
-
-#if 0  
-  if (Technology::T->nmetals < 5) {
-    RoutingMat *m3 = Technology::T->metal[2];
-    padx = 2*m2->getPitch();
-    pady = 2*m3->getPitch();
-    pady = snap_to (pady, m1->getPitch());
-  }
-#endif
-
-  /* calculate diff spacing */
-  int diff_spc = Technology::T->getMaxSameDiffSpacing();
-
-  *burx = snap_to (urx - llx + 1 + diff_spc + 2*padx, m2->getPitch());
-  *bury = snap_to (ury - lly + 1 + diff_spc + 2*pady, m1->getPitch());
-
-  *bllx = llx - padx;
-  *blly = lly - pady;
-  *burx = *burx + llx - padx;
-  *bury = *bury + lly - pady;
-}
 
 
 int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
