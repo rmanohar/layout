@@ -743,6 +743,9 @@ void *ActStackLayoutPass::local_op (Process *p, int mode)
   else if (mode == 2) {
     _reportLocalStats (p);
   }
+  else if (mode == 3) {
+    _maxHeightlocal (p);
+  }
   return getMap (p);
 }
 
@@ -1062,7 +1065,10 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     BLOB = bl;
   }
 
-  BLOB = computeLEFBoundary (BLOB);
+  BLOB = LayoutBlob::delBBox (BLOB);
+  if (BLOB) {
+    BLOB = computeLEFBoundary (BLOB);
+  }
 
   return BLOB;
 }
@@ -1139,6 +1145,8 @@ int ActStackLayoutPass::run (Process *p)
     LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
     bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
     bl->appendBlob (wellplugs[flavor]);
+
+    bl = LayoutBlob::delBBox (bl);
     wellplugs[flavor] = computeLEFBoundary (bl);
   }
 
@@ -1895,36 +1903,21 @@ LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
   Returns the max height of all layout blocks within p that have not
   been visited yet 
 */
-int ActStackLayoutPass::_maxHeight (Process *p)
+void ActStackLayoutPass::_maxHeightlocal (Process *p)
 {
-  int maxval = 0;
   LayoutBlob *b;
-
-  visited->insert (p);
 
   b = getLayout (p);
   if (b) {
     long llx, lly, urx, ury;
     b->getBloatBBox (&llx, &lly, &urx, &ury);
-    maxval = (ury - lly + 1);
-  }
-  
-  ActInstiter i(p->CurScope ());
-  for (i = i.begin(); i != i.end(); i++) {
-    ValueIdx *vx = (*i);
-    if (TypeFactory::isProcessType (vx->t)) {
-      Process *x = dynamic_cast<Process *> (vx->t->BaseType());
-      if (x->isExpanded()) {
-	if (visited->find (x) == visited->end()) {
-	  int tmp = _maxHeight (x);
-	  if (tmp > maxval) {
-	    maxval = tmp;
-	  }
-	}
-      }
+    if (lly < _ymin) {
+      _ymin = lly;
+    }
+    if (ury > _ymax) {
+      _ymax = ury;
     }
   }
-  return maxval;
 }
 
 
@@ -1936,32 +1929,12 @@ int ActStackLayoutPass::maxHeight (Process *p)
     return 0;
   }
 
-  visited = new std::unordered_set<Process *>();
-  
-  if (!p) {
-    ActNamespace *g = ActNamespace::Global();
-    ActInstiter i(g->CurScope());
+  _ymin = 0;
+  _ymax = 0;
 
-    for (i = i.begin(); i != i.end(); i++) {
-      ValueIdx *vx = (*i);
-      if (TypeFactory::isProcessType (vx->t)) {
-	Process *x = dynamic_cast<Process *>(vx->t->BaseType());
-	if (x->isExpanded()) {
-	  if (visited->find (x) == visited->end()) {
-	    int tmp = _maxHeight (x);
-	    if (tmp > maxval) {
-	      maxval = tmp;
-	    }
-	  }
-	}
-      }
-    }
-  }
-  else {
-    maxval = _maxHeight (p);
-  }
-  delete visited;
-  visited = NULL;
+  run_recursive (p, 3);
+
+  maxval = _ymax - _ymin + 1;
   
   return maxval;
 }

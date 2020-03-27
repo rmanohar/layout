@@ -397,6 +397,13 @@ public:
   void setBBox (long _llx, long _lly, long _urx, long _ury);
 
   /**
+   * Remove any bounding box blobs. Returns updated blob.
+   * If it is called on base bbox blob, then it returns NULL after
+   * deleting it.
+   */
+  static LayoutBlob *delBBox (LayoutBlob *b);
+
+  /**
    * Returns a list of tiles in the layout that match the net
    *  @param net is the net pointer (a node_t)
    *  @param m should not be used at the top-level, but provides the

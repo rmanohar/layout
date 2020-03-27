@@ -69,7 +69,6 @@ class ActStackLayoutPass : public ActPass {
   void *local_op (Process *p, int mode = 0);
   void free_local (void *v);
   
-  int _maxHeight (Process *p);
 
   /* mode 0 */
   LayoutBlob *_createlocallayout (Process *p);
@@ -81,6 +80,9 @@ class ActStackLayoutPass : public ActPass {
 
   /* mode 2 */
   void _reportLocalStats(Process *p);
+
+  /* mode 3 */
+  void _maxHeightlocal (Process *p);
 
   /* welltap */
   LayoutBlob **wellplugs;
@@ -98,6 +100,7 @@ class ActStackLayoutPass : public ActPass {
   double _total_area;
   double _total_stdcell_area;
   int _maxht;
+  int _ymax, _ymin; // aux vars 
 
   /* arguments */
   FILE *_fp, *_fpcell;

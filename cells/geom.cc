@@ -2140,18 +2140,6 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
 }
 
 
-
-static unsigned long snap_to (unsigned long w, unsigned long pitch)
-{
-  if (w % pitch != 0) {
-    w += pitch - (w % pitch);
-  }
-  return w;
-}
-
-
-
-
 int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
 		    int *d1, int *d2)
 {
@@ -2242,5 +2230,49 @@ void LayoutBlob::searchBBox (list_t *slist, long *bllx, long *blly,
     *blly = wlly;
     *burx = wurx;
     *bury = wury;
+  }
+}
+
+
+LayoutBlob *LayoutBlob::delBBox (LayoutBlob *b)
+{
+  if (!b) return NULL;
+  if (b->t == BLOB_BASE) {
+    if (b->base.l) {
+      return b;
+    }
+    else {
+      delete b;
+      return NULL;
+    }
+  }
+  else {
+    blob_list *x, *prev;
+    prev = NULL;
+    x = b->l.hd;
+    while (x) {
+      x->b = LayoutBlob::delBBox (x->b);
+      if (!x->b) {
+	q_delete_item (b->l.hd, b->l.tl, prev, x);
+	FREE (x);
+	if (prev) {
+	  x = prev->next;
+	}
+	else {
+	  x = b->l.hd;
+	}
+      }
+      else {
+	prev = x;
+	x = x->next;
+      }
+    }
+    if (!b->l.hd) {
+      delete b;
+      return NULL;
+    }
+    else {
+      return b;
+    }
   }
 }
