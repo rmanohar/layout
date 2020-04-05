@@ -1634,6 +1634,15 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
   tfp = fopen (cname, "w");
   emitRect (tfp, p);
   fclose (tfp);
+
+#if 0
+  /* check! */
+  printf ("--- check %s ---\n", cname);
+  Layout *tmp = new Layout(stk->getNL (p));
+  tmp->ReadRect (cname);
+  tmp->PrintRect (stdout);
+  delete tmp;
+#endif  
 }
 
 /*

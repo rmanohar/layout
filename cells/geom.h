@@ -199,7 +199,7 @@ protected:
   Tile *hint;			/* tile containing 0,0 / last lookup */
 
   Tile *vhint;			// tile layer containing vias to the
-				// next (upper) layer
+ 				// next (upper) layer
   
   Layer *up, *down;		/* layer above and below */
   
@@ -292,8 +292,7 @@ public:
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
-
-  void ReadRect (FILE *fp);
+  void ReadRect (const char *file);
 
   list_t *search (void *net);
   list_t *search (int attr);
@@ -304,6 +303,7 @@ private:
   int nflavors;
   int nmetals;
   netlist_t *N;
+  struct Hashtable *lmap;	// map from layer string to base layer name
 };
 
 

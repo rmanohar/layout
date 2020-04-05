@@ -100,8 +100,6 @@ Layer::Layer (Material *m, netlist_t *_n)
 Layer::~Layer()
 {
   /* XXX: delete all tiles! */
-  
-  
 }
 
 void Layer::allocOther (int sz)
@@ -141,14 +139,32 @@ void Layout::Init()
   Technology::Init ("layout.conf");
 }
 
+#define LMAP_VIA 0
+#define LMAP_DIFF 1
+#define LMAP_WDIFF 2
+#define LMAP_FET 3
+
+struct layermap {
+  Layer *l;
+  int etype;			/* n/p, if needed */
+  int flavor;			/* flavor */
+  unsigned int lcase:2;  // LMAP_<what> is it?
+};
+  
+
 Layout::Layout(netlist_t *_n)
 {
+  struct layermap *lp;
+  hash_bucket_t *b;
+  
   Layout::Init();
   
   /*-- create all the layers --*/
   Assert (Technology::T, "Initialization error");
 
   N = _n;
+
+  lmap = hash_new (8);
 
   /* 1. base layer for diff, well, fets */
   base = new Layer (Technology::T->poly, _n);
@@ -164,18 +180,140 @@ Layout::Layout(netlist_t *_n)
   for (int i=0; i < sz; i++) {
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, FET_OFFSET),
 		    Technology::T->fet[EDGE_NFET][i]);
+
+    NEW (lp, struct layermap);
+    lp->l = base;
+    lp->etype = EDGE_NFET;
+    lp->flavor = i;
+    lp->lcase = LMAP_FET;
+
+    b = hash_add (lmap, Technology::T->fet[EDGE_NFET][i]->getName());
+    b->v = lp;
+    
+    
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, FET_OFFSET),
 		    Technology::T->fet[EDGE_PFET][i]);
 
+    NEW (lp, struct layermap);
+    lp->l = base;
+    lp->etype = EDGE_PFET;
+    lp->flavor = i;
+    lp->lcase = LMAP_FET;
+
+    b = hash_add (lmap, Technology::T->fet[EDGE_PFET][i]->getName());
+    b->v = lp;
+
+
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, DIFF_OFFSET),
 		    Technology::T->diff[EDGE_NFET][i]);
+
+    NEW (lp, struct layermap);
+    lp->l = base;
+    lp->etype = EDGE_NFET;
+    lp->flavor = i;
+    lp->lcase = LMAP_DIFF;
+
+    b = hash_add (lmap, Technology::T->diff[EDGE_NFET][i]->getName());
+    b->v = lp;
+
+    /* add via */
+    if (Technology::T->diff[EDGE_NFET][i]->getUpC()) {
+
+      if (!hash_lookup (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName())) {
+	NEW (lp, struct layermap);
+	lp->l = base;
+	lp->etype = EDGE_NFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_VIA;
+
+	b = hash_add (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName());
+	b->v = lp;
+      }
+    }
+
+    
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, DIFF_OFFSET),
 		    Technology::T->diff[EDGE_PFET][i]);
 
+    NEW (lp, struct layermap);
+    lp->l = base;
+    lp->etype = EDGE_PFET;
+    lp->flavor = i;
+    lp->lcase = LMAP_DIFF;
+
+    b = hash_add (lmap, Technology::T->diff[EDGE_PFET][i]->getName());
+    b->v = lp;
+
+    if (Technology::T->diff[EDGE_PFET][i]->getUpC()) {
+      if (!hash_lookup (lmap,
+			Technology::T->diff[EDGE_PFET][i]->getUpC()->getName())) {
+      
+	NEW (lp, struct layermap);
+	lp->l = base;
+	lp->etype = EDGE_PFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_VIA;
+
+	b = hash_add (lmap, Technology::T->diff[EDGE_PFET][i]->getUpC()->getName());
+	b->v = lp;
+      }
+    }
+
+    
+
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, WDIFF_OFFSET),
 		    Technology::T->welldiff[EDGE_NFET][i]);
+
+    if (Technology::T->welldiff[EDGE_NFET]) {
+      NEW (lp, struct layermap);
+      lp->l = base;
+      lp->etype = EDGE_NFET;
+      lp->flavor = i;
+      lp->lcase = LMAP_WDIFF;
+
+      b = hash_add (lmap, Technology::T->welldiff[EDGE_NFET][i]->getName());
+      b->v = lp;
+
+      if (Technology::T->welldiff[EDGE_NFET][i]->getUpC()) {
+	if (!hash_lookup (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName())) {
+	  NEW (lp, struct layermap);
+	  lp->l = base;
+	  lp->etype = EDGE_NFET;
+	  lp->flavor = i;
+	  lp->lcase = LMAP_VIA;
+
+	  b = hash_add (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName());
+	  b->v = lp;
+	}
+      }
+    }
+
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, WDIFF_OFFSET),
 		    Technology::T->welldiff[EDGE_PFET][i]);
+
+    if (Technology::T->welldiff[EDGE_PFET]) {
+      NEW (lp, struct layermap);
+      lp->l = base;
+      lp->etype = EDGE_PFET;
+      lp->flavor = i;
+      lp->lcase = LMAP_WDIFF;
+
+      b = hash_add (lmap, Technology::T->welldiff[EDGE_PFET][i]->getName());
+      b->v = lp;
+
+      if (Technology::T->welldiff[EDGE_PFET][i]->getUpC()) {
+	if (!hash_lookup (lmap, Technology::T->diff[EDGE_PFET][i]->getUpC()->getName())) {
+	  NEW (lp, struct layermap);
+	  lp->l = base;
+	  lp->etype = EDGE_PFET;
+	  lp->flavor = i;
+	  lp->lcase = LMAP_VIA;
+
+	  b = hash_add (lmap, Technology::T->diff[EDGE_PFET][i]->getUpC()->getName());
+	  b->v = lp;
+	}
+      }
+    }
   }
 
   Layer *prev = base;
@@ -187,6 +325,17 @@ Layout::Layout(netlist_t *_n)
     metals[i] = new Layer (Technology::T->metal[i], _n);
     metals[i]->setDownLink (prev);
     prev = metals[i];
+
+    if (Technology::T->metal[i]->getUpC()) {
+      NEW (lp, struct layermap);
+      lp->l = metals[i];
+      lp->etype = -1;
+      lp->flavor = 0;
+      lp->lcase = LMAP_VIA;
+
+      b = hash_add (lmap, Technology::T->metal[i]->getUpC()->getName());
+      b->v = lp;
+    }
   }
 }
 
@@ -201,6 +350,8 @@ Layout::~Layout()
     t = t->up;
     delete l;
   }
+
+  hash_free (lmap);
 }
 
 
@@ -1159,6 +1310,151 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
   for (int i=0; i < nmetals; i++) {
     metals[i]->PrintRect (fp, t);
   }
+}
+
+void Layout::ReadRect (const char *fname)
+{
+  FILE *fp;
+  char buf[10240];
+  int rtype = 0;
+  int offset;
+  char *net;
+  Process *p;
+
+  if (!N || !N->bN || !N->bN->p) {
+    warning ("Layout::ReadRect() skipped; no netlist specified for layout");
+    return;
+  }
+  /* the process */
+  p = N->bN->p;
+  Assert (p->isExpanded(), "What?");
+  
+
+  fp = fopen (fname, "r");
+  if (!fp) {
+    fatal_error ("Could not open `%s' rect file", fname);
+  }
+  while (fgets (buf, 10240, fp)) {
+#if 0
+    printf ("BUF: %s", buf);
+#endif    
+    offset = 0;
+    if (strncmp (buf, "inrect ", 7) == 0) {
+      offset = 7;
+      rtype = 1;
+    }
+    else if (strncmp (buf, "outrect ", 8) == 0) {
+      offset = 8;
+      rtype = 2;
+    }
+    else if (strncmp (buf, "rect ", 5) == 0) {
+      offset = 5;
+      rtype = 0;
+    }
+    else {
+      fatal_error ("Line: %s\nNeeds inrect, outrect, or rect", buf);
+    }
+
+    if (strncmp (buf+offset, "# ", 2) == 0) {
+      net = NULL;
+      offset += 2;
+    }
+    else {
+      net = buf+offset;
+      while (buf[offset] && buf[offset] != ' ') {
+	offset++;
+      }
+      Assert (buf[offset], "Long line");
+      buf[offset] = '\0';
+      offset++;
+    }
+
+    node_t *n = NULL;
+
+    if (net) {
+      n = ActNetlistPass::string_to_node (N, net);
+    }
+
+    char *material;
+    material = buf+offset;
+
+    while (buf[offset] && buf[offset] != ' ') {
+      offset++;
+    }
+    Assert (buf[offset], "Long line");
+    buf[offset] = '\0';
+    offset++;
+
+    long rllx, rlly, rurx, rury;
+    sscanf (buf+offset, "%ld %ld %ld %ld", &rllx, &rlly, &rurx, &rury);
+
+#if 0
+    printf ("[%s] rtype=%d, net=%s, (%ld, %ld) -> (%ld, %ld)\n", material,
+	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
+#endif
+
+    /* now find the material/layer, and draw it */
+    if (material[0] == 'm' && isdigit(material[1])) {
+      /* m# is a metal layer */
+      int l;
+      sscanf (material+1, "%d", &l);
+#if 0
+      printf ("metal %d\n", l);
+#endif
+
+      if (l < 1 || l > Technology::T->nmetals) {
+	warning ("Technology has %d metal layers; found `%s'; skipped",
+		 Technology::T->nmetals, material);
+      }
+      else {
+	l--;
+	/*--- draw metal ---*/
+	DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
+      }
+    }
+    else if (strcmp (material, base->mat->getName()) == 0) {
+      /* poly */
+#if 0
+      printf ("poly\n");
+#endif
+      /*--- draw poly ---*/
+      DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n);
+    }
+    else {
+      struct layermap *lm;
+      hash_bucket_t *b;
+      b = hash_lookup (lmap, material);
+      if (b) {
+	/*--- draw base layer or via ---*/
+	lm = (struct layermap *) b->v;
+	switch (lm->lcase) {
+	case LMAP_DIFF:
+	  DrawDiff (lm->flavor, lm->etype, rllx, rlly,
+		    rurx - rllx, rury - rlly, n);
+	  break;
+	  
+	case LMAP_FET:
+	  DrawFet (lm->flavor, lm->etype, rllx, rlly,
+		   rurx - rllx, rury - rlly, n);
+	  break;
+	case LMAP_WDIFF:
+	  DrawWellDiff (lm->flavor, lm->etype, rllx, rlly,
+			rurx - rllx, rury - rlly, n);
+	  break;
+	case LMAP_VIA:
+	  lm->l->drawVia (rllx, rlly, rurx - rllx, rury - rlly, n, 0);
+	  break;
+	default:
+	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
+	  break;
+	}
+      }
+      else {
+	warning ("Unknown material `%s'; skipped", material);
+      }
+    }
+  }
+  fclose (fp);
 }
 
 
