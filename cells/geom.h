@@ -236,10 +236,12 @@ protected:
 
   int isMetal ();
   
-  list_t *search (void *net);
-  list_t *search (int attr);
+  list_t *searchMat (void *net);
+  list_t *searchMat (int attr);
+  list_t *searchVia (void *net);
+  list_t *searchVia (int attr);
   list_t *allNonSpaceMat ();
-  list_t *allNonSpaceVia ();
+  list_t *allNonSpaceVia ();	// looks at "up" vias only
 
 
   void getBBox (long *llx, long *lly, long *urx, long *ury);

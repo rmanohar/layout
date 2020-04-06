@@ -2238,7 +2238,7 @@ static void appendtype (void *cookie, Tile *t)
   }
 }
 
-list_t *Layer::search (void *net)
+list_t *Layer::searchMat (void *net)
 {
   list_t *l = list_new ();
   _searchnet = net;
@@ -2249,11 +2249,32 @@ list_t *Layer::search (void *net)
   return l;
 }
 
-list_t *Layer::search (int type)
+list_t *Layer::searchMat (int type)
 {
   list_t *l = list_new ();
   _searchtype = type;
   hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l, appendtype);
+  return l;
+}
+
+list_t *Layer::searchVia (void *net)
+{
+  list_t *l = list_new ();
+  _searchnet = net;
+  vhint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l, appendnet);
+  _searchnet = NULL;
+  return l;
+}
+
+list_t *Layer::searchVia (int type)
+{
+  list_t *l = list_new ();
+  _searchtype = type;
+  vhint->applyTiles (MIN_VALUE, MIN_VALUE,
 		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
 		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l, appendtype);
   return l;
@@ -2288,7 +2309,7 @@ list_t *Layout::search (void *net)
   list_t *ret = list_new ();
   list_t *tmp;
 
-  tmp = base->search (net);
+  tmp = base->searchMat (net);
   if (list_isempty (tmp)) {
     list_free (tmp);
   }
@@ -2298,7 +2319,7 @@ list_t *Layout::search (void *net)
   }
   
   for (int i=0; i < nmetals; i++) {
-    list_t *l = metals[i]->search (net);
+    list_t *l = metals[i]->searchMat (net);
     if (list_isempty (l)) {
       list_free (l);
     }
@@ -2318,7 +2339,7 @@ list_t *Layout::search (int type)
   list_t *ret = list_new ();
   list_t *tmp;
 
-  tmp = base->search (type);
+  tmp = base->searchMat (type);
   if (list_isempty (tmp)) {
     list_free (tmp);
   }
