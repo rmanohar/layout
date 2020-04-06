@@ -2645,9 +2645,10 @@ void Layout::propagateAllNets ()
 	      neighbors[3] = t->uryTile();
 	      for (int k=0; k < 4; k++) {
 		if (Tile::isConnected (L, t, neighbors[k])) {
-		  if (neighbors[k]->getNet() &&
-		      t->getNet() != neighbors[k]->getNet()) {
-		    warning ("Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=%d) with different net", t->getllx(), t->getlly(), k);
+		  if (neighbors[k]->getNet()) {
+		    if (t->getNet() != neighbors[k]->getNet()) {
+		      warning ("Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=%d) with different net", t->getllx(), t->getlly(), k);
+		    }
 		  }
 		  else {
 		    neighbors[k]->setNet (t->getNet());

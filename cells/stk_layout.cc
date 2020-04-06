@@ -1640,6 +1640,7 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
   printf ("--- check %s ---\n", cname);
   Layout *tmp = new Layout(stk->getNL (p));
   tmp->ReadRect (cname);
+  tmp->propagateAllNets ();
   tmp->PrintRect (stdout);
   delete tmp;
 #endif  
