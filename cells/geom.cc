@@ -53,8 +53,8 @@ Tile::Tile ()
   llx = MIN_VALUE;
   lly = MIN_VALUE;
   
-  up = NULL;
-  down = NULL;
+  //up = NULL;
+  //down = NULL;
   space = 1;
   virt = 0;
   attr = 0;
@@ -70,8 +70,8 @@ Tile::~Tile()
   llx = MIN_VALUE;
   lly = MIN_VALUE;
   
-  up = NULL;
-  down = NULL;
+  //up = NULL;
+  //down = NULL;
   space = 1;
   virt = 0;
   attr = 0;
@@ -93,8 +93,8 @@ Layer::Layer (Material *m, netlist_t *_n)
   hint = new Tile();
   vhint = new Tile();
 
-  hint->up = vhint;
-  vhint->down = hint;
+  //hint->up = vhint;
+  //vhint->down = hint;
 }
 
 Layer::~Layer()
@@ -126,8 +126,8 @@ void Layer::setDownLink (Layer *x)
   x->up = this;
 
   /* link the tiles as well */
-  x->vhint->up = hint;
-  hint->down = x->vhint;
+  //x->vhint->up = hint;
+  //hint->down = x->vhint;
 }
 
 bool Layout::_initdone = false;
@@ -987,8 +987,8 @@ Tile *Tile::splitX (long x)
   t->space = space;
   t->virt = virt;
   t->attr = attr;
-  t->up = up;
-  t->down = down;
+  //t->up = up;
+  //t->down = down;
   t->net = net;
 
   t->llx = x;
@@ -1066,8 +1066,8 @@ Tile *Tile::splitY (long y)
   t->space = space;
   t->virt = virt;
   t->attr = attr;
-  t->up = up;
-  t->down = down;
+  //t->up = up;
+  //t->down = down;
   t->net = net;
 
   t->llx = llx;
@@ -2259,6 +2259,26 @@ list_t *Layer::search (int type)
   return l;
 }
 
+list_t *Layer::allNonSpaceMat ()
+{
+  list_t *l = list_new ();
+  hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l,
+		    append_nonspacetile);
+  return l;
+}
+
+list_t *Layer::allNonSpaceVia ()
+{
+  list_t *l = list_new ();
+  vhint->applyTiles (MIN_VALUE, MIN_VALUE,
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l,
+		    append_nonspacetile);
+  return l;
+}
+
 
 /*
   Returns a list with alternating  (Layer, listoftiles)
@@ -2571,4 +2591,178 @@ LayoutBlob *LayoutBlob::delBBox (LayoutBlob *b)
       return b;
     }
   }
+}
+
+/*
+  Propagate net labels across the layout
+*/
+void Layout::propagateAllNets ()
+{
+  Layer *L;
+  listitem_t *li;
+  int flag;
+  int rep;
+
+  list_t **tl;
+
+  /* 0 = base, 1 = viabase, 2 = metal1, etc.. */
+
+  /* collect *all* tiles on *all* layers */
+  MALLOC (tl, list_t *, 1 + 2*nmetals);
+
+  L = base;
+  tl[0] = base->allNonSpaceMat ();
+  tl[1] = base->allNonSpaceVia ();
+  
+  for (int i=0; i < nmetals; i++) {
+    Assert (L->up, "What?");
+    L = L->up;
+    tl[2*i+2] = metals[i]->allNonSpaceMat ();
+    if (i != nmetals - 1) {
+      tl[2*i+3] = metals[i]->allNonSpaceVia ();
+    }
+    else {
+      Assert (L->up == NULL, "what?");
+    }
+  }
+
+  do {
+    rep = 0;
+    L = base;
+    for (int i=0; i < 2*nmetals + 1; i++) {
+      Assert (L, "What?");
+      if ((i & 1) == 0) {
+	/* a horizontal layer; propagate within the layer */
+	do {
+	  flag = 0;
+	  for (li = list_first (tl[i]); li; li = list_next (li)) {
+	    Tile *t = (Tile *) list_value (li);
+	    if (t->getNet()) {
+	      Tile *neighbors[4];
+	      neighbors[0] = t->llxTile();
+	      neighbors[1] = t->llyTile();
+	      neighbors[2] = t->urxTile();
+	      neighbors[3] = t->uryTile();
+	      for (int k=0; k < 4; k++) {
+		if (Tile::isConnected (L, t, neighbors[k])) {
+		  if (neighbors[k]->getNet() &&
+		      t->getNet() != neighbors[k]->getNet()) {
+		    warning ("Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=%d) with different net", t->getllx(), t->getlly(), k);
+		  }
+		  else {
+		    neighbors[k]->setNet (t->getNet());
+		    flag = 1;
+		    rep = 1;
+		  }
+		}
+	      }
+	    }
+	  }
+	} while (flag);
+      }
+      else {
+	/* via layer: look at layers above and below and
+	   inherit/propagate labels to directly connected tiles */
+
+	for (li = list_first (tl[i]); li; li = list_next (li)) {
+	  Tile *t = (Tile *) list_value (li);
+	  Tile *up, *dn;
+	  if (L->up) {
+	    up = L->findVia (t->getllx(), t->getlly());
+	  }
+	  else {
+	    up = NULL;
+	  }
+	  if (L->down) {
+	    dn = L->down->findVia (t->getllx(), t->getlly());
+	  }
+	  else {
+	    dn = NULL;
+	  }
+
+#define CHK_EQUAL(x,y)  (((x) && (y)) ? ((x)->getNet() == (y)->getNet()) : 1)
+
+	  /* t is not NULL, so we have a via here */
+	  if (CHK_EQUAL(dn,t) && CHK_EQUAL (up,t) && CHK_EQUAL (up,dn)) {
+	    void *propnet;
+	    if (dn && dn->getNet()) {
+	      propnet = dn->getNet();
+	    }
+	    else if (up && up->getNet()) {
+	      propnet = up->getNet();
+	    }
+	    else if (t->getNet()) {
+	      propnet = t->getNet();
+	    }
+	    else {
+	      /* nothing to do! */
+	      propnet = NULL;
+	    }
+	    if (propnet) {
+	      if (dn && !dn->getNet()) {
+		dn->setNet(propnet);
+		rep = 1;
+	      }
+	      if (!t->getNet()) {
+		t->setNet (propnet);
+		rep = 1;
+	      }
+	      if (up && !up->getNet()) {
+		up->setNet (propnet);
+		rep = 1;
+	      }
+	    }
+	  }
+	}
+	L = L->up;
+      }
+    }
+  } while (rep);
+
+  for (int i=0; i < 2*nmetals + 1; i++) {
+    list_free (tl[i]);
+  }
+  FREE (tl);
+}
+
+
+
+int Tile::isConnected (Layer *l, Tile *t1, Tile *t2)
+{
+  if (t1->isSpace() || t2->isSpace()) {
+    return 0;
+  }
+  if (t1->isVirt() || t2->isVirt()) {
+    return 0;
+  }
+  unsigned int a1, a2;
+  a1 = t1->getAttr();
+  a2 = t2->getAttr();
+  if (l->isMetal()) {
+    if (TILE_ATTR_CLRPIN (a1) == TILE_ATTR_CLRPIN (a2)) {
+      return 1;
+    }
+  }
+  else {
+    if (a1 == a2) {
+      /* exactly the same */
+      return 1;
+    }
+    /* base layer */
+    if ((TILE_ATTR_ISROUTE (a1) || TILE_ATTR_ISFET (a1)) &&
+	(TILE_ATTR_ISROUTE (a2) || TILE_ATTR_ISFET (a2))) {
+      return 1;
+    }
+    if ((TILE_ATTR_ISDIFF (a1) || TILE_ATTR_ISWDIFF (a1)) &&
+	(TILE_ATTR_ISDIFF (a2) || TILE_ATTR_ISWDIFF (a2))) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
+Tile *Layer::findVia (long llx, long lly)
+{
+  return vhint->find (llx, lly);
 }

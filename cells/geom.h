@@ -91,12 +91,14 @@ Order:
 #define TILE_ATTR_MKPIN(x)  ((x) |= 4)
 #define TILE_ATTR_ISOUTPUT(x)  ((x) & 8)
 #define TILE_ATTR_MKOUTPUT(x) ((x) |= 8)
+#define TILE_ATTR_CLRPIN(x) ((x) & ~(4|8))
 
 #define TILE_ATTR_ISFET(x)   (TILE_ATTR_TO_OFF(x) == FET_OFFSET)
 #define TILE_ATTR_ISDIFF(x)  (TILE_ATTR_TO_OFF(x) == DIFF_OFFSET)
 #define TILE_ATTR_ISWDIFF(x) (TILE_ATTR_TO_OFF(x) == WDIFF_OFFSET)
 #define TILE_ATTR_ISROUTE(x) ((x) == 0)
 
+class Layer;
 
 class Tile {
  private:
@@ -106,7 +108,7 @@ class Tile {
     Tile *x, *y;
   } ll, ur;
   long llx, lly;		// lower left corner
-  Tile *up, *down;
+  //Tile *up, *down;
   unsigned int space:1;		/* 1 if this is a space tile */
   unsigned int virt:1;		// virtual tile: used to *add* spacing
 				// constraints
@@ -136,7 +138,6 @@ class Tile {
 
   void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		   void *cookie, void (*f) (void *, Tile *));
-
 
   int isPin() { return TILE_ATTR_ISPIN(attr); }
 
@@ -169,6 +170,9 @@ class Tile {
   unsigned int getAttr() { return attr; }
   unsigned int isVirt() { return virt; }
   void *getNet ()  { return net; }
+  void setNet (void *n) { net = n; }
+
+  static int isConnected (Layer *l, Tile *t1, Tile *t2);
   
   friend class Layer;
 };
@@ -234,6 +238,9 @@ protected:
   
   list_t *search (void *net);
   list_t *search (int attr);
+  list_t *allNonSpaceMat ();
+  list_t *allNonSpaceVia ();
+
 
   void getBBox (long *llx, long *lly, long *urx, long *ury);
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
@@ -241,6 +248,8 @@ protected:
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   const char *getRouteName() { return mat->getName(); }
+
+  Tile *findVia (long x, long y);
 
   friend class Layout;
 };
@@ -297,6 +306,8 @@ public:
   list_t *search (void *net);
   list_t *search (int attr);
   
+  void propagateAllNets();
+
 private:
   Layer *base;
   Layer **metals;
