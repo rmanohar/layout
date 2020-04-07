@@ -28,9 +28,6 @@
 #include <unordered_set>
 #include <hash.h>
 
-/* lef/def conversion factor to microns */
-#define MICRON_CONVERSION 2000
-
 /*-- data structures --*/
 
 class ActStackLayoutPass : public ActPass {
@@ -68,6 +65,11 @@ class ActStackLayoutPass : public ActPass {
  private:
   void *local_op (Process *p, int mode = 0);
   void free_local (void *v);
+
+  long snap_up_x (long);
+  long snap_up_y (long);
+  long snap_dn_x (long);
+  long snap_dn_y (long);
   
 
   /* mode 0 */
@@ -105,6 +107,15 @@ class ActStackLayoutPass : public ActPass {
   /* arguments */
   FILE *_fp, *_fpcell;
   int _do_rect;
+
+  const char *_version;
+  unsigned int _micron_conv;
+  double _manufacturing_grid;
+  RoutingMat *_m_align_x;
+  RoutingMat *_m_align_y;
+  int _horiz_metal;
+  int _pin_layer;
+  RoutingMat *_pin_metal;
 
   std::unordered_set<Process *> *visited;
 };

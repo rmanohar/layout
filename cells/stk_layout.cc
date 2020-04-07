@@ -65,24 +65,24 @@ static long snap_dn (long w, unsigned long pitch)
   return w;
 }
 
-static long snap_up_x (long w)
+long ActStackLayoutPass::snap_up_x (long w)
 {
-  return snap_up (w, Technology::T->metal[1]->getPitch());
+  return snap_up (w, _m_align_x->getPitch());
 }
 
-static long snap_dn_x (long w)
+long ActStackLayoutPass::snap_dn_x (long w)
 {
-  return snap_dn (w, Technology::T->metal[1]->getPitch());
+  return snap_dn (w, _m_align_x->getPitch());
 }
 
-static long snap_up_y (long w)
+long ActStackLayoutPass::snap_up_y (long w)
 {
-  return snap_up (w, Technology::T->metal[0]->getPitch());
+  return snap_up (w, _m_align_y->getPitch());
 }
 
-static long snap_dn_y (long w)
+long ActStackLayoutPass::snap_dn_y (long w)
 {
-  return snap_dn (w, Technology::T->metal[0]->getPitch());
+  return snap_dn (w, _m_align_y->getPitch());
 }
 
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
@@ -112,6 +112,75 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 
   wellplugs = NULL;
   dummy_netlist = NULL;
+
+  /* more parameters */
+  if (config_exists ("layout.lefdef.version")) {
+    _version = config_get_string ("layout.lefdef.version");
+  }
+  else {
+    _version = "5.8";
+  }
+  if (config_exists ("layout.lefdef.micron_conversion")) {
+    _micron_conv = config_get_int ("layout.lefdef.micron_conversion");
+  }
+  else {
+    _micron_conv = 2000;
+  }
+  
+  if (config_exists ("layout.lefdef.manufacturing_grid")) {
+    _manufacturing_grid = config_get_real ("layout.lefdef.manufacturing_grid");
+  }
+  else {
+    _manufacturing_grid = 0.0005;
+  }
+
+  int v;
+  if (config_exists ("layout.lefdef.metal_align.x_dim")) {
+    v = config_get_int ("layout.lefdef.metal_align.x_dim");
+  }
+  else {
+    v = 2;
+  }
+  if (v < 1 || v > Technology::T->nmetals) {
+    fatal_error ("lefdef.metal_align.x_dim (%d) is out of range (max %d)",
+		 v, Technology::T->nmetals);
+  }
+  _m_align_x = Technology::T->metal[v-1];
+
+  if (config_exists ("layout.lefdef.metal_align.y_dim")) {
+    v = config_get_int ("layout.lefdef.metal_align.y_dim");
+  }
+  else {
+    v = 1;
+  }
+  if (v < 1 || v > Technology::T->nmetals) {
+    fatal_error ("lefdef.metal_align.y_dim (%d) is out of range (max %d)",
+		 v, Technology::T->nmetals);
+  }
+  _m_align_y = Technology::T->metal[v-1];
+
+  if (config_exists ("layout.lefdef.pin_layer")) {
+    v = config_get_int ("layout.lefdef.pin_layer");
+  }
+  else {
+    v = 2;
+  }
+  if (v < 1 || v > Technology::T->nmetals) {
+    fatal_error ("lefdef.pin_layer (%d) is out of range (max %d)", v, 
+		 Technology::T->nmetals);
+  }
+  _pin_layer = v - 1;
+  _pin_metal = Technology::T->metal[v-1];
+
+  if (config_exists ("layout.lefdef.horiz_metal")) {
+    _horiz_metal = config_get_int ("layout.lefdef.horiz_metal");
+    if (_horiz_metal != 0 && _horiz_metal != 1) {
+      fatal_error ("lefdef.horiz_metal: must be 0 or 1");
+    }
+  }
+  else {
+    _horiz_metal = 1;
+  }
 }
 
 
@@ -877,22 +946,21 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     int s_in = 1;
     int s_out = 1;
 
-    RoutingMat *m1 = Technology::T->metal[0];
-    RoutingMat *m2 = Technology::T->metal[1];
-
     int redge = (burx - bllx + 1);
     int tedge = (bury - blly + 1);
 
-    redge = snap_up (redge, m2->getPitch());
-    tedge = snap_up (tedge, m1->getPitch());
+    redge = snap_up_x (redge);
+    tedge = snap_up_y (tedge);
 
     /* move the top edge if there isn't enough space for two
        rows of pins 
     */
-    while (blly + tedge - m2->minWidth() <=
-	blly + m1->getPitch() + m2->minWidth()) {
-      tedge += m1->getPitch();
-    }
+    while (tedge - _pin_metal->minWidth() <=
+	   _m_align_y->getPitch() + _pin_metal->minWidth() +
+	   _pin_metal->minSpacing())
+      {
+       tedge += _m_align_y->getPitch();
+      }
 
     int found_vdd = 0;
     int found_gnd = 0;
@@ -960,28 +1028,35 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       p_in++;
     }
 
-    if ((p_in * m2->getPitch() > redge) ||(p_out * m2->getPitch() > redge)) {
+    if ((p_in * _m_align_x->getPitch() > redge) ||
+	(p_out * _m_align_x->getPitch() > redge)) {
       warning ("Can't fit ports!");
     }
     
     if (p_in > 0) {
-      while ((m2->getPitch() + p_in * s_in * m2->getPitch()) <= redge) {
-	s_in++;
-      }
+      while ((_m_align_x->getPitch() + p_in * s_in * _m_align_x->getPitch())
+	     <= redge)
+	{
+	  s_in++;
+	}
       s_in--;
       if (s_in == 0) { s_in = 1; }
     }
 
     if (p_out > 0) {
-      while ((m2->getPitch() + p_out * s_out * m2->getPitch()) <= redge) {
-	s_out++;
-      }
+      while ((_m_align_x->getPitch() + p_out * s_out * _m_align_x->getPitch())
+	     <= redge)
+	{
+	  s_out++;
+	}
       s_out--;
       if (s_out == 0) { s_out = 1; }
     }
 
-    p_in = m2->getPitch();
-    p_out = m2->getPitch();
+    /* sin, sout: strides */
+
+    p_in = _m_align_x->getPitch();
+    p_out = _m_align_x->getPitch();
 
     Layout *pins = new Layout(n);
 
@@ -1002,14 +1077,15 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       Assert (av, "Problem..");
 
       if (n->bN->ports[i].input) {
-	int w = m2->minWidth ();
-	pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n, 0);
-	p_in += m2->getPitch()*s_in;
+	int w = _pin_metal->minWidth ();
+	pins->DrawMetalPin (_pin_layer,
+			    bllx + p_in, blly + tedge - w, w, w, av->n, 0);
+	p_in += _m_align_x->getPitch()*s_in;
       }
       else {
-	int w = m2->minWidth ();
-	pins->DrawMetalPin (1, bllx + p_out, blly + m1->getPitch(), w, w, av->n, 1);
-	p_out += m2->getPitch()*s_out;
+	int w = _pin_metal->minWidth ();
+	pins->DrawMetalPin (_pin_layer, bllx + p_out, blly + _m_align_y->getPitch(), w, w, av->n, 1);
+	p_out += _m_align_x->getPitch()*s_out;
       }
 
       if (av->n == n->Vdd) {
@@ -1031,9 +1107,10 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
       Assert (av, "Hmm");
 
-      int w = m2->minWidth ();
-      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, av->n, 0);
-      p_in += m2->getPitch()*s_in;
+      int w = _pin_metal->minWidth ();
+      pins->DrawMetalPin (_pin_layer,
+			  bllx + p_in, blly + tedge - w, w, w, av->n, 0);
+      p_in += _m_align_x->getPitch()*s_in;
 
       if (av->n == n->Vdd) {
 	found_vdd = 1;
@@ -1044,16 +1121,16 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     }
     if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
       found_vdd = 1;
-      int w = m2->minWidth ();
-      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
-      p_in += m2->getPitch()*s_in;
+      int w = _pin_metal->minWidth ();
+      pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
+      p_in += _m_align_x->getPitch()*s_in;
       
     }
     if (!found_gnd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
       found_gnd = 1;
-      int w = m2->minWidth ();
-      pins->DrawMetalPin (1, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
-      p_in += m2->getPitch()*s_in;
+      int w = _pin_metal->minWidth ();
+      pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
+      p_in += _m_align_x->getPitch()*s_in;
     }
 
     /*--- XXX: but this is not the end of the pins... ---*/
@@ -1147,26 +1224,27 @@ int ActStackLayoutPass::run (Process *p)
     wellplugs[flavor] = computeLEFBoundary (wellplugs[flavor]);
     
     /* add pins */
-    RoutingMat *m1 = Technology::T->metal[0];
-    RoutingMat *m2 = Technology::T->metal[1];
-
     long bllx, blly, burx, bury;
     wellplugs[flavor]->getBBox (&bllx, &blly, &burx, &bury);
 
     int tedge;
-    tedge = snap_up (bury - blly + 1, m1->getPitch());
-    while (blly + tedge - m2->minWidth() <=
-	   blly + m1->getPitch() + m2->minWidth()) {
-      tedge += m1->getPitch();
-    }
+    tedge = snap_up_y (bury - blly + 1);
 
-    p = m2->getPitch();
+    while (tedge - _pin_metal->minWidth() <=
+	   _m_align_y->getPitch() + _pin_metal->minWidth() +
+	   _pin_metal->minSpacing())
+      {
+	tedge += _m_align_y->getPitch();
+      }
+
+    p = _m_align_x->getPitch();
     Layout *pins = new Layout (dummy_netlist);
-    int w = m2->minWidth();
-    pins->DrawMetalPin (1, bllx + p, blly + tedge - w, w, w,
+    int w = _pin_metal->minWidth();
+    pins->DrawMetalPin (_pin_layer, bllx + p, blly + tedge - w, w, w,
 			dummy_netlist->nsc, 0);
-
-    pins->DrawMetalPin (1, bllx + p, blly + m1->getPitch(), w, w,
+    
+    pins->DrawMetalPin (_pin_layer,
+			bllx + p, blly + _m_align_y->getPitch(), w, w,
 			dummy_netlist->psc, 0);
 
     LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
@@ -1739,14 +1817,14 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
   double scale = Technology::T->scale/1000.0;
   
   /* -- lef header -- */
-  fprintf (fp, "VERSION 5.6 ;\n\n");
+  fprintf (fp, "VERSION %s ;\n\n", _version);
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "UNITS\n");
-  fprintf (fp, "    DATABASE MICRONS %d ;\n", MICRON_CONVERSION);
+  fprintf (fp, "    DATABASE MICRONS %d ;\n", _micron_conv);
   fprintf (fp, "END UNITS\n\n");
 
-  fprintf (fp, "MANUFACTURINGGRID 0.000500 ; \n\n");
+  fprintf (fp, "MANUFACTURINGGRID %.6f ; \n\n", _manufacturing_grid);
   fprintf (fp, "CLEARANCEMEASURE EUCLIDEAN ; \n\n");
   fprintf (fp, "USEMINSPACING OBS ON ; \n\n");
 
@@ -1765,7 +1843,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     fprintf (fp, "   TYPE ROUTING ;\n");
 
     fprintf (fp, "   DIRECTION %s ;\n",
-	     (i % 2) ? "VERTICAL" : "HORIZONTAL");
+	     ((i % 2) == _horiz_metal) ? "VERTICAL" : "HORIZONTAL");
     fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
     if (mat->minArea() > 0) {
       fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
@@ -2154,7 +2232,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
 {
   /* -- def header -- */
-  fprintf (fp, "VERSION 5.6 ;\n\n");
+  fprintf (fp, "VERSION %s ;\n\n", _version);
   fprintf (fp, "BUSBITCHARS \"[]\" ;\n\n");
   fprintf (fp, "DIVIDERCHAR \"/\" ;\n\n");
   fprintf (fp, "DESIGN ");
@@ -2162,7 +2240,7 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   a->mfprintfproc (fp, p);
   fprintf (fp, " ;\n");
   
-  fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", MICRON_CONVERSION);
+  fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", _micron_conv);
 }
 
 void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
@@ -2195,7 +2273,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 
   double side = sqrt (_total_area);
 
-  double unit_conv = Technology::T->scale*MICRON_CONVERSION/1000.0;
+  double unit_conv = Technology::T->scale*_micron_conv/1000.0;
 
   side *= unit_conv;
 
