@@ -1377,7 +1377,6 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 	/* only use pin tiles */
 	if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
 	  
-	  
 	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
 	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
 
@@ -1550,8 +1549,6 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
     return 1;
   }
 
-  RoutingMat *m1 = Technology::T->metal[0];
-  RoutingMat *m2 = Technology::T->metal[1];
   long bllx, blly, burx, bury;
   blob->getBloatBBox (&bllx, &blly, &burx, &bury);
 
@@ -1675,16 +1672,18 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   /* XXX: add obstructions for metal layers; in reality we need to
      add the routed metal and then grab that here */
   long rllx, rlly, rurx, rury;
+  RoutingMat *m1 = Technology::T->metal[0];
+  int pinspc = MAX (m1->getPitch(), _pin_metal->getPitch());
   blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
-  if (((rury - rlly+1) > 6*m1->getPitch()) &&
-      ((rurx - rllx+1) > 2*m2->getPitch())) {
+  if (((rury - rlly+1) > 6*pinspc) &&
+      ((rurx - rllx+1) > 2*_pin_metal->getPitch())) {
     fprintf (fp, "    OBS\n");
     fprintf (fp, "      LAYER %s ;\n", m1->getName());
     fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     scale*((rllx - bllx) + m2->getPitch()),
-	     scale*((rlly - blly) + 3*m1->getPitch()),
-	     scale*((rurx - bllx) - m2->getPitch()),
-	     scale*((rury - blly) - 3*m1->getPitch()));
+	     scale*((rllx - bllx) + _pin_metal->getPitch()),
+	     scale*((rlly - blly) + 3*pinspc),
+	     scale*((rurx - bllx) - _pin_metal->getPitch()),
+	     scale*((rury - blly) - 3*pinspc));
     fprintf (fp, "    END\n");
   }
 
@@ -1831,9 +1830,8 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
   fprintf (fp, "SITE CoreSite\n");
   fprintf (fp, "    CLASS CORE ;\n");
   fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
-	   Technology::T->metal[1]->getPitch()*scale, // m2
-	   Technology::T->metal[0]->getPitch()*scale  // m1
-	   );
+	   _m_align_x->getPitch()*scale,
+	   _m_align_y->getPitch()*scale);
   fprintf (fp, "END CoreSite\n\n");
   
   int i;
@@ -2280,8 +2278,8 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   int pitchx, pitchy, track_gap;
   int nx, ny;
 
-  pitchx = Technology::T->metal[1]->getPitch();
-  pitchy = Technology::T->metal[0]->getPitch();
+  pitchx = _m_align_x->getPitch();
+  pitchy = _m_align_y->getPitch();
 
   pitchx *= unit_conv;
   pitchy *= unit_conv;
