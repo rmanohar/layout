@@ -159,6 +159,16 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   }
   _m_align_y = Technology::T->metal[v-1];
 
+  if (config_exists ("layout.lefdef.horiz_metal")) {
+    _horiz_metal = config_get_int ("layout.lefdef.horiz_metal");
+    if (_horiz_metal != 0 && _horiz_metal != 1) {
+      fatal_error ("lefdef.horiz_metal: must be 0 or 1");
+    }
+  }
+  else {
+    _horiz_metal = 1;
+  }
+
   if (config_exists ("layout.lefdef.pin_layer")) {
     v = config_get_int ("layout.lefdef.pin_layer");
   }
@@ -171,16 +181,12 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   }
   _pin_layer = v - 1;
   _pin_metal = Technology::T->metal[v-1];
+  
+  if (((_pin_layer+1) % 2) == _horiz_metal) {
+    warning ("lefdef.pin_layer (%d) is a horizontal metal layer.\n\t[default pin locations are in a line at the top/bottom of the cell]", _pin_layer);
+  }
 
-  if (config_exists ("layout.lefdef.horiz_metal")) {
-    _horiz_metal = config_get_int ("layout.lefdef.horiz_metal");
-    if (_horiz_metal != 0 && _horiz_metal != 1) {
-      fatal_error ("lefdef.horiz_metal: must be 0 or 1");
-    }
-  }
-  else {
-    _horiz_metal = 1;
-  }
+  
 }
 
 
@@ -1841,7 +1847,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     fprintf (fp, "   TYPE ROUTING ;\n");
 
     fprintf (fp, "   DIRECTION %s ;\n",
-	     ((i % 2) == _horiz_metal) ? "VERTICAL" : "HORIZONTAL");
+	     (((i+1) % 2) == _horiz_metal) ? "HORIZONTAL" : "VERTICAL");
     fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
     if (mat->minArea() > 0) {
       fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
