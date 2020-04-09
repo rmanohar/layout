@@ -200,6 +200,16 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
       fprintf (stderr, "\tgeneric pins might violate spacing rules.\n");
     }
   }
+
+  if (config_exists ("layout.lefdef.rect_import")) {
+    _rect_import = config_get_int ("layout.lefdef.rect_import");
+    if (_rect_import != 0 && _rect_import != 1) {
+      fatal_error ("lefdef.rect_import: must be 0 or 1");
+    }
+  }
+  else {
+    _rect_import = 0;
+  }
 }
 
 
@@ -834,6 +844,9 @@ void *ActStackLayoutPass::local_op (Process *p, int mode)
   else if (mode == 3) {
     _maxHeightlocal (p);
   }
+  else if (mode == 4) {
+    _emitlocalRect (p);
+  }
   return getMap (p);
 }
 
@@ -846,6 +859,89 @@ void ActStackLayoutPass::free_local (void *v)
 }
 
 
+LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
+{
+  char cname[10240];
+  int len;
+
+  if (!_rect_import) {
+    return NULL;
+  }
+  
+  if (!p) {
+    sprintf (cname, "toplevel");
+  }
+  else {
+    a->msnprintfproc (cname, 10240, p);
+  }
+  len = strlen (cname);
+  snprintf (cname + len, 10240 - len, ".rect");
+  FILE *fp = fopen (cname, "r");
+
+  if (!fp) {
+    return NULL;
+  }
+  fclose (fp);
+
+  /* found a .rect file! Override layout generation */
+  Layout *tmp = new Layout (stk->getNL (p));
+  tmp->ReadRect (cname);
+  tmp->propagateAllNets ();
+  LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
+
+  /* now shift all the tiles to line up 0,0 in the middle of the
+     diffusion section */
+  DiffMat *d = NULL;
+  list_t *tiles = NULL;
+  int type, flavor;
+  long ymin, ymax;
+  for (int i=0; i < Technology::T->num_devs; i++) {
+    for (int j=0; j < 2; j++) {
+      tiles = b->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET));
+      if (list_isempty (tiles)) {
+	list_free (tiles);
+      }
+      else {
+	/* done! */
+	long xmin, xmax;
+	d = Technology::T->diff[j][i];
+	type = j;
+	flavor = i;
+	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+	/* calculate ymin, ymax */
+	LayoutBlob::searchFree (tiles);
+	break;
+      }
+    }
+  }
+  if (d == NULL) {
+    warning ("Read %s; no diffusion found?", cname);
+  }
+  else {
+    int diffspace = d->getOppDiffSpacing (flavor);
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    int xlate;
+
+    if (type == EDGE_NFET) {
+      xlate = n - ymax;
+    }
+    else {
+      xlate = p - ymin;
+    }
+    if (xlate != 0) {
+      LayoutBlob *tmp = new LayoutBlob (BLOB_VERT);
+      tmp->appendBlob (b, xlate);
+      b = tmp;
+    }
+  }
+  
+  b = computeLEFBoundary (b);
+  
+  return b;
+}
+  
+
 /*
  *
  * Convert transistors stacks into groups and generate layout geometry
@@ -856,12 +952,18 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 {
   list_t *stks;
   BBox b;
+  LayoutBlob *BLOB;
 
   Assert (stk, "What?");
 
   stks = stk->getStacks (p);
   if (!stks || list_length (stks) == 0) {
     return NULL;
+  }
+
+  BLOB = _readlocalRect (p);
+  if (BLOB) {
+    return BLOB;
   }
 
   listitem_t *li;
@@ -871,7 +973,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
   _lambda_to_scale = lambda_to_scale;
 
-  LayoutBlob *BLOB = new LayoutBlob (BLOB_HORIZ);
+  BLOB = new LayoutBlob (BLOB_HORIZ);
 
   if (list_length (stklist) > 0) {
     /* dual stacks */
@@ -1278,18 +1380,12 @@ int ActStackLayoutPass::run (Process *p)
 }
 
 
-int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
+void ActStackLayoutPass::_emitlocalRect (Process *p)
 {
-  if (!completed ()) {
-    return 0;
-  }
-  if (!p) {
-    return 0;
-  }
-
   LayoutBlob *blob = getLayout (p);
+
   if (!blob) {
-    return 0;
+    return;
   }
 
   long bllx, blly, burx, bury;
@@ -1297,16 +1393,27 @@ int ActStackLayoutPass::emitRect (FILE *fp, Process *p)
 
   if (bllx > burx || blly > bury) {
     /* no layout */
-    return 0;
+    return;
   }
 
   TransformMat mat;
 
   mat.applyTranslate (-bllx, -blly);
 
-  blob->PrintRect (fp, &mat);
+  FILE *fp;
+  char cname[10240];
 
-  return 1;
+  if (p) {
+    a->msnprintfproc (cname, 10240, p);
+  }
+  else {
+    sprintf (cname, "toplevel");
+  }
+  int len = strlen (cname);
+  snprintf (cname + len, 10240-len, ".rect");
+  fp = fopen (cname, "w");
+  blob->PrintRect (fp, &mat);
+  fclose (fp);
 }
 
 int ActStackLayoutPass::haveRect (Process *p)
@@ -1380,21 +1487,30 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   for (tli = list_first (tiles); tli; tli = list_next (tli)) {
     struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
     listitem_t *xi;
+    Layer *lprev = NULL;
     for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
       Layer *lname = (Layer *) list_value (xi);
       xi = list_next (xi);
       Assert (xi, "Hmm");
 	
       if (!lname->isMetal()) continue;
-      
+
       list_t *actual_tiles = (list_t *) list_value (xi);
       listitem_t *ti;
+
+      if (lname == lprev) {
+	fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
+      }
+      else {
+	fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
+      }
+      lprev = lname;
+      
       for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
 	long tllx, tlly, turx, tury;
 	Tile *tmp = (Tile *) list_value (ti);
 	
-	/* only use pin tiles */
-	if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
+	//if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
 	  
 	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
 	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
@@ -1411,21 +1527,47 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 	  tury = x;
 	}
 	
-	fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
 		 scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
       }
     }
   }
+  LayoutBlob::searchFree (tiles);
   fprintf (fp, "        END\n");
   fprintf (fp, "    END ");
   a->mfprintf (fp, "%s", name);
   fprintf (fp, "\n");
 }
 
+void ActStackLayoutPass::emitRect (Process *p)
+{
+  if (!completed()) {
+    return;
+  }
+  run_recursive (p, 4);
 
-void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
-				  Process *p, int do_rect)
+  for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+    if (wellplugs[i]) {
+      LayoutBlob *b = wellplugs[i];
+      char name[1024];
+
+      snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (i));
+
+      long bllx, blly, burx, bury;
+      TransformMat mat;
+      b->getBloatBBox (&bllx, &blly, &burx, &bury);
+      mat.applyTranslate (-bllx, -blly);
+      
+      /* emit rectangles */
+      strcat (name, ".rect");
+      FILE *tfp = fopen (name, "w");
+      b->PrintRect (tfp, &mat);
+      fclose (tfp);
+    }
+  }
+}
+
+void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 {
   if (!completed ()) {
     return;
@@ -1433,7 +1575,6 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
   /* pass arguments */
   _fp = fp;
   _fpcell = fpcell;
-  _do_rect = do_rect;
 
   run_recursive (p, 1);
 
@@ -1474,7 +1615,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
 	    list_t *tiles = b->search (TILE_FLGS_TO_ATTR(i,j,
 							 WDIFF_OFFSET), &mat);
 	    LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
-	    list_free (tiles);
+	    LayoutBlob::searchFree (tiles);
 
 	    if (wllx <= wurx) {
 	      fprintf (fpcell, "   LAYER %s ;\n", w->getName());
@@ -1491,13 +1632,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell,
 	fprintf (fpcell, "   END VERSION\n");
 	fprintf (fpcell, "END %s\n", name);
       }
-      if (do_rect) {
-	/* emit rectangles */
-	strcat (name, ".rect");
-	FILE *tfp = fopen (name, "w");
-	b->PrintRect (tfp, &mat);
-	fclose (tfp);
-      }
+      
     }
   }
 
@@ -1514,7 +1649,6 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
 {
   FILE *fp = _fp;
   FILE *fpcell = _fpcell;
-  int do_rect = _do_rect;
   
   /* emit self */
   netlist_t *n;
@@ -1711,35 +1845,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   if (fpcell) {
     _emitLocalWellLEF (fpcell, p);
   }
-  if (do_rect) {
-    _emitlocalRect (p);
-  }
   return 1;
-}
-
-
-void ActStackLayoutPass::_emitlocalRect (Process *p)
-{
-  FILE *tfp;
-  char cname[10240];
-  int len;
-
-  a->msnprintfproc (cname, 10240, p);
-  len = strlen (cname);
-  snprintf (cname + len, 10240-len, ".rect");
-  tfp = fopen (cname, "w");
-  emitRect (tfp, p);
-  fclose (tfp);
-
-#if 0
-  /* check! */
-  printf ("--- check %s ---\n", cname);
-  Layout *tmp = new Layout(stk->getNL (p));
-  tmp->ReadRect (cname);
-  tmp->propagateAllNets ();
-  tmp->PrintRect (stdout);
-  delete tmp;
-#endif  
 }
 
 /*
@@ -1803,6 +1909,7 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
       long wllx, wlly, wurx, wury;
 
       LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
+      LayoutBlob::searchFree (tiles);
       if (wurx >= wllx) {
 	/* bloat the region based on well overhang */
 	wllx -= w->getOverhang();
@@ -1815,7 +1922,6 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
 		 scale*wllx, scale*wlly, scale*wurx, scale*wury);
 	fprintf (fp, "        END\n");
       }
-      list_free (tiles);
     }
   }
   fprintf (fp, "    END VERSION\n");

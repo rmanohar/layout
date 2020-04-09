@@ -219,7 +219,8 @@ int main (int argc, char **argv)
     fatal_error ("Could not open file `%s' for writing", buf);
   }
   lp->emitWellHeader (fpcell);
-  lp->emitLEF (fp, fpcell, p, 1);
+  lp->emitRect (p);
+  lp->emitLEF (fp, fpcell, p);
   fclose (fp);
   fclose (fpcell);
 

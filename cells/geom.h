@@ -84,7 +84,7 @@ protected:
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
 
-  int isMetal ();
+  int isMetal ();		// 1 if it is a metal layer or a via layer
   
   list_t *searchMat (void *net);
   list_t *searchMat (int attr);
@@ -100,6 +100,7 @@ protected:
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   const char *getRouteName() { return mat->getName(); }
+  const char *getViaName() { return ((RoutingMat *)mat)->getUpC()->getName(); } 
 
   Tile *findVia (long x, long y);
 
@@ -242,7 +243,9 @@ public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   ~LayoutBlob ();
 
-  void appendBlob (LayoutBlob *b, long gap = 10, mirror_type m = MIRROR_NONE);
+  void applyTransform (TransformMat *t);
+
+  void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
@@ -284,6 +287,7 @@ public:
    */
   static void searchBBox (list_t *slist, long *bllx, long *blly, long *burx,
 			  long *bury);
+  static void searchFree (list_t *tiles);
 
   /**
    *  Calculate the edge alignment between two edge atttributes
