@@ -1330,7 +1330,11 @@ void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
       }
     }
 
-    /* half bloat of min spacing */
+    /* half bloat of min spacing; round up so that you can mirror the
+       cells; if mirroring is not allowed during placement, we can
+       change this to two different bloats: left/bot could be 
+       floor(bloat/2), and right/top could be ceil(bloat/2).
+    */
     bloat = (bloat + 1)/2;
 
     if (first) {
