@@ -1039,6 +1039,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       fatal_error ("What?");
     }
   }
+#if 0
+  printf ("blob: (%ld,%ld) -> (%ld,%ld); bloat: (%ld,%ld)->(%ld,%ld)\n",
+	  llx, lly, urx, ury, bloatllx, bloatlly, bloaturx, bloatury);
+#endif
 }
 
 
@@ -1054,6 +1058,11 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
     if (mat) {
       m = *mat;
     }
+#if 0    
+    long tllx, tlly;
+    m.apply (0, 0, &tllx, &tlly);
+    printf ("orig mat: (%ld,%ld)\n", tllx, tlly);
+#endif    
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       if (t == BLOB_HORIZ) {
 	m.applyTranslate (bl->gap, bl->shift);
@@ -1061,6 +1070,14 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
       else {
 	m.applyTranslate (bl->shift, bl->gap);
       }
+#if 0      
+      m.apply (0, 0, &tllx, &tlly);
+      printf ("gap: (%ld,%ld); tmat gets you to: (%ld,%ld)\n",
+	      bl->gap, bl->shift, tllx, tlly);
+      printf ("   (%ld,%ld) -> (%ld,%ld)  :: bloat: (%ld,%ld) -> (%ld,%ld)\n",
+	      bl->b->llx, bl->b->lly, bl->b->urx, bl->b->ury,
+	      bl->b->bloatllx, bl->b->bloatlly, bl->b->bloaturx, bl->b->bloatury);
+#endif      
       bl->b->PrintRect (fp, &m);
       if (t == BLOB_HORIZ) {
 	if (bl->next) {
@@ -1321,8 +1338,8 @@ void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
       xlly = tlly;
       xurx = turx;
       xury = tury;
-      bxllx = tllx - bloat;
-      bxlly = tlly - bloat;
+      bxllx = tllx - bloat + 1;
+      bxlly = tlly - bloat + 1;
       bxurx = turx + bloat;
       bxury = tury + bloat;
       first = 0;
@@ -1333,8 +1350,8 @@ void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
       xurx = MAX(xurx, turx);
       xury = MAX(xury, tury);
 
-      bxllx = MIN(bxllx, tllx - bloat);
-      bxlly = MIN(bxlly, tlly - bloat);
+      bxllx = MIN(bxllx, tllx - bloat + 1);
+      bxlly = MIN(bxlly, tlly - bloat + 1);
       bxurx = MAX(bxurx, turx + bloat);
       bxury = MAX(bxury, tury + bloat);
     }
