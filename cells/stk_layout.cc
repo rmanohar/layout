@@ -28,6 +28,7 @@
 #include <math.h>
 #include <string.h>
 
+#define IS_METAL_HORIZ(i) ((((i) % 2) == _horiz_metal) ? 1 : 0)
 
 static long snap_up (long w, unsigned long pitch)
 {
@@ -1966,13 +1967,12 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     fprintf (fp, "   TYPE ROUTING ;\n");
 
     fprintf (fp, "   DIRECTION %s ;\n",
-	     (((i+1) % 2) == _horiz_metal) ? "HORIZONTAL" : "VERTICAL");
+	     IS_METAL_HORIZ(i+1) ? "HORIZONTAL" : "VERTICAL");
     fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
     if (mat->minArea() > 0) {
       fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
     }
     fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
-    fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
 
     RangeTable *maxwidths = NULL;
 
@@ -1981,6 +1981,9 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       /* even in this case, emit a spacing table since the open
 	 source tools don't seem to work otherwise (?)
       */
+#if 0
+      fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
+#endif    
       fprintf (fp, "   SPACINGTABLE\n");
       fprintf (fp, "      PARALLELRUNLENGTH 0.0\n");
       fprintf (fp, "      WIDTH 0.0 %.6f ;\n", mat->minSpacing()*scale);
@@ -2065,10 +2068,24 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 
 
     if (i != Technology::T->nmetals - 1) {
-      fprintf (fp, "LAYER %s\n", mat->getUpC()->getName());
+      Contact *vup = mat->getUpC();
+      fprintf (fp, "LAYER %s\n", vup->getName());
       fprintf (fp, "    TYPE CUT ;\n");
-      fprintf (fp, "    SPACING %.6f ;\n", scale*mat->getUpC()->getSpacing());
-      fprintf (fp, "    WIDTH %.6f ;\n",  scale*mat->getUpC()->getWidth ());
+      fprintf (fp, "    SPACING %.6f ;\n", scale*vup->getSpacing());
+      fprintf (fp, "    WIDTH %.6f ;\n",  scale*vup->getWidth());
+      /* enclosure rules */
+      if (vup->isSym()) {
+	fprintf (fp, "    ENCLOSURE ABOVE %.6f %.6f ;\n",
+		 scale*vup->getSymUp(), scale*vup->getSymUp());
+	fprintf (fp, "    ENCLOSURE BELOW %.6f %.6f ;\n",
+		 scale*vup->getSym(), scale*vup->getSym());
+      }
+      else {
+	fprintf (fp, "    ENCLOSURE ABOVE %.6f %.6f ;\n",
+		 scale*vup->getAsymUp(), scale*vup->getSymUp());
+	fprintf (fp, "    ENCLOSURE BELOW %.6f %.6f ;\n",
+		 scale*vup->getAsym(), scale*vup->getSym());
+      }
       fprintf (fp, "END %s\n\n", mat->getUpC()->getName());
     }
   }
@@ -2078,21 +2095,51 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     RoutingMat *mat = Technology::T->metal[i];
     Contact *vup = mat->getUpC();
     double scale = Technology::T->scale/1000.0;
-    double w;
+    double w, w2;
     
     fprintf (fp, "VIA %s_C DEFAULT\n", vup->getName());
 
     w = (vup->getWidth() + 2*vup->getSym())*scale/2;
+    if (vup->isAsym()) {
+      w2 = (vup->getWidth() + 2*vup->getAsym())*scale/2;
+    }
+    else {
+      w2 = w;
+    }
+    if (w2 < w) {
+      fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
+    }
+    
     fprintf (fp, "   LAYER %s ;\n", mat->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+    if (IS_METAL_HORIZ (i+1)) {
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
+    }
+    else {
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
+    }
 
     w = vup->getWidth()*scale/2;
     fprintf (fp, "   LAYER %s ;\n", vup->getName());
     fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
 
     w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
+    if (vup->isAsym()) {
+      w2 = (vup->getWidth() + 2*vup->getAsymUp())*scale/2;
+    }
+    else {
+      w2 = 2;
+    }
+    if (w2 < w) {
+      fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
+    }
+    
     fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+    if (IS_METAL_HORIZ (i+2)) {
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
+    }
+    else {
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
+    }      
     
     fprintf (fp, "END %s_C\n\n", vup->getName());
   }
