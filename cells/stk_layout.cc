@@ -1435,12 +1435,13 @@ int ActStackLayoutPass::haveRect (Process *p)
   }
 }
 
-static void emit_header (FILE *fp, const char *name, LayoutBlob *blob)
+static void emit_header (FILE *fp, const char *name, const char *lefclass,
+			 LayoutBlob *blob)
 {
   double scale = Technology::T->scale/1000.0;
   
   fprintf (fp, "MACRO %s\n", name);
-  fprintf (fp, "    CLASS CORE ;\n");
+  fprintf (fp, "    CLASS %s ;\n", lefclass);
   fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
@@ -1587,7 +1588,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
       char name[1024];
 
       snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
-      emit_header (fp, name, b);
+      emit_header (fp, name, "WELLTAP", b);
 
       emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->psc);
       emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->nsc);
@@ -1737,7 +1738,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   double scale = Technology::T->scale/1000.0;
   
   a->msnprintfproc (macroname, 10240, p);
-  emit_header (fp, macroname, blob);
+  emit_header (fp, macroname, "CORE", blob);
   
   /* find pins */
   int found_vdd = 0;
