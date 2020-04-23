@@ -4,8 +4,15 @@
 foreach $i (@ARGV) {
     &process_rect ($i);
 }
+&std_defs ();
 
 exit 0;
+
+sub std_defs {
+   print 'proc lcell { x } { load "_0_0cell_0_0g${x}x0" }';
+   print;
+}
+
 
 sub process_rect {
     my $name = $_[0];

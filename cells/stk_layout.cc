@@ -30,6 +30,10 @@
 
 #define IS_METAL_HORIZ(i) ((((i) % 2) == _horiz_metal) ? 1 : 0)
 
+#ifndef MAX
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 static long snap_up (long w, unsigned long pitch)
 {
   if (w >= 0) {
@@ -219,9 +223,6 @@ ActStackLayoutPass::~ActStackLayoutPass() { }
 #define EDGE_FLAGS_LEFT 0x1
 #define EDGE_FLAGS_RIGHT 0x2
 
-#ifndef MAX
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
 
 
 #ifndef MIN
@@ -310,6 +311,7 @@ static int locate_fetedge (Layout *L, int dx,
   int rect;
   int fet_type; /* -1 = downward notch, +1 = upward notch, 0 = same
 		   width */
+  int spc = 0;
 
   int e_w = getwidth (0, e);
 
@@ -318,6 +320,19 @@ static int locate_fetedge (Layout *L, int dx,
   d = L->getDiff (e->type, e->flavor);
   f = L->getFet (e->type, e->flavor);
   p = L->getPoly ();
+
+  if (prev) {
+    spc = MAX (f->getSpacing (getlength (prev)),
+	       p->getSpacing (getlength (prev)));
+  }
+  else {
+    spc = 0;
+  }
+  if (e) {
+    spc = MAX (MAX (spc, f->getSpacing (getlength (e))),
+	       p->getSpacing (getlength (e)));
+  }
+  
 
   rect = 0;
   if (flags & EDGE_FLAGS_LEFT) {
@@ -331,7 +346,7 @@ static int locate_fetedge (Layout *L, int dx,
 
     if (prev_w == e_w) {
       fet_type = 0;
-      rect = f->getSpacing (e_w);
+      rect = spc;
       if (left->contact) {
 	rect = MAX (rect, d->viaSpaceMid());
       }
@@ -340,10 +355,10 @@ static int locate_fetedge (Layout *L, int dx,
       /* upward notch */
       fet_type = 1;
       rect = d->getNotchSpacing();
-      if (left->contact &&
-	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e_w);
+      if (left->contact) {
+	rect = MAX (rect, d->viaSpaceMid() - d->effOverhang (e_w));
       }
+      rect = MAX (rect, spc);
     }
     else {
       fet_type = -1;
@@ -359,9 +374,8 @@ static int locate_fetedge (Layout *L, int dx,
     if (fet_type < 0) {
       /* down notch */
       rect = d->getNotchSpacing();
-      if (left->contact &&
-	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e_w);
+      if (left->contact) {
+	rect = MAX (rect, d->viaSpaceMid() - d->effOverhang (e_w));
       }
     }
     else {
@@ -418,6 +432,20 @@ static int emit_rectangle (Layout *L,
   p = L->getPoly ();
   b.flavor = e->flavor;
 
+  int spc;
+  if (prev) {
+    spc = MAX (f->getSpacing (getlength (prev)),
+	       p->getSpacing (getlength (prev)));
+  }
+  else {
+    spc = 0;
+  }
+  if (e) {
+    spc = MAX (MAX (spc, f->getSpacing (getlength (e))),
+	       p->getSpacing (getlength (e)));
+  }
+  
+
   int prev_w = 0;
 
   rect = 0;
@@ -432,7 +460,7 @@ static int emit_rectangle (Layout *L,
     
     if (prev_w == e_w) {
       fet_type = 0;
-      rect = f->getSpacing (e_w);
+      rect = spc;
       if (left->contact) {
 	rect = MAX (rect, d->viaSpaceMid());
       }
@@ -441,10 +469,10 @@ static int emit_rectangle (Layout *L,
       /* upward notch */
       fet_type = 1;
       rect = d->getNotchSpacing();
-      if (left->contact &&
-	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e_w);
+      if (left->contact) {
+	rect = MAX (rect, d->viaSpaceMid() - d->effOverhang (e_w));
       }
+      rect = MAX (rect, spc);
     }
     else {
       fet_type = -1;
@@ -487,9 +515,8 @@ static int emit_rectangle (Layout *L,
     if (fet_type < 0) {
       /* down notch */
       rect = d->getNotchSpacing();
-      if (left->contact &&
-	  (rect + d->effOverhang (e_w) < d->viaSpaceMid())) {
-	rect = d->viaSpaceMid() - d->effOverhang (e_w);
+      if (left->contact) {
+	rect = MAX (rect, d->viaSpaceMid() - d->effOverhang (e_w));
       }
     }
     else {
@@ -566,11 +593,10 @@ static int emit_rectangle (Layout *L,
   return dx;
 }
 
-static BBox print_dualstack (Layout *L, struct gate_pairs *gp)
+static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
 {
   int flavor;
   int xpos, xpos_p;
-  int diffspace;
   BBox b;
   int dx = 0;
   
@@ -592,8 +618,8 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp)
   DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
   DiffMat *pdiff = Technology::T->diff[EDGE_PFET][flavor];
 
-  diffspace = ndiff->getOppDiffSpacing (flavor);
-  Assert (diffspace == pdiff->getOppDiffSpacing (flavor), "Hmm?!");
+  //diffspace = ndiff->getOppDiffSpacing (flavor);
+  //Assert (diffspace == pdiff->getOppDiffSpacing (flavor), "Hmm?!");
 
   FetMat *nfet = Technology::T->fet[EDGE_NFET][flavor];
   FetMat *pfet = Technology::T->fet[EDGE_PFET][flavor];
@@ -919,7 +945,8 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
     warning ("Read %s; no diffusion found?", cname);
   }
   else {
-    int diffspace = d->getOppDiffSpacing (flavor);
+    //int diffspace = d->getOppDiffSpacing (flavor);
+    int diffspace = _localdiffspace (p);
     int p = +diffspace/2;
     int n = p - diffspace;
     int xlate;
@@ -976,6 +1003,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
   BLOB = new LayoutBlob (BLOB_HORIZ);
 
+  int diffspace = _localdiffspace (p);
+
   if (list_length (stklist) > 0) {
     /* dual stacks */
     listitem_t *si;
@@ -986,8 +1015,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       gp = (struct gate_pairs *) list_value (si);
 
       /*--- process gp ---*/
-      b = print_dualstack (l, gp);
-
+      b = print_dualstack (l, gp, diffspace);
+      
       l->DrawDiffBBox (b.flavor, EDGE_PFET,
 		       b.p.llx, b.p.lly, b.p.urx-b.p.llx, b.p.ury-b.p.lly);
       l->DrawDiffBBox (b.flavor, EDGE_NFET,
@@ -999,6 +1028,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
   li = list_next (li);
   stklist = (list_t *) list_value (li);
+
+  /* XXX: check singlestack!!! */
 
   if (stklist && (list_length (stklist) > 0)) {
     /* n stacks */
@@ -1272,7 +1303,6 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   return BLOB;
 }
 
-
 int ActStackLayoutPass::run (Process *p)
 {
   int ret = ActPass::run (p);
@@ -1297,7 +1327,8 @@ int ActStackLayoutPass::run (Process *p)
     
     DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
 
-    int diffspace = ndiff->getOppDiffSpacing (flavor);
+    int diffspace = _localdiffspace (p);
+    //int diffspace = ndiff->getOppDiffSpacing (flavor);
     /* this is symmetric: pdiff->getOppDiffSpacing (flavor)
        must be the same */
     int p = +diffspace/2;
@@ -2701,4 +2732,113 @@ LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
 #endif  
   
   return bl;
+}
+
+
+/*
+ * Assumed that if there is a notch, then the poly overhang out of the
+ * notch is not more than the normal poly overhang...
+ */
+int ActStackLayoutPass::_localdiffspace (Process *p)
+{
+  int poly_potential;
+  int spc_default, spc2;
+  int flavor = -1;
+  int poly_overhang;
+  PolyMat *pmat = Technology::T->poly;
+
+  list_t *stks = stk->getStacks (p);
+  
+  if (!stks || list_length (stks) == 0) {
+    return 0;
+  }
+#if 0
+  printf ("computing local diffspace for %s...\n", p->getName());
+#endif
+  
+  spc_default = 0;
+  poly_overhang = 0;
+  
+  list_t *stklist = (list_t *) list_value (list_first (stks));
+
+  poly_potential = 0;
+  
+  if (list_length (stklist) > 0) {
+    listitem_t *si;
+    /* dual stacks */
+
+    for (si = list_first (stklist); si; si = list_next (si)) {
+      struct gate_pairs *gp;
+      gp = (struct gate_pairs *) list_value (si);
+      if (gp->basepair) {
+	if (gp->u.e.n && gp->u.e.p) {
+	  poly_overhang = MAX (poly_overhang,
+			       pmat->getOverhang (getlength (gp->u.e.n)));
+	  poly_overhang = MAX (poly_overhang,
+			       pmat->getOverhang (getlength (gp->u.e.p)));
+	  if (gp->u.e.n->g != gp->u.e.p->g) {
+	    poly_potential = 1;
+	  }
+	}
+	if (gp->u.e.n) {
+	  if (flavor != gp->u.e.n->flavor) {
+	    flavor = gp->u.e.n->flavor;
+	    int x = Technology::T->diff[EDGE_NFET][flavor]->getOppDiffSpacing(flavor);
+	    spc_default = MAX (spc_default, x);
+	  }
+	}
+	if (gp->u.e.p) {
+	  if (flavor != gp->u.e.n->flavor) {
+	    flavor = gp->u.e.n->flavor;
+	    int x = Technology::T->diff[EDGE_PFET][flavor]->getOppDiffSpacing(flavor);
+	    spc_default = MAX (spc_default, x);
+	  }
+	}
+      }
+      else {
+	listitem_t *li;
+	for (li = list_first (gp->u.gp); li; li = list_next (li)) {
+	  struct gate_pairs *tmp;
+	  tmp = (struct gate_pairs *) list_value (li);
+	  Assert (tmp->basepair, "What?");
+	  if (tmp->u.e.n && tmp->u.e.p) {
+	    poly_overhang = MAX (poly_overhang,
+				 pmat->getOverhang (getlength (tmp->u.e.n)));
+	    poly_overhang = MAX (poly_overhang,
+				 pmat->getOverhang (getlength (tmp->u.e.p)));
+				 
+	    if (tmp->u.e.n->g != tmp->u.e.p->g) {
+	      poly_potential = 1;
+	    }
+	  }
+	  if (tmp->u.e.n) {
+	    if (flavor != tmp->u.e.n->flavor) {
+	      flavor = tmp->u.e.n->flavor;
+	      int x = Technology::T->diff[EDGE_NFET][flavor]->getOppDiffSpacing(flavor);
+	      spc_default = MAX (spc_default, x);
+	    }
+	  }
+	  if (tmp->u.e.p) {
+	    if (flavor != tmp->u.e.p->flavor) {
+	      flavor = tmp->u.e.p->flavor;
+	      int x = Technology::T->diff[EDGE_PFET][flavor]->getOppDiffSpacing(flavor);
+	      spc_default = MAX (spc_default, x);
+	    }
+	  }
+	}
+      }
+    }
+  }
+#if 0
+  printf (" poly_pot = %d; def = %d; ", poly_potential, spc_default);
+#endif  
+  if (poly_potential) {
+    spc_default = MAX (poly_overhang*2 + MAX (pmat->getEol(),
+					      pmat->getSpacing(0)),
+		       spc_default);
+  }
+#if 0
+  printf (" final = %d\n", spc_default);
+#endif  
+  return spc_default;
 }

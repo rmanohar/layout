@@ -73,6 +73,8 @@ class ActStackLayoutPass : public ActPass {
   long snap_dn_x (long);
   long snap_dn_y (long);
 
+  int _localdiffspace (Process *p);
+
   LayoutBlob *_readlocalRect (Process *p);
 
   /* mode 0 */
