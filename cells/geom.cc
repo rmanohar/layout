@@ -992,7 +992,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       bloatlly = MIN (bloatlly, b->bloatlly + bl->shift);
       bloatury = MAX (bloatury, b->bloatury + bl->shift);
 
-      int shiftamt = (bloaturx - llx) + (b->llx - b->bloatllx + 1);
+      int shiftamt = (bloaturx - llx + 1) + (b->llx - b->bloatllx + 1);
 
       urx = b->urx + gap + shiftamt;
       bloaturx = b->bloaturx + gap + shiftamt;
@@ -1020,7 +1020,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
       bloatllx = MIN (bloatllx, b->bloatllx + bl->shift);
       bloaturx = MAX (bloaturx, b->bloaturx + bl->shift);
       
-      int shiftamt = (bloatury - lly) + (b->lly - b->bloatlly + 1);
+      int shiftamt = (bloatury - lly + 1) + (b->lly - b->bloatlly + 1);
 
       ury = b->ury + gap + shiftamt;
       bloatury = b->bloatury + gap + shiftamt;
