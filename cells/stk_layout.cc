@@ -398,7 +398,8 @@ static int emit_rectangle (Layout *L,
 			   int dx, int dy,
 			   unsigned int flags,
 			   edge_t *prev, int previdx,
-			   node_t *left, edge_t *e, int eidx, int yup,
+			   node_t *left, edge_t *e, edge_t *eopp, int oup,
+			   int eidx, int yup,
 			   BBox *ret)
 {
   DiffMat *d;
@@ -475,6 +476,7 @@ static int emit_rectangle (Layout *L,
       rect = MAX (rect, spc);
     }
     else {
+      /* downward step */
       fet_type = -1;
       rect = d->effOverhang (e_w);
     }
@@ -551,16 +553,44 @@ static int emit_rectangle (Layout *L,
   if (fet_type != 0) {
     uoverhang = MAX (uoverhang, p->getNotchOverhang (getlength (e)));
   }
-
+  
+#if 0
+  printf ("yup=%d; print poly\n", yup);
+#endif  
   /* now print poly edges */
   if (yup < 0) {
     L->DrawPoly (dx, dy, getlength (e), -yup*poverhang, e->g);
     L->DrawPoly (dx, dy + yup*(e_w+uoverhang), getlength(e), -yup*uoverhang, NULL);
   }
   else {
-    L->DrawPoly (dx, dy - yup*poverhang, getlength (e), yup*poverhang, e->g);
+    int oppoverhang;
+    if (eopp) {
+      oppoverhang = p->getOverhang (getlength (eopp));
+    }
+    else {
+      oppoverhang = -1;
+    }
+    /* 
+       There may be an issue in case the diffspacing is not enough to
+       account for the poly overhang. We break this tie asymmetrically
+       here. We really need to see both transistors! But here we
+       assume that the overhang is the same for p and n.
+    */
+    if (eopp && oppoverhang > yup) {
+      int endpoly = oppoverhang + oup;
+      int ht = dy - endpoly;
+      //L->DrawPoly (dx, dy - yup*poverhang, getlength (e),
+      //yup*poverhang, e->g);
+      //printf ("adjust: %d, ht %d\n", endpoly, ht);
+      L->DrawPoly (dx, endpoly, getlength (e), ht, e->g);
+    }
+    else {
+      L->DrawPoly (dx, dy - yup*poverhang, getlength (e), yup*poverhang, e->g);
+    }
+    
     L->DrawPoly (dx, dy + yup*e_w, getlength (e), yup*uoverhang, NULL);
   }
+  //printf ("done!\n");
   
 
   dx += getlength (e);
@@ -662,12 +692,14 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
     xpos = emit_rectangle (L, padn, xpos, yn,
 			   EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
 			   NULL, 0,
-			   gp->l.n, gp->u.e.n, gp->n_start, -1, &b);
+			   gp->l.n, gp->u.e.n, gp->u.e.p, yp,
+			   gp->n_start, -1, &b);
     
     xpos_p = emit_rectangle (L, padp, xpos_p, yp,
 			     EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
 			     NULL, 0,
-			     gp->l.p, gp->u.e.p, gp->p_start, 1, &b);
+			     gp->l.p, gp->u.e.p, gp->u.e.n, yn,
+			     gp->p_start, 1, &b);
   }
   else {
     listitem_t *li;
@@ -761,6 +793,7 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
       if (tmp->u.e.n) {
 	xpos = emit_rectangle (L, padn, xpos, yn, flagsn,
 			       prevn, prevnidx, leftn, tmp->u.e.n,
+			       tmp->u.e.p, yp,
 			       tmp->n_start, -1, &b);
 	prevn = tmp->u.e.n;
 	prevnidx = tmp->n_start;
@@ -772,6 +805,7 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
       if (tmp->u.e.p) {
 	xpos_p = emit_rectangle (L, padp, xpos_p, yp, flagsp,
 				 prevp, prevpidx, leftp, tmp->u.e.p,
+				 tmp->u.e.n, yn,
 				 tmp->p_start, 1, &b);
 
 	prevp = tmp->u.e.p;
@@ -780,7 +814,6 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
 	  xpos = xpos_p;
 	}
       }
-      
     }
   }
   return b;
@@ -845,7 +878,7 @@ static BBox print_singlestack (Layout *L, list_t *l)
     }
 
     xpos = emit_rectangle (L, 0, xpos, ypos, flags, prev, previdx, 
-			   n, e, idx, 1, &b);
+			   n, e, NULL, 0, idx, 1, &b);
     prev = e;
     previdx = idx;
 
@@ -1004,6 +1037,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   BLOB = new LayoutBlob (BLOB_HORIZ);
 
   int diffspace = _localdiffspace (p);
+
+  //printf ("Creating local layout: %s\n", p->getName());
 
   if (list_length (stklist) > 0) {
     /* dual stacks */
