@@ -576,7 +576,7 @@ static int emit_rectangle (Layout *L,
        here. We really need to see both transistors! But here we
        assume that the overhang is the same for p and n.
     */
-    if (eopp && oppoverhang > yup) {
+    if (eopp &&  (oup + oppoverhang + poverhang >= dy)) {
       int endpoly = oppoverhang + oup;
       int ht = dy - endpoly;
       //L->DrawPoly (dx, dy - yup*poverhang, getlength (e),
