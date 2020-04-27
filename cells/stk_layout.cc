@@ -998,6 +998,7 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
   }
   
   b = computeLEFBoundary (b);
+  b->markRead ();
   
   return b;
 }
@@ -1529,57 +1530,64 @@ static void emit_footer (FILE *fp, const char *name)
 {
   fprintf (fp, "END %s\n\n", name);
 }
-			 
-static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
-			  const char *sigtype, LayoutBlob *blob,
-			  node_t *signode)
+
+static void emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
+			      int num_io = 0)
 {
-  long bllx, blly, burx, bury;
   double scale = Technology::T->scale/1000.0;
-
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
-  
-  fprintf (fp, "    PIN ");
-  a->mfprintf (fp, "%s\n", name);
-
-  fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
-  fprintf (fp, "        USE %s ;\n", sigtype);
-
-  fprintf (fp, "        PORT\n");
-
-  /* -- find all pins of this name! -- */
-  TransformMat mat;
-  mat.applyTranslate (-bllx, -blly);
-  list_t *tiles = blob->search (signode, &mat);
   listitem_t *tli;
+  int emit_obs = 0;
+
+  if (io == NULL) { emit_obs = 1; }
+  
   for (tli = list_first (tiles); tli; tli = list_next (tli)) {
     struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
     listitem_t *xi;
     Layer *lprev = NULL;
+
     for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
       Layer *lname = (Layer *) list_value (xi);
       xi = list_next (xi);
       Assert (xi, "Hmm");
-	
-      if (!lname->isMetal()) continue;
+
+      if (!lname->isMetal()) {
+	continue;
+      }
 
       list_t *actual_tiles = (list_t *) list_value (xi);
       listitem_t *ti;
-
-      if (lname == lprev) {
-	fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
-      }
-      else {
-	fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
-      }
-      lprev = lname;
+      int first = 1;
       
       for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
 	long tllx, tlly, turx, tury;
 	Tile *tmp = (Tile *) list_value (ti);
+
+	if (tmp->getNet()) {
+	  int k;
+	  for (k=0; k < num_io; k++) {
+	    if (tmp->getNet() == io[k])
+	      break;
+	  }
+	  if (k != num_io) {
+	    /* skip! */
+	    continue;
+	  }
+	}
+
+	if (first) {
+	  if (!emit_obs) {
+	    fprintf (fp, "    OBS\n");
+	    emit_obs = 1;
+	  }
+	  if (lname == lprev) {
+	    fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
+	  }
+	  else {
+	    fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
+	  }
+	}
+	first = 0;
 	
-	//if (!TILE_ATTR_ISPIN(tmp->getAttr())) continue;
-	  
 	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
 	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
 
@@ -1598,9 +1606,37 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
 		 scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
       }
+      lprev = lname;
     }
   }
+}  
+
+static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
+			  const char *sigtype, LayoutBlob *blob,
+			  node_t *signode)
+{
+  long bllx, blly, burx, bury;
+  double scale = Technology::T->scale/1000.0;
+
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  
+  fprintf (fp, "    PIN ");
+  a->mfprintf (fp, "%s\n", name);
+  
+  //printf ("pin %s [node 0x%lx]\n", name, (unsigned long)signode);
+
+  fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
+  fprintf (fp, "        USE %s ;\n", sigtype);
+
+  fprintf (fp, "        PORT\n");
+
+  /* -- find all pins of this name! -- */
+  TransformMat mat;
+  mat.applyTranslate (-bllx, -blly);
+  list_t *tiles = blob->search (signode, &mat);
+  emit_layer_rects (fp, tiles);
   LayoutBlob::searchFree (tiles);
+
   fprintf (fp, "        END\n");
   fprintf (fp, "    END ");
   a->mfprintf (fp, "%s", name);
@@ -1717,6 +1753,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
 {
   FILE *fp = _fp;
   FILE *fpcell = _fpcell;
+  A_DECL (node_t *, iopins);
   
   /* emit self */
   netlist_t *n;
@@ -1800,6 +1837,8 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
     }
   }
 
+  A_INIT (iopins);
+
   char macroname[10240];
   double scale = Technology::T->scale/1000.0;
   
@@ -1838,6 +1877,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
       found_gnd = 1;
     }
     emit_one_pin (a, fp, tmp, n->bN->ports[i].input, sigtype, blob, av->n);
+    A_NEW (iopins, node_t *);
+    A_NEXT (iopins) = av->n;
+    A_INC (iopins);
   }
 
   /* add globals as input pins */
@@ -1868,6 +1910,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
       sigtype = "GROUND";
     }
     emit_one_pin (a, fp, tmp, 1 /* input */, sigtype, blob, av->n);
+    A_NEW (iopins, node_t *);
+    A_NEXT (iopins) = av->n;
+    A_INC (iopins);
   }
 
   /* check Vdd/GND */
@@ -1877,6 +1922,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
       emit_one_pin (a, fp, config_get_string ("net.global_vdd"),
 		    1, "POWER", blob, n->Vdd);
 
+    A_NEW (iopins, node_t *);
+    A_NEXT (iopins) = n->Vdd;
+    A_INC (iopins);
     }
   }
 
@@ -1886,26 +1934,42 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
       emit_one_pin (a, fp, config_get_string ("net.global_gnd"),
 		    1, "GROUND", blob, n->GND);
 
+      A_NEW (iopins, node_t *);
+      A_NEXT (iopins) = n->GND;
+      A_INC (iopins);
     }
   }
-  
 
-  /* XXX: add obstructions for metal layers; in reality we need to
-     add the routed metal and then grab that here */
-  long rllx, rlly, rurx, rury;
-  RoutingMat *m1 = Technology::T->metal[0];
-  int pinspc = MAX (m1->getPitch(), _pin_metal->getPitch());
-  blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
-  if (((rury - rlly+1) > 6*pinspc) &&
-      ((rurx - rllx+1) > 2*_pin_metal->getPitch())) {
-    fprintf (fp, "    OBS\n");
-    fprintf (fp, "      LAYER %s ;\n", m1->getName());
-    fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	     scale*((rllx - bllx) + _pin_metal->getPitch()),
-	     scale*((rlly - blly) + 3*pinspc),
-	     scale*((rurx - bllx) - _pin_metal->getPitch()),
-	     scale*((rury - blly) - 3*pinspc));
-    fprintf (fp, "    END\n");
+  /* read non-pin metal */
+
+  if (blob->getRead ()) {
+    list_t *l;
+    long rllx, rlly, rurx, rury;
+    blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
+    TransformMat mat;
+    mat.applyTranslate (-rllx, -rlly);
+    l = blob->searchAllMetal (&mat);
+    emit_layer_rects (fp, l, iopins, A_LEN (iopins));
+    LayoutBlob::searchFree (l);
+  }
+  else {
+    /* XXX: add obstructions for metal layers; in reality we need to
+       add the routed metal and then grab that here */
+    long rllx, rlly, rurx, rury;
+    RoutingMat *m1 = Technology::T->metal[0];
+    int pinspc = MAX (m1->getPitch(), _pin_metal->getPitch());
+    blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
+    if (((rury - rlly+1) > 6*pinspc) &&
+	((rurx - rllx+1) > 2*_pin_metal->getPitch())) {
+      fprintf (fp, "    OBS\n");
+      fprintf (fp, "      LAYER %s ;\n", m1->getName());
+      fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
+	       scale*((rllx - bllx) + _pin_metal->getPitch()),
+	       scale*((rlly - blly) + 3*pinspc),
+	       scale*((rurx - bllx) - _pin_metal->getPitch()),
+	       scale*((rury - blly) - 3*pinspc));
+      fprintf (fp, "    END\n");
+    }
   }
 
   emit_footer (fp, macroname);
@@ -1913,6 +1977,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   if (fpcell) {
     _emitLocalWellLEF (fpcell, p);
   }
+
+  A_FREE (iopins);
+  
   return 1;
 }
 

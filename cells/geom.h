@@ -102,7 +102,7 @@ protected:
   const char *getRouteName() { return mat->getName(); }
   const char *getViaName() { return ((RoutingMat *)mat)->getUpC()->getName(); } 
 
-  Tile *findVia (long x, long y);
+  Tile *find (long x, long y);
 
   friend class Layout;
 };
@@ -158,10 +158,14 @@ public:
 
   list_t *search (void *net);
   list_t *search (int attr);
+  list_t *searchAllMetal ();
   
   void propagateAllNets();
 
+  bool readRectangles() { return _readrect; }
+
 private:
+  bool _readrect;
   Layer *base;
   Layer **metals;
   int nflavors;
@@ -238,6 +242,8 @@ private:
   LayoutEdgeAttrib *edges[4];	// 0 = l, 1 = t, 2 = r, 3 = b
 
   unsigned long count;
+
+  bool readRect;
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
@@ -247,6 +253,9 @@ public:
 
   void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
 
+  void markRead () { readRect = true; }
+  bool getRead() { return readRect; }
+  
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
   /**
@@ -280,6 +289,7 @@ public:
   list_t *search (void *net, TransformMat *m = NULL);
   list_t *search (int type, TransformMat *m = NULL); // this is for
 						     // base layers
+  list_t *searchAllMetal (TransformMat *m = NULL);
 
   /* 
    * Uses the return value from the search function and returns its

@@ -124,6 +124,7 @@ Layout::Layout(netlist_t *_n)
   Assert (Technology::T, "Initialization error");
 
   N = _n;
+  _readrect = false;
 
   lmap = hash_new (8);
 
@@ -555,8 +556,7 @@ void Layout::ReadRect (const char *fname)
   /* the process */
   p = N->bN->p;
   Assert (p->isExpanded(), "What?");
-  
-
+  _readrect = true;
   fp = fopen (fname, "r");
   if (!fp) {
     fatal_error ("Could not open `%s' rect file", fname);
@@ -600,6 +600,10 @@ void Layout::ReadRect (const char *fname)
 
     if (net) {
       n = ActNetlistPass::string_to_node (N, net);
+      if (!n) {
+	warning ("Could not find signal `%s' in netlist!", net);
+      }
+      //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
     }
 
     char *material;
@@ -908,6 +912,7 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
 LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
 {
   t = type;
+  readRect = false;
 
   edges[0] = NULL;
   edges[1] = NULL;
@@ -1941,6 +1946,12 @@ LayoutBlob *LayoutBlob::delBBox (LayoutBlob *b)
   }
 }
 
+static void printtile (FILE *fp, Tile *t)
+{
+  fprintf (fp, "(%ld, %ld) -> (%ld, %ld)\n", t->getllx(), t->getlly(),
+	  t->geturx(), t->getury());
+}
+
 /*
   Propagate net labels across the layout
 */
@@ -1995,7 +2006,13 @@ void Layout::propagateAllNets ()
 		if (Tile::isConnected (L, t, neighbors[k])) {
 		  if (neighbors[k]->getNet()) {
 		    if (t->getNet() != neighbors[k]->getNet()) {
-		      warning ("Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=%d) with different net", t->getllx(), t->getlly(), k);
+		      warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d)\n\t connected neighbor (dir=%d) with different net", N->bN->p->getName(),
+			       t->getllx(), t->getlly(), k);
+		      fprintf (stderr, "\tnet1: ");
+		      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+		      fprintf (stderr, "; net2: ");
+		      ActNetlistPass::emit_node (N, stderr, (node_t *)neighbors[k]->getNet());
+		      fprintf (stderr, "\n");
 		    }
 		  }
 		  else {
@@ -2012,55 +2029,130 @@ void Layout::propagateAllNets ()
       else {
 	/* via layer: look at layers above and below and
 	   inherit/propagate labels to directly connected tiles */
-
 	for (li = list_first (tl[i]); li; li = list_next (li)) {
 	  Tile *t = (Tile *) list_value (li);
 	  Tile *up, *dn;
-	  if (L->up) {
-	    up = L->findVia (t->getllx(), t->getlly());
-	  }
-	  else {
-	    up = NULL;
-	  }
-	  if (L->down) {
-	    dn = L->down->findVia (t->getllx(), t->getlly());
-	  }
-	  else {
-	    dn = NULL;
-	  }
+	  Assert (L->up, "What?");
+	  Assert (L, "What?");
+	  up = L->up->find (t->getllx(), t->getlly());
+	  dn = L->find (t->getllx(), t->getlly());
 
-#define CHK_EQUAL(x,y)  (((x) && (y)) ? ((x)->getNet() == (y)->getNet()) : 1)
-
-	  /* t is not NULL, so we have a via here */
-	  if (CHK_EQUAL(dn,t) && CHK_EQUAL (up,t) && CHK_EQUAL (up,dn)) {
-	    void *propnet;
-	    if (dn && dn->getNet()) {
-	      propnet = dn->getNet();
-	    }
-	    else if (up && up->getNet()) {
-	      propnet = up->getNet();
-	    }
-	    else if (t->getNet()) {
-	      propnet = t->getNet();
+	  if (up->isSpace()) {
+	    warning ("[%s] Missing upper metal %d layer at (%ld,%ld)?",
+		     N->bN->p->getName(),
+		     (i+1)/2, t->getllx(), t->getlly ());
+	    continue;
+	  }
+	  if (dn->isSpace()) {
+	    if (i == 1) {
+	      warning ("[%s] Missing lower base layer at (%ld,%ld)?",
+		       N->bN->p->getName(),
+		       t->getllx(), t->getlly());
 	    }
 	    else {
-	      /* nothing to do! */
-	      propnet = NULL;
+	      warning ("[%s] Missing lower metal %d layer at (%ld,%ld)?",
+		       N->bN->p->getName(),
+		       (i-1)/2, t->getllx(), t->getlly ());
 	    }
+	    continue;
+	  }
+
+#define CHK_EQUAL(x,y)  ((x)->getNet() == (y)->getNet())
+	  
+#if 0
+	  fprintf (stderr, "[%s] here %d, via=%d, up=%d, dn=%d ", 
+		   N->bN->p->getName(), i,
+		   t->getNet() ? 1 : 0,
+		   up->getNet() ? 1 : 0,
+		   dn->getNet() ? 1 : 0);
+	  printtile (stderr, t);
+#endif
+
+	  if (!(CHK_EQUAL(dn,t) && CHK_EQUAL (up,t) && CHK_EQUAL (up,dn))) {
+	    void *propnet = NULL;
+	    if (dn->getNet()) {
+	      propnet = dn->getNet();
+	    }
+	    if (up->getNet()) {
+	      if (propnet && propnet != up->getNet()) {
+		warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=up) with different net", N->bN->p->getName(),
+			 t->getllx(), t->getlly());
+		fprintf (stderr, " net: ");
+		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+		fprintf (stderr, "; up: ");
+		ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet());
+		fprintf (stderr, "\n");
+	      }
+	      else {
+		propnet = up->getNet();
+	      }
+	    }
+	    if (t->getNet()) {
+	      if (propnet && propnet != t->getNet()) {
+		warning ("[%s] Layer::propagateNet(): Via tile at (%ld,%d) has connected neighbor with different net", N->bN->p->getName(),
+			 t->getllx(), t->getlly());
+		fprintf (stderr, " net: ");
+		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+		fprintf (stderr, "; via-net: ");
+		ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+		fprintf (stderr, "\n");
+	      }
+	      else {
+		propnet = t->getNet();
+	      }
+	    }
+
 	    if (propnet) {
-	      if (dn && !dn->getNet()) {
+#if 0	      
+	      fprintf (stderr, "[%s] propnet: ", N->bN->p->getName());
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+#endif	      
+	      if (!dn->getNet()) {
+#if 0		
+		fprintf (stderr, " dn");
+#endif
 		dn->setNet(propnet);
 		rep = 1;
 	      }
 	      if (!t->getNet()) {
+#if 0		
+		fprintf (stderr, " via");
+#endif		
 		t->setNet (propnet);
 		rep = 1;
 	      }
-	      if (up && !up->getNet()) {
+	      if (!up->getNet()) {
+#if 0		
+		fprintf (stderr, " up");
+#endif		
 		up->setNet (propnet);
 		rep = 1;
 	      }
+#if 0	      
+	      fprintf (stderr, "\n");
+#endif	      
 	    }
+	  }
+	  else {
+#if 0	    
+	    fprintf (stderr, "  -> nothing to do\n");
+	    if (t->getNet()) {
+	      fprintf (stderr, "  via:");
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+	      printtile (stderr, t);
+	    }
+	    if (up->getNet()) {
+	      fprintf (stderr, " up:");
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet());
+	      printtile (stderr, up);
+	    }
+	    if (dn->getNet()) {
+	      fprintf (stderr, " dn:");
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)dn->getNet());
+	      printtile (stderr, dn);
+	    }
+	    fprintf (stderr, "\n");
+#endif	    
 	  }
 	}
 	L = L->up;
@@ -2068,16 +2160,106 @@ void Layout::propagateAllNets ()
     }
   } while (rep);
 
+#if 1
+  for (int i=0; i < nmetals; i++) {
+    for (listitem_t *li = list_first (tl[2*i+2]); li; li = list_next (li)) {
+      Tile *t = (Tile *) list_value (li);
+      if (!t->getNet()) {
+	fprintf (stderr, "[%s] metal %d : no net for ", N->bN->p->getName(), i+1);
+	printtile (stderr, t);
+      }
+    }
+  }
+#endif  
+
   for (int i=0; i < 2*nmetals + 1; i++) {
     list_free (tl[i]);
   }
   FREE (tl);
 }
 
-
-
-
-Tile *Layer::findVia (long llx, long lly)
+list_t *Layout::searchAllMetal ()
 {
-  return vhint->find (llx, lly);
+  list_t *ret = list_new ();
+  Layer *L;
+  listitem_t *li;
+
+  for (int i=0; i < nmetals; i++) {
+    list_t *l = metals[i]->allNonSpaceMat ();
+    if (list_isempty (l)) {
+      list_free (l);
+    }
+    else {
+      list_append (ret, metals[i]);
+      list_append (ret, l);
+    }
+  }
+  return ret;
+}
+
+
+
+
+Tile *Layer::find (long llx, long lly)
+{
+  return hint->find (llx, lly);
+}
+
+
+list_t *LayoutBlob::searchAllMetal (TransformMat *m)
+{
+  TransformMat tmat;
+  list_t *tiles;
+
+  if (m) {
+    tmat = *m;
+  }
+  if (t == BLOB_BASE) {
+    if (base.l) {
+      tiles = base.l->searchAllMetal();
+      if (list_isempty (tiles)) {
+	return tiles;
+      }
+      else {
+	struct tile_listentry *tle;
+	NEW (tle, struct tile_listentry);
+	tle->m = tmat;
+	tle->tiles = tiles;
+	tiles = list_new ();
+	list_append (tiles, tle);
+	return tiles;
+      }
+    }
+    else {
+      tiles = list_new ();
+      return tiles;
+    }
+  }
+  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+    blob_list *bl;
+    tiles = list_new ();
+    
+    for (bl = l.hd; bl; q_step (bl)) {
+      if (t == BLOB_MERGE) {
+	/* no change to tmat */
+      }
+      else if (t == BLOB_HORIZ) {
+	tmat.applyTranslate (bl->gap, bl->shift);
+      }
+      else if (t == BLOB_VERT) {
+	tmat.applyTranslate (bl->shift, bl->gap);
+      }
+      else {
+	fatal_error ("What is this?");
+      }
+      list_t *tmp = bl->b->searchAllMetal (&tmat);
+      list_concat (tiles, tmp);
+      list_free (tmp);
+    }
+  }
+  else {
+    tiles = NULL;
+    fatal_error ("New blob?");
+  }
+  return tiles;
 }

@@ -48,7 +48,7 @@ sub process_rect {
 	    print "box $llx $lly $llx $lly\n";
 	    $node =~ s/\[/\(/g;
 	    $node =~ s/\]/\)/g;
-	    print "label \"$node\"\n";
+	    print "label \"$node\" right $mat\n";
 	    $llx--;
 	    $lly--;
 	    if ($rect eq "inrect") {

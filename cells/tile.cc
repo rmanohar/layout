@@ -65,12 +65,6 @@ Tile::~Tile()
 }
   
 
-void printtile (void *x, Tile *t)
-{
-  printf ("(%ld, %ld) -> (%ld, %ld)\n", t->getllx(), t->getlly(),
-	  t->geturx(), t->getury());
-}
-
 #define SCALE 8
 #define WINDOW 100
 #define OFFSET 10
