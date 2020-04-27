@@ -2006,8 +2006,9 @@ void Layout::propagateAllNets ()
 		if (Tile::isConnected (L, t, neighbors[k])) {
 		  if (neighbors[k]->getNet()) {
 		    if (t->getNet() != neighbors[k]->getNet()) {
-		      warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d)\n\t connected neighbor (dir=%d) with different net", N->bN->p->getName(),
-			       t->getllx(), t->getlly(), k);
+		      //warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d)\n\t connected neighbor (dir=%d) with different net", N->bN->p->getName(),
+		      //t->getllx(), t->getlly(), k);
+		      warning ("[%s] Net propagation detected two nets are shorted.", N->bN->p->getName());
 		      fprintf (stderr, "\tnet1: ");
 		      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
 		      fprintf (stderr, "; net2: ");
@@ -2075,11 +2076,12 @@ void Layout::propagateAllNets ()
 	    }
 	    if (up->getNet()) {
 	      if (propnet && propnet != up->getNet()) {
-		warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=up) with different net", N->bN->p->getName(),
-			 t->getllx(), t->getlly());
-		fprintf (stderr, " net: ");
+		//warning ("[%s] Layer::propagateNet(): Tile at (%ld,%d) has connected neighbor (dir=up) with different net", N->bN->p->getName(),
+		//t->getllx(), t->getlly());
+		warning ("[%s] Net propagation detected two nets are shorted across layers.", N->bN->p->getName());
+		fprintf (stderr, "\tnet1: ");
 		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
-		fprintf (stderr, "; up: ");
+		fprintf (stderr, "; net2: ");
 		ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet());
 		fprintf (stderr, "\n");
 	      }
@@ -2089,11 +2091,12 @@ void Layout::propagateAllNets ()
 	    }
 	    if (t->getNet()) {
 	      if (propnet && propnet != t->getNet()) {
-		warning ("[%s] Layer::propagateNet(): Via tile at (%ld,%d) has connected neighbor with different net", N->bN->p->getName(),
-			 t->getllx(), t->getlly());
-		fprintf (stderr, " net: ");
+		//warning ("[%s] Layer::propagateNet(): Via tile at (%ld,%d) has connected neighbor with different net", N->bN->p->getName(),
+		//t->getllx(), t->getlly());
+		warning ("[%s] Net propagation detected two nets are shorted.", N->bN->p->getName());
+		fprintf (stderr, "\tnet1: ");
 		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
-		fprintf (stderr, "; via-net: ");
+		fprintf (stderr, "; net2: ");
 		ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
 		fprintf (stderr, "\n");
 	      }
