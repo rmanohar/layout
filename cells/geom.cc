@@ -827,6 +827,53 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
     fprintf (fp, "\n");
   }    
   list_free (l);
+
+  if (vhint) {
+    l = list_new ();
+    
+    vhint->applyTiles (MIN_VALUE, MIN_VALUE,
+		       (unsigned long)MAX_VALUE - (MIN_VALUE + 1), (unsigned long)MAX_VALUE - (MIN_VALUE + 1),
+		       l, append_nonspacetile);
+
+    while (!list_isempty (l)) {
+      Tile *tmp = (Tile *) list_delete_tail (l);
+
+      fprintf (fp, "rect ");
+      if (tmp->net) {
+	dump_node (fp, N, (node_t *)tmp->net);
+      }
+      else {
+	fprintf (fp, "#");
+      }
+      fprintf (fp, " %s", ((RoutingMat *)mat)->getUpC()->getName());
+
+      long llx, lly, urx, ury;
+
+      if (t) {
+	t->apply (tmp->getllx(), tmp->getlly(), &llx, &lly);
+	t->apply (tmp->geturx(), tmp->getury(), &urx, &ury);
+
+	if (llx > urx) {
+	  long x = llx;
+	  llx = urx;
+	  urx = x;
+	}
+	if (lly > ury) {
+	  long x = lly;
+	  lly = ury;
+	  ury = x;
+	}
+      }
+      else {
+	llx = tmp->getllx();
+	lly = tmp->getlly();
+	urx = tmp->geturx();
+	ury = tmp->getury();
+      }
+      fprintf (fp, " %ld %ld %ld %ld\n", llx, lly, urx+1, ury+1);
+    }    
+    list_free (l);
+  }
 }
 
 void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
