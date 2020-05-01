@@ -1257,7 +1257,14 @@ void TransformMat::inverse (TransformMat *inp)
 
   /* 
      Assumes: just rotations and translations.
+
      This also means the third row is [ 0 0 1 ]
+
+     Inverse of
+     [ a b c                          [  e  -b   bf-ce
+       d e f       is    1/(ae-bd) *    -d   a   dc-af
+       0 0 1 ]                           0   0  1/(ae-bd)  ]
+
   */
 
   m[0][0] = inp->m[1][1];
@@ -1273,7 +1280,9 @@ void TransformMat::inverse (TransformMat *inp)
   m[2][2] = 1;
 
 
-  /* this assumes the discriminant is 1 */
+  /* this assumes the discriminant (ae-bd) is 1 
+     (90 degree rotations only)
+   */
 
   /* check */
   mat_mult (tmp, m, inp->m);
