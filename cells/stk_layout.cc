@@ -978,6 +978,12 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
     warning ("Read %s; no diffusion found?", cname);
   }
   else {
+    /* 
+       We align this so that y-coordinate of 0 can be used
+       to consistently align the wells, with the p-diff region on 
+       top and the n-diff region on the bottom.
+    */
+    
     //int diffspace = d->getOppDiffSpacing (flavor);
     int diffspace = _localdiffspace (p);
     int p = +diffspace/2;
@@ -1690,7 +1696,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
       char name[1024];
 
       snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
-      emit_header (fp, name, "WELLTAP", b);
+      emit_header (fp, name, "CORE WELLTAP", b);
 
       emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->psc);
       emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->nsc);
@@ -2051,6 +2057,27 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
 	wlly -= w->getOverhang();
 	wurx += w->getOverhang();
 	wury += w->getOverhang();
+
+#if 0
+	fprintf (fp, "blly = %ld; wlly = %ld; wury = %ld; j = %d\n",
+		 blly, wlly, wury, j);
+#endif	
+	if (j == EDGE_PFET) {
+	  if (wlly+blly > 0) {
+	    wlly = -blly;
+#if 0	    
+	    fprintf (fp, "change\n");
+#endif
+	  }
+	}
+	else {
+	  if (wury+blly < 0) {
+	    wury = -blly;
+#if 0
+	    fprintf (fp, "change\n");
+#endif	    
+	  }
+	}
 
 	fprintf (fp, "        LAYER %s ;\n", w->getName());
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
