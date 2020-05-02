@@ -1537,15 +1537,13 @@ static void emit_footer (FILE *fp, const char *name)
   fprintf (fp, "END %s\n\n", name);
 }
 
-static void emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
+static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
 			      int num_io = 0)
 {
   double scale = Technology::T->scale/1000.0;
   listitem_t *tli;
   int emit_obs = 0;
 
-  if (io == NULL) { emit_obs = 1; }
-  
   for (tli = list_first (tiles); tli; tli = list_next (tli)) {
     struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
     listitem_t *xi;
@@ -1581,7 +1579,7 @@ static void emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
 	}
 
 	if (first) {
-	  if (!emit_obs) {
+	  if (!emit_obs && io != NULL) {
 	    fprintf (fp, "    OBS\n");
 	    emit_obs = 1;
 	  }
@@ -1615,6 +1613,7 @@ static void emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
       lprev = lname;
     }
   }
+  return emit_obs;
 }  
 
 static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
@@ -1955,7 +1954,9 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
     TransformMat mat;
     mat.applyTranslate (-rllx, -rlly);
     l = blob->searchAllMetal (&mat);
-    emit_layer_rects (fp, l, iopins, A_LEN (iopins));
+    if (emit_layer_rects (fp, l, iopins, A_LEN (iopins))) {
+      fprintf (fp, "    END\n");
+    }
     LayoutBlob::searchFree (l);
   }
   else {
