@@ -1,5 +1,12 @@
 #!/usr/bin/perl
 
+if ($ARGV[0] eq "-prboundary") {
+    $prboundary = 1;
+    shift;
+}
+else {
+    $prboundary = 0;
+}
 
 foreach $i (@ARGV) {
     &process_rect ($i);
@@ -9,7 +16,7 @@ foreach $i (@ARGV) {
 exit 0;
 
 sub std_defs {
-   print 'proc lcell { x } { load "_0_0cell_0_0g${x}x0" }' . "\n";
+    print 'proc lcell { x } { load "_0_0cell_0_0g${x}x0" }' . "\n";
 }
 
 
@@ -28,7 +35,13 @@ sub process_rect {
 	next if /^#/;
 	chop;
 	($rect,$node,$mat,$llx,$lly,$urx,$ury) = split;
-        next if ($rect eq "bbox");
+	if ($rect eq "bbox") {
+	    if ($prboundary) {
+		print "box $node $mat $llx $lly\n";
+		print "label prboundary\n";
+	    }
+	    next;
+        }
 	if ($llx > $urx) {
 	    $tmp = $llx;
 	    $llx = $urx;
