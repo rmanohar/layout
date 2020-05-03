@@ -9,8 +9,7 @@ foreach $i (@ARGV) {
 exit 0;
 
 sub std_defs {
-   print 'proc lcell { x } { load "_0_0cell_0_0g${x}x0" }';
-   print;
+   print 'proc lcell { x } { load "_0_0cell_0_0g${x}x0" }' . "\n";
 }
 
 
@@ -29,6 +28,7 @@ sub process_rect {
 	next if /^#/;
 	chop;
 	($rect,$node,$mat,$llx,$lly,$urx,$ury) = split;
+        next if ($rect eq "bbox");
 	if ($llx > $urx) {
 	    $tmp = $llx;
 	    $llx = $urx;

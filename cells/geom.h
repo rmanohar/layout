@@ -244,6 +244,8 @@ private:
   unsigned long count;
 
   bool readRect;
+
+  void _printRect (FILE *fp, TransformMat *t);
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);

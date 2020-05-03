@@ -1098,7 +1098,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 }
 
 
-void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
+void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 {
   if (t == BLOB_BASE) {
     if (base.l) {
@@ -1130,7 +1130,7 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
 	      bl->b->llx, bl->b->lly, bl->b->urx, bl->b->ury,
 	      bl->b->bloatllx, bl->b->bloatlly, bl->b->bloaturx, bl->b->bloatury);
 #endif      
-      bl->b->PrintRect (fp, &m);
+      bl->b->_printRect (fp, &m);
       if (t == BLOB_HORIZ) {
 	if (bl->next) {
 	  int shiftamt = (bl->b->bloaturx - bl->b->llx + 1)
@@ -1153,7 +1153,7 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
       m = *mat;
     }
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
-      bl->b->PrintRect (fp, &m);
+      bl->b->_printRect (fp, &m);
     }
   }
   else {
@@ -1161,7 +1161,25 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
   }
 }
 
-void TransformMat::mkI ()
+void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
+{
+  long bllx, blly, burx, bury;
+  long x, y;
+  getBloatBBox (&bllx, &blly, &burx, &bury);
+  fprintf (fp, "bbox ");
+  if (mat) {
+    mat->apply (bllx, blly, &x, &y);
+    fprintf (fp, "%ld %ld", x, y);
+    mat->apply (burx+1, bury+1, &x, &y);
+    fprintf (fp, " %ld %ld\n", x, y);
+  }
+  else {
+    fprintf (fp, "%ld %ld %ld %ld\n", bllx, blly, burx+1, bury+1);
+  }
+  _printRect (fp, mat);
+}
+
+  void TransformMat::mkI ()
 {
   int i, j;
   for (i=0; i < 3; i++)
