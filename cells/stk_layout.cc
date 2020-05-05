@@ -2629,8 +2629,8 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 	   10*pitchx, track_gap,
 	   (10+nx)*pitchx, (1+ny)*track_gap);
   
-  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
-	   10*pitchx, pitchy, ny, track_gap);
+  //  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
+  //	   10*pitchx, pitchy, ny, track_gap);
 
   /* routing tracks: metal1, metal2 */
 
