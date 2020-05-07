@@ -2478,6 +2478,17 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
   if (net->port) {
     fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
   }
+  else if (net->net->isglobal()) {
+    ActId *tmp = net->net->toid();
+    tmp->sPrint (buf, 10240);
+    delete tmp;
+    if ((strcmp (buf, "Vdd") == 0) || (strcmp (buf, "GND") == 0)) {
+      /* omit */
+    }
+    else {
+      fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
+    }
+  }
 
   for (int i=0; i < A_LEN (net->pins); i++) {
     fprintf (fp, " ( ");
@@ -2678,11 +2689,30 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 
   if (do_pins) {
     int num_pins = 0;
+    const char *gvdd = config_get_string ("net.global_vdd");
+    const char *ggnd = config_get_string ("net.global_gnd");
 
     for (int i=0; i < A_LEN (act_bnl->ports); i++) {
       if (act_bnl->ports[i].omit) continue;
       num_pins++;
     }
+
+        /* gloal nets */
+    for (int i=0; i < A_LEN (act_bnl->nets); i++) {
+      if (act_bnl->nets[i].net->isglobal()) {
+	char buf[100];
+	ActId *tmp = act_bnl->nets[i].net->toid();
+	tmp->sPrint (buf, 100);
+	if (strcmp (buf, gvdd) == 0 || strcmp (buf, ggnd) == 0) {
+	  /* nothing for power supplies */
+	}
+	else {
+	  num_pins++;
+	}
+	delete tmp;
+      }
+    }
+
     fprintf (fp, "PINS %d ;\n", num_pins);
     num_pins = 0;
     for (int i=0; i < A_LEN (act_bnl->ports); i++) {
@@ -2700,6 +2730,24 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
       }
       /* placement directives will go here */
       fprintf (fp, " ;\n");
+    }
+
+    /* gloal nets */
+    for (int i=0; i < A_LEN (act_bnl->nets); i++) {
+      if (act_bnl->nets[i].net->isglobal()) {
+	char buf[100];
+	ActId *tmp = act_bnl->nets[i].net->toid();
+	tmp->sPrint (buf, 100);
+	if (strcmp (buf, gvdd) == 0 || strcmp (buf, ggnd) == 0) {
+	  /* nothing */
+	}
+	else {
+	  fprintf (fp, "- top_iopin%d + NET ", i);
+	  tmp->Print (fp);
+	  fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ;\n");
+	}
+	delete tmp;
+      }
     }
   }
   else {
