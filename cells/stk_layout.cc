@@ -2315,6 +2315,7 @@ void ActStackLayoutPass::emitWellHeader (FILE *fp)
   fprintf (fp, "LAYER LEGALIZER\n");
   fprintf (fp, "   SAME_DIFF_SPACING %.6f ;\n", Technology::T->getMaxSameDiffSpacing()*scale);
   fprintf (fp, "   ANY_DIFF_SPACING %.6f ;\n", Technology::T->getMaxDiffSpacing()*scale);
+  fprintf (fp, "   WELLTAP_ADJUST %.6f ;\n", snap_up_y (Technology::T->welltap_adjust)*scale);
   fprintf (fp, "END LEGALIZER\n\n");
   
   for (int i=0; i < Technology::T->num_devs; i++) {
