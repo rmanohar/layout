@@ -1381,7 +1381,6 @@ int ActStackLayoutPass::run (Process *p)
     //int diffspace = ndiff->getOppDiffSpacing (flavor);
     /* this is symmetric: pdiff->getOppDiffSpacing (flavor)
        must be the same */
-    int adjust = Technology::T->welltap_adjust;
     int p = +diffspace/2;
     int n = p - diffspace;
 
@@ -1420,7 +1419,7 @@ int ActStackLayoutPass::run (Process *p)
 	  n = -w->getOverhangWelldiff();
 	}
       }
-      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina - adjust, 
+      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
 		       pplusdiff->getWidth(), mina, dummy_netlist->psc);
     }
 
@@ -1755,10 +1754,10 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 	      }
 
 	      if (j == EDGE_PFET) {
-		wlly -= adjust;
+		wlly += adjust;
 	      }
 	      else {
-		wury -= adjust;
+		wury += adjust;
 	      }
 	      
 	      fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
