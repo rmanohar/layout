@@ -1369,10 +1369,19 @@ int ActStackLayoutPass::run (Process *p)
     
     DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
 
-    int diffspace = _localdiffspace (p);
+    int diffspace;
+
+    if (nplusdiff) {
+      diffspace = nplusdiff->getOppDiffSpacing(flavor);
+    }
+    else {
+      diffspace = pplusdiff->getOppDiffSpacing(flavor);
+    }
+
     //int diffspace = ndiff->getOppDiffSpacing (flavor);
     /* this is symmetric: pdiff->getOppDiffSpacing (flavor)
        must be the same */
+    int adjust = Technology::T->welltap_adjust;
     int p = +diffspace/2;
     int n = p - diffspace;
 
@@ -1389,7 +1398,7 @@ int ActStackLayoutPass::run (Process *p)
       }
       w = Technology::T->well[EDGE_NFET][flavor];
       if (w) {
-	if (w->getOverhangWelldiff() < p) {
+	if (w->getOverhangWelldiff() > p) {
 	  p = w->getOverhangWelldiff();
 	}
       }
@@ -1407,11 +1416,11 @@ int ActStackLayoutPass::run (Process *p)
       }
       w = Technology::T->well[EDGE_PFET][flavor];
       if (w) {
-	if (w->getOverhangWelldiff() < -n) {
+	if (w->getOverhangWelldiff() > -n) {
 	  n = -w->getOverhangWelldiff();
 	}
       }
-      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
+      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina - adjust, 
 		       pplusdiff->getWidth(), mina, dummy_netlist->psc);
     }
 
@@ -1687,7 +1696,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 
   run_recursive (p, 1);
 
-  /* emit lef for the welltap cells */
+  /*-- emit lef for the welltap cells --*/
   double scale = Technology::T->scale/1000.0;
   for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
     if (wellplugs[i]) {
@@ -1711,6 +1720,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 	/* emit local well lef */
 	WellMat *w;
 	DiffMat *d;
+	int adjust = Technology::T->welltap_adjust;
 
 	fprintf (fpcell, "MACRO %s\n", name);
 	fprintf (fpcell, "   VERSION %s\n", name);
@@ -1732,6 +1742,25 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 	      wlly -= w->getOverhangWelldiff();
 	      wurx += w->getOverhangWelldiff();
 	      wury += w->getOverhangWelldiff();
+
+	      if (j == EDGE_PFET) {
+		if (wlly+blly > 0) {
+		  wlly = -blly;
+		}
+	      }
+	      else {
+		if (wury+blly < 0) {
+		  wury = -blly;
+		}
+	      }
+
+	      if (j == EDGE_PFET) {
+		wlly -= adjust;
+	      }
+	      else {
+		wury -= adjust;
+	      }
+	      
 	      fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
 		       wllx*scale, wlly*scale, wurx*scale, wury*scale);
 	      fprintf (fpcell, "   END\n");
