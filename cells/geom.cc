@@ -578,6 +578,9 @@ void Layout::ReadRect (const char *fname)
       offset = 5;
       rtype = 0;
     }
+    else if (strncmp (buf, "bbox ", 5) == 0) {
+      continue;
+    }
     else {
       fatal_error ("Line: %s\nNeeds inrect, outrect, or rect", buf);
     }
