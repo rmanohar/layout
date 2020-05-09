@@ -170,6 +170,7 @@ class Tile {
   unsigned int isVirt() { return virt; }
   void *getNet ()  { return net; }
   void setNet (void *n) { net = n; }
+  int isFet() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISFET(attr); }
 
   static int isConnected (Layer *l, Tile *t1, Tile *t2);
   

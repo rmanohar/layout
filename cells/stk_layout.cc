@@ -1622,7 +1622,62 @@ static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
     }
   }
   return emit_obs;
+}
+
+static void emit_antenna_area (FILE *fp, list_t *tiles)
+{
+  double scale = Technology::T->scale/1000.0;
+  listitem_t *tli;
+  double ant_area = 0.0;
+
+  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+    listitem_t *xi;
+
+    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+      Layer *lname = (Layer *) list_value (xi);
+      xi = list_next (xi);
+      Assert (xi, "Hmm");
+
+      if (lname->isMetal()) {
+	continue;
+      }
+
+      list_t *actual_tiles = (list_t *) list_value (xi);
+      listitem_t *ti;
+      int first = 1;
+      
+      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	long tllx, tlly, turx, tury;
+	Tile *tmp = (Tile *) list_value (ti);
+
+	if (!tmp->isFet()) {
+	  continue;
+	}
+
+	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+	
+	if (tllx > turx) {
+	  long x = tllx;
+	  tllx = turx;
+	  turx = x;
+	}
+
+	if (tlly > tury) {
+	  long x = tlly;
+	  tlly = tury;
+	  tury = x;
+	}
+	ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+      }
+    }
+  }
+  if (ant_area > 0) {
+    fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
+  }
 }  
+
 
 static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 			  const char *sigtype, LayoutBlob *blob,
@@ -1648,9 +1703,14 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   mat.applyTranslate (-bllx, -blly);
   list_t *tiles = blob->search (signode, &mat);
   emit_layer_rects (fp, tiles);
-  LayoutBlob::searchFree (tiles);
 
   fprintf (fp, "        END\n");
+
+  // now we emit just the fet area for antennas
+  emit_antenna_area (fp, tiles);
+
+  LayoutBlob::searchFree (tiles);
+
   fprintf (fp, "    END ");
   a->mfprintf (fp, "%s", name);
   fprintf (fp, "\n");
