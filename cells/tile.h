@@ -171,6 +171,8 @@ class Tile {
   void *getNet ()  { return net; }
   void setNet (void *n) { net = n; }
   int isFet() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISFET(attr); }
+  int isPoly() { return TILE_ATTR_ISROUTE(attr) || (virt && TILE_ATTR_ISFET(attr)); }
+  int isDiff() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISDIFF(attr); }
 
   static int isConnected (Layer *l, Tile *t1, Tile *t2);
   

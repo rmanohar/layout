@@ -1629,6 +1629,7 @@ static void emit_antenna_area (FILE *fp, list_t *tiles)
   double scale = Technology::T->scale/1000.0;
   listitem_t *tli;
   double ant_area = 0.0;
+  double ant_diffarea = 0.0;
 
   for (tli = list_first (tiles); tli; tli = list_next (tli)) {
     struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
@@ -1651,10 +1652,6 @@ static void emit_antenna_area (FILE *fp, list_t *tiles)
 	long tllx, tlly, turx, tury;
 	Tile *tmp = (Tile *) list_value (ti);
 
-	if (!tmp->isFet()) {
-	  continue;
-	}
-
 	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
 	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
 	
@@ -1669,12 +1666,21 @@ static void emit_antenna_area (FILE *fp, list_t *tiles)
 	  tlly = tury;
 	  tury = x;
 	}
-	ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	
+	if (tmp->isFet()) {
+	  ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	}
+	else if (tmp->isDiff()) {
+	  ant_diffarea += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	}
       }
     }
   }
   if (ant_area > 0) {
     fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
+  }
+  if (ant_diffarea > 0) {
+    fprintf (fp, "        ANTENNADIFFAREA %.6f ;\n", ant_diffarea);
   }
 }  
 
@@ -2314,6 +2320,18 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     }
     fprintf (fp, "   PITCH %.6f %.6f ;\n",
 	     mat->getPitch()*scale, mat->getPitch()*scale);
+
+    /* antenna rules */
+    if (mat->getAntenna() > 0 || mat->getAntennaDiff() > 0) {
+      fprintf (fp, "   ANTENNAMODEL OXIDE1 ;\n");
+      if (mat->getAntenna() > 0) {
+	fprintf (fp, "   ANTENNAAREARATIO %.6f ;\n", mat->getAntenna());
+      }
+      if (mat->getAntennaDiff() > 0) {
+	fprintf (fp, "   ANTENNADIFFAREARATIO %.6f ;\n", mat->getAntennaDiff());
+      }
+    }
+    
     fprintf (fp, "END %s\n\n", mat->getName());
 
 
@@ -2336,7 +2354,19 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 	fprintf (fp, "    ENCLOSURE BELOW %.6f %.6f ;\n",
 		 scale*vup->getAsym(), scale*vup->getSym());
       }
-      fprintf (fp, "END %s\n\n", mat->getUpC()->getName());
+
+      /* antenna rules */
+      if (vup->getAntenna() > 0 || vup->getAntennaDiff() > 0) {
+	fprintf (fp, "   ANTENNAMODEL OXIDE1 ;\n");
+	if (vup->getAntenna() > 0) {
+	  fprintf (fp, "   ANTENNAAREARATIO %.6f ;\n", vup->getAntenna());
+	}
+	if (vup->getAntennaDiff() > 0) {
+	  fprintf (fp, "   ANTENNADIFFAREARATIO %.6f ;\n", vup->getAntennaDiff());
+	}
+      }
+      
+      fprintf (fp, "END %s\n\n", vup->getName());
     }
   }
   fprintf (fp, "\n");
