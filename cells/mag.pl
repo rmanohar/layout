@@ -35,7 +35,7 @@ sub process_rect {
 	next if /^#/;
 	chop;
 	($rect,$node,$mat,$llx,$lly,$urx,$ury) = split;
-	if ($rect eq "bbox") {
+	if ($rect eq "bbox" || $rect eq "sbox") {
 	    if ($prboundary) {
 		print "box $node $mat $llx $lly\n";
 		print "label prboundary\n";
