@@ -540,7 +540,7 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
   }
 }
 
-void Layout::ReadRect (const char *fname)
+void Layout::ReadRect (const char *fname, int raw_mode)
 {
   FILE *fp;
   char buf[10240];
@@ -549,14 +549,23 @@ void Layout::ReadRect (const char *fname)
   char *net;
   Process *p;
 
-  if (!N || !N->bN || !N->bN->p) {
+  if (raw_mode == 0 && (!N || !N->bN || !N->bN->p)) {
     warning ("Layout::ReadRect() skipped; no netlist specified for layout");
     return;
   }
   /* the process */
-  p = N->bN->p;
-  Assert (p->isExpanded(), "What?");
+  if (raw_mode == 0) {
+    p = N->bN->p;
+    Assert (p->isExpanded(), "What?");
+  }
+  else {
+    p = NULL;
+  }
   _readrect = true;
+  _rllx = 0;
+  _rlly = 0;
+  _rurx = -1;
+  _rury  = -1;
   fp = fopen (fname, "r");
   if (!fp) {
     fatal_error ("Could not open `%s' rect file", fname);
@@ -581,6 +590,12 @@ void Layout::ReadRect (const char *fname)
     else if (strncmp (buf, "bbox ", 5) == 0) {
       continue;
     }
+    else if (strncmp (buf, "sbox ", 5) == 0) {
+      sscanf (buf+5, "%ld %ld %ld %ld", &_rllx, &_rlly, &_rurx, &_rury);
+      _rurx--;
+      _rury--;
+      continue;
+    }
     else {
       fatal_error ("Line: %s\nNeeds inrect, outrect, or rect", buf);
     }
@@ -601,7 +616,7 @@ void Layout::ReadRect (const char *fname)
 
     node_t *n = NULL;
 
-    if (net) {
+    if (net && (raw_mode == 0)) {
       n = ActNetlistPass::string_to_node (N, net);
       if (!n) {
 	warning ("Could not find signal `%s' in netlist!", net);
@@ -1465,6 +1480,15 @@ void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
   long a, b, c, d;
   int set;
 
+  if (_readrect && (_rllx <= _rurx) && (_rlly <= _rury)) {
+    /* override, use bbox from .rect file */
+    *llx = _rllx;
+    *lly = _rlly;
+    *urx = _rurx;
+    *ury = _rury;
+    return;
+  }
+
   set = 0;
   base->getBBox (&a, &b, &c, &d);
   if (a <= c && b <= d) {
@@ -1504,6 +1528,16 @@ void Layout::getBloatBBox (long *llx, long *lly, long *urx, long *ury)
 {
   long a, b, c, d;
   int set;
+
+  if (_readrect && (_rllx <= _rurx) && (_rlly <= _rury)) {
+    /* override, use bbox from .rect file */
+    *llx = _rllx;
+    *lly = _rlly;
+    *urx = _rurx;
+    *ury = _rury;
+    return;
+  }
+  
 
   set = 0;
   base->getBloatBBox (&a, &b, &c, &d);

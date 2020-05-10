@@ -19,20 +19,25 @@
 #
 #-------------------------------------------------------------------------
 EXE=act2lef.$(EXT)
+EXE2=actrectbbox.$(EXT)
 
-TARGETS=$(EXE)
+TARGETS=$(EXE) $(EXE2)
 TARGETCONF=layout.conf
 TARGETINCS=stk_pass.h stk_layout.h geom.h tile.h
 TARGETINCSUBDIR=act/layout
 
-OBJS=stk_pass.o main.o geom.o stk_layout.o tile.o
+OBJS1=stk_pass.o main.o geom.o stk_layout.o tile.o
+OBJS2=stk_pass.o main2.o geom.o stk_layout.o tile.o
 
-SRCS=$(OBJS:.o=.cc)
+SRCS=$(OBJS1:.o=.cc) main2.cc
 
 
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
-$(EXE): $(OBJS) $(ACTPASSDEPEND)
-	$(CXX) $(CFLAGS) $(OBJS) -o $(EXE) $(LIBACTPASS)
+$(EXE): $(OBJS1) $(ACTPASSDEPEND)
+	$(CXX) $(CFLAGS) $(OBJS1) -o $(EXE) $(LIBACTPASS)
+
+$(EXE2): $(OBJS2) $(ACTPASSDEPEND)
+	$(CXX) $(CFLAGS) $(OBJS2) -o $(EXE2) $(LIBACTPASS)
 
 -include Makefile.deps

@@ -24,6 +24,7 @@
 
 #include <act/act.h>
 #include <act/layout/geom.h>
+#include <act/layout/stk_pass.h>
 #include <map>
 #include <unordered_set>
 #include <hash.h>
@@ -63,15 +64,15 @@ class ActStackLayoutPass : public ActPass {
   /* this is mode 2 */
   void reportStats(Process *p);
 
+  long snap_up_x (long);
+  long snap_up_y (long);
+  long snap_dn_x (long);
+  long snap_dn_y (long);
 
  private:
   void *local_op (Process *p, int mode = 0);
   void free_local (void *v);
 
-  long snap_up_x (long);
-  long snap_up_y (long);
-  long snap_dn_x (long);
-  long snap_dn_y (long);
 
   int _localdiffspace (Process *p);
 

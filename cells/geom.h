@@ -154,7 +154,7 @@ public:
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
-  void ReadRect (const char *file);
+  void ReadRect (const char *file, int raw_mode = 0);
 
   list_t *search (void *net);
   list_t *search (int attr);
@@ -164,8 +164,11 @@ public:
 
   bool readRectangles() { return _readrect; }
 
+  void flushBBox() { _rllx = 0; _rlly = 0; _rurx = -1; _rury = -1; }
+
 private:
   bool _readrect;
+  long _rllx, _rlly, _rurx, _rury;
   Layer *base;
   Layer **metals;
   int nflavors;
