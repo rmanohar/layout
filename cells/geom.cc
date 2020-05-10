@@ -575,22 +575,27 @@ void Layout::ReadRect (const char *fname, int raw_mode)
     printf ("BUF: %s", buf);
 #endif    
     offset = 0;
-    if (strncmp (buf, "inrect ", 7) == 0) {
-      offset = 7;
+    for (int bx=0; bx < 10240 && buf[bx]; bx++) {
+      if (!isspace (buf[bx])) { break; }
+      offset++;
+    }
+    if (buf[offset] == '\0') continue;
+    if (strncmp (buf+offset, "inrect ", 7) == 0) {
+      offset += 7;
       rtype = 1;
     }
-    else if (strncmp (buf, "outrect ", 8) == 0) {
-      offset = 8;
+    else if (strncmp (buf+offset, "outrect ", 8) == 0) {
+      offset += 8;
       rtype = 2;
     }
-    else if (strncmp (buf, "rect ", 5) == 0) {
-      offset = 5;
+    else if (strncmp (buf+offset, "rect ", 5) == 0) {
+      offset += 5;
       rtype = 0;
     }
-    else if (strncmp (buf, "bbox ", 5) == 0) {
+    else if (strncmp (buf+offset, "bbox ", 5) == 0) {
       continue;
     }
-    else if (strncmp (buf, "sbox ", 5) == 0) {
+    else if (strncmp (buf+offset, "sbox ", 5) == 0) {
       sscanf (buf+5, "%ld %ld %ld %ld", &_rllx, &_rlly, &_rurx, &_rury);
       _rurx--;
       _rury--;
