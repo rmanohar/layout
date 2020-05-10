@@ -2548,14 +2548,14 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
   if (net->skip) return 0;
   if (net->port && (!toplevel || !pins)) return 0;
 
-  if (A_LEN (net->pins) < 2) return 0;
+  if (A_LEN (net->pins) < 1) return 0;
 
   fprintf (fp, "- ");
   if (prefix) {
     prefix->Print (fp);
     fprintf (fp, ".");
   }
-  ActId *tmp = net->net->toid();
+  ActId *tmp = net->net->primary()->toid();
   tmp->Print (fp);
   delete tmp;
 
@@ -2566,7 +2566,7 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
   if (net->port) {
     fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
   }
-  else if (net->net->isglobal()) {
+  else if (net->net->isglobal() && pins) {
     ActId *tmp = net->net->toid();
     tmp->sPrint (buf, 10240);
     delete tmp;
