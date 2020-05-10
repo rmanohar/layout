@@ -49,7 +49,8 @@ int main (int argc, char **argv)
   l->ReadRect (argv[2], 1);
   
   long llx, lly, urx, ury;
-  
+
+  /* NOTE: this has to be kept consistent with computeLEFboundary */
   l->getBloatBBox (&llx, &lly, &urx, &ury);
   
   Assert (Technology::T->nmetals >= 3, "Hmm");
