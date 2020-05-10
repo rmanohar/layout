@@ -21,7 +21,7 @@
 EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
-TARGETS=$(EXE) $(EXE2)
+TARGETS=$(EXE) $(EXE2) mag.pl
 TARGETCONF=layout.conf
 TARGETINCS=stk_pass.h stk_layout.h geom.h tile.h
 TARGETINCSUBDIR=act/layout
