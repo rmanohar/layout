@@ -1375,7 +1375,7 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
   long ymin, ymax;
   
   for (int j=0; j < 2; j++) {
-    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,DIFF_OFFSET));
+    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
     if (list_isempty (tiles)) {
       list_free (tiles);
     }
@@ -1383,11 +1383,13 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
       /* done! */
       long xmin, xmax;
       d = Technology::T->welldiff[j][flavor];
-      type = j;
-      LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
-      /* calculate ymin, ymax */
-      LayoutBlob::searchFree (tiles);
-      break;
+      if (d) {
+	type = j;
+	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+	/* calculate ymin, ymax */
+	LayoutBlob::searchFree (tiles);
+	break;
+      }
     }
   }
   if (d == NULL) {
