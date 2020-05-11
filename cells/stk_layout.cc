@@ -1345,6 +1345,191 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   return BLOB;
 }
 
+
+LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
+{
+  char cname[128];
+  
+  if (!_rect_import) {
+    return NULL;
+  }
+
+  snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
+  FILE *fp = fopen (cname, "r");
+  if (!fp) {
+    return NULL;
+  }
+  fclose (fp);
+
+  /* found a .rect file! Override layout generation */
+  Layout *tmp = new Layout (dummy_netlist);
+  tmp->ReadRect (cname);
+  tmp->propagateAllNets ();
+  LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
+
+  /* now shift all the tiles to line up 0,0 in the middle of the
+     ppdiff/nndiff diffusion section */
+  DiffMat *d = NULL;
+  list_t *tiles = NULL;
+  int type;
+  long ymin, ymax;
+  
+  for (int j=0; j < 2; j++) {
+    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,DIFF_OFFSET));
+    if (list_isempty (tiles)) {
+      list_free (tiles);
+    }
+    else {
+      /* done! */
+      long xmin, xmax;
+      d = Technology::T->welldiff[j][flavor];
+      type = j;
+      LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+      /* calculate ymin, ymax */
+      LayoutBlob::searchFree (tiles);
+      break;
+    }
+  }
+  if (d == NULL) {
+    warning ("Read %s; no well diffusion found?", cname);
+  }
+  else {
+    /* 
+       We align this so that y-coordinate of 0 can be used
+       to consistently align the wells, with the p-diff region on 
+       top and the n-diff region on the bottom.
+    */
+    
+    int diffspace = d->getOppDiffSpacing (flavor);
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    int xlate;
+
+    if (type == EDGE_NFET) {
+      xlate = n - ymax;
+    }
+    else {
+      xlate = p - ymin;
+    }
+    if (xlate != 0) {
+      LayoutBlob *tmp = new LayoutBlob (BLOB_VERT);
+      tmp->appendBlob (b, xlate);
+      b = tmp;
+    }
+  }
+  
+  b = computeLEFBoundary (b);
+  b->markRead ();
+  
+  return b;
+}
+
+
+LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
+{
+  Layout *l;
+  DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
+  DiffMat *pplusdiff = Technology::T->welldiff[EDGE_PFET][flavor];
+  LayoutBlob *BLOB;
+
+  BLOB = _readwelltap (flavor);
+  if (BLOB) {
+    return BLOB;
+  }
+
+  /* no well tap */
+  if (!nplusdiff && !pplusdiff) {
+    return NULL;
+  }
+    
+  int diffspace;
+  
+  if (nplusdiff) {
+    diffspace = nplusdiff->getOppDiffSpacing(flavor);
+  }
+  else {
+    diffspace = pplusdiff->getOppDiffSpacing(flavor);
+  }
+  
+  int p = +diffspace/2;
+  int n = p - diffspace;
+
+  l = new Layout (dummy_netlist);
+
+  if (nplusdiff) {
+    int mina = nplusdiff->minArea ();
+    WellMat *w;
+    if (mina > 0) {
+      mina = mina / nplusdiff->getWidth();
+    }
+    if (mina < nplusdiff->getWidth()) {
+      mina = nplusdiff->getWidth();
+    }
+    w = Technology::T->well[EDGE_NFET][flavor];
+    if (w) {
+      if (w->getOverhangWelldiff() > p) {
+	p = w->getOverhangWelldiff();
+      }
+    }
+    l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->getWidth (),
+		     mina, dummy_netlist->nsc);
+  }
+  if (pplusdiff) {
+    WellMat *w;
+    int mina = pplusdiff->minArea ();
+    if (mina > 0) {
+      mina = mina / pplusdiff->getWidth();
+    }
+    if (mina < pplusdiff->getWidth()) {
+      mina = pplusdiff->getWidth();
+    }
+    w = Technology::T->well[EDGE_PFET][flavor];
+    if (w) {
+      if (w->getOverhangWelldiff() > -n) {
+	n = -w->getOverhangWelldiff();
+      }
+    }
+    l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
+		     pplusdiff->getWidth(), mina, dummy_netlist->psc);
+  }
+
+  BLOB = new LayoutBlob (BLOB_BASE, l);
+  BLOB = computeLEFBoundary (BLOB);
+    
+  /* add pins */
+  long bllx, blly, burx, bury;
+  BLOB->getBBox (&bllx, &blly, &burx, &bury);
+
+  int tedge;
+  tedge = snap_up_y (bury - blly + 1);
+
+  while (tedge - _pin_metal->minWidth() <=
+	 _m_align_y->getPitch() + _pin_metal->minWidth() +
+	 _pin_metal->minSpacing())
+    {
+      tedge += _m_align_y->getPitch();
+    }
+
+  p = _m_align_x->getPitch();
+  Layout *pins = new Layout (dummy_netlist);
+  int w = _pin_metal->minWidth();
+  pins->DrawMetalPin (_pin_layer, bllx + p, blly + tedge - w, w, w,
+		      dummy_netlist->nsc, 0);
+    
+  pins->DrawMetalPin (_pin_layer,
+		      bllx + p, blly + _m_align_y->getPitch(), w, w,
+		      dummy_netlist->psc, 0);
+
+  LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
+  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
+  bl->appendBlob (BLOB);
+
+  bl = LayoutBlob::delBBox (bl);
+  BLOB = computeLEFBoundary (bl);
+  
+  return BLOB;
+}
+
 int ActStackLayoutPass::run (Process *p)
 {
   int ret = ActPass::run (p);
@@ -1357,105 +1542,7 @@ int ActStackLayoutPass::run (Process *p)
   int ntaps = config_get_table_size ("act.dev_flavors");
   MALLOC (wellplugs, LayoutBlob *, ntaps);
   for (int flavor=0; flavor < ntaps; flavor++) {
-    Layout *l;
-    DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
-    DiffMat *pplusdiff = Technology::T->welldiff[EDGE_PFET][flavor];
-
-    /* no well tap */
-    if (!nplusdiff && !pplusdiff) {
-      wellplugs[flavor] = NULL;
-      continue;
-    }
-    
-    DiffMat *ndiff = Technology::T->diff[EDGE_NFET][flavor];
-
-    int diffspace;
-
-    if (nplusdiff) {
-      diffspace = nplusdiff->getOppDiffSpacing(flavor);
-    }
-    else {
-      diffspace = pplusdiff->getOppDiffSpacing(flavor);
-    }
-
-    //int diffspace = ndiff->getOppDiffSpacing (flavor);
-    /* this is symmetric: pdiff->getOppDiffSpacing (flavor)
-       must be the same */
-    int p = +diffspace/2;
-    int n = p - diffspace;
-
-    l = new Layout (dummy_netlist);
-
-    if (nplusdiff) {
-      int mina = nplusdiff->minArea ();
-      WellMat *w;
-      if (mina > 0) {
-	mina = mina / nplusdiff->getWidth();
-      }
-      if (mina < nplusdiff->getWidth()) {
-	mina = nplusdiff->getWidth();
-      }
-      w = Technology::T->well[EDGE_NFET][flavor];
-      if (w) {
-	if (w->getOverhangWelldiff() > p) {
-	  p = w->getOverhangWelldiff();
-	}
-      }
-      l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->getWidth (),
-		       mina, dummy_netlist->nsc);
-    }
-    if (pplusdiff) {
-      WellMat *w;
-      int mina = pplusdiff->minArea ();
-      if (mina > 0) {
-	mina = mina / pplusdiff->getWidth();
-      }
-      if (mina < pplusdiff->getWidth()) {
-	mina = pplusdiff->getWidth();
-      }
-      w = Technology::T->well[EDGE_PFET][flavor];
-      if (w) {
-	if (w->getOverhangWelldiff() > -n) {
-	  n = -w->getOverhangWelldiff();
-	}
-      }
-      l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
-		       pplusdiff->getWidth(), mina, dummy_netlist->psc);
-    }
-
-    wellplugs[flavor] = new LayoutBlob (BLOB_BASE, l);
-    wellplugs[flavor] = computeLEFBoundary (wellplugs[flavor]);
-    
-    /* add pins */
-    long bllx, blly, burx, bury;
-    wellplugs[flavor]->getBBox (&bllx, &blly, &burx, &bury);
-
-    int tedge;
-    tedge = snap_up_y (bury - blly + 1);
-
-    while (tedge - _pin_metal->minWidth() <=
-	   _m_align_y->getPitch() + _pin_metal->minWidth() +
-	   _pin_metal->minSpacing())
-      {
-	tedge += _m_align_y->getPitch();
-      }
-
-    p = _m_align_x->getPitch();
-    Layout *pins = new Layout (dummy_netlist);
-    int w = _pin_metal->minWidth();
-    pins->DrawMetalPin (_pin_layer, bllx + p, blly + tedge - w, w, w,
-			dummy_netlist->nsc, 0);
-    
-    pins->DrawMetalPin (_pin_layer,
-			bllx + p, blly + _m_align_y->getPitch(), w, w,
-			dummy_netlist->psc, 0);
-
-    LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
-    bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
-    bl->appendBlob (wellplugs[flavor]);
-
-    bl = LayoutBlob::delBBox (bl);
-    wellplugs[flavor] = computeLEFBoundary (bl);
+    wellplugs[flavor] = _createwelltap (flavor);
   }
 
   return ret;

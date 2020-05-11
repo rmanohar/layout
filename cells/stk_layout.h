@@ -98,6 +98,10 @@ class ActStackLayoutPass : public ActPass {
   LayoutBlob **wellplugs;
   netlist_t *dummy_netlist;	// dummy netlist
 
+  LayoutBlob *_createwelltap (int flavor);
+  LayoutBlob *_readwelltap (int flavor);
+
+
   /* aligned LEF boundary */
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
