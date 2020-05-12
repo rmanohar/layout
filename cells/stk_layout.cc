@@ -1608,7 +1608,7 @@ void ActStackLayoutPass::_emitwelltaprect (int flavor)
   if (_rect_wells) {
     for (int j=0; j < 2; j++) {
       long wllx, wlly, wurx, wury;
-      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury);
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
       if (wllx < wurx && wlly < wury) {
 	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
 		 Technology::T->well[j][flavor]->getName(),
