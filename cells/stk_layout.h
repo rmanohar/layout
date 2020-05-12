@@ -85,6 +85,9 @@ class ActStackLayoutPass : public ActPass {
   int _emitlocalLEF (Process *p);
   void _emitLocalWellLEF (FILE *fp, Process *p);
 
+  void _computeWell (LayoutBlob *blob, int flavor, int type,
+		     long *llx, long *lly, long *urx, long *ury);
+
   /* mode 2 */
   void _reportLocalStats(Process *p);
 
@@ -100,6 +103,7 @@ class ActStackLayoutPass : public ActPass {
 
   LayoutBlob *_createwelltap (int flavor);
   LayoutBlob *_readwelltap (int flavor);
+  void _emitwelltaprect (int flavor);
 
 
   /* aligned LEF boundary */
@@ -129,6 +133,7 @@ class ActStackLayoutPass : public ActPass {
   int _pin_layer;
   RoutingMat *_pin_metal;
   int _rect_import;
+  int _rect_wells;
 
   std::unordered_set<Process *> *visited;
 };

@@ -215,6 +215,17 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   else {
     _rect_import = 0;
   }
+
+  if (config_exists ("layout.lefdef.rect_wells")) {
+    _rect_wells = config_get_int ("layout.lefdef.rect_wells");
+    if (_rect_wells != 0 && _rect_wells != 1) {
+      fatal_error ("lefdef.rect_wells: must be 0 or 1");
+    }
+  }
+  else {
+    _rect_wells = 0;
+  }
+  
 }
 
 
@@ -1572,6 +1583,31 @@ LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
   return BLOB;
 }
 
+
+void ActStackLayoutPass::_emitwelltaprect (int flavor)
+{
+  if (!wellplugs[flavor]) {
+    return;
+  }
+    
+  LayoutBlob *b = wellplugs[flavor];
+  char name[1024];
+
+  snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (flavor));
+
+  long bllx, blly, burx, bury;
+  TransformMat mat;
+  b->getBloatBBox (&bllx, &blly, &burx, &bury);
+  mat.applyTranslate (-bllx, -blly);
+      
+  /* emit rectangles */
+  strcat (name, ".rect");
+  FILE *tfp = fopen (name, "w");
+  b->PrintRect (tfp, &mat);
+  fclose (tfp);
+}
+
+
 int ActStackLayoutPass::run (Process *p)
 {
   int ret = ActPass::run (p);
@@ -1608,7 +1644,6 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
   }
 
   TransformMat mat;
-
   mat.applyTranslate (-bllx, -blly);
 
   FILE *fp;
@@ -1624,6 +1659,23 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
   snprintf (cname + len, 10240-len, ".rect");
   fp = fopen (cname, "w");
   blob->PrintRect (fp, &mat);
+
+  
+  if (_rect_wells) {
+    
+    for (int i=0; i < Technology::T->num_devs; i++) {
+      for (int j=0; j < 2; j++) {
+	long wllx, wlly, wurx, wury;
+	_computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
+	if (wllx < wurx && wlly < wury) {
+	  fprintf (fp, "rect # %s %ld %ld %ld %ld\n",
+		   Technology::T->well[j][i]->getName(),
+		   wllx, wlly, wurx, wury);
+	}
+      }
+    }
+  }
+  
   fclose (fp);
 }
 
@@ -1859,23 +1911,7 @@ void ActStackLayoutPass::emitRect (Process *p)
   run_recursive (p, 4);
 
   for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-    if (wellplugs[i]) {
-      LayoutBlob *b = wellplugs[i];
-      char name[1024];
-
-      snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (i));
-
-      long bllx, blly, burx, bury;
-      TransformMat mat;
-      b->getBloatBBox (&bllx, &blly, &burx, &bury);
-      mat.applyTranslate (-bllx, -blly);
-      
-      /* emit rectangles */
-      strcat (name, ".rect");
-      FILE *tfp = fopen (name, "w");
-      b->PrintRect (tfp, &mat);
-      fclose (tfp);
-    }
+    _emitwelltaprect (i);
   }
 }
 
@@ -2213,6 +2249,56 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
   return 1;
 }
 
+
+void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
+				       long *llx, long *lly, long *urx, long *ury)
+{
+  TransformMat mat;
+
+  WellMat *w = Technology::T->well[type][flavor];
+
+  if (!blob || !w) {
+    *llx = 0;
+    *lly = 0;
+    *urx = -1;
+    *ury = -1;
+    return;
+  }
+
+  long bllx, blly, burx, bury;
+
+  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  mat.applyTranslate (-bllx, -blly);
+  
+  list_t *tiles = blob->search (TILE_FLGS_TO_ATTR(flavor,type,DIFF_OFFSET), &mat);
+  long wllx, wlly, wurx, wury;
+
+  LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
+  LayoutBlob::searchFree (tiles);
+  if (wurx >= wllx) {
+    /* bloat the region based on well overhang */
+    wllx -= w->getOverhang();
+    wlly -= w->getOverhang();
+    wurx += w->getOverhang();
+    wury += w->getOverhang();
+
+    if (type == EDGE_PFET) {
+      if (wlly+blly > 0) {
+	wlly = -blly;
+      }
+    }
+    else {
+      if (wury+blly < 0) {
+	wury = -blly;
+      }
+    }
+  }
+  *llx = wllx;
+  *lly = wlly;
+  *urx = wurx;
+  *ury = wury;
+}
+
 /*
  * Called from LEF generation pass
  */
@@ -2263,47 +2349,13 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
     fprintf (fp, "        PLUG\n");
   }
 
-  TransformMat mat;
-  mat.applyTranslate (-bllx, -blly);
-
   for (int i=0; i < Technology::T->num_devs; i++) {
     for (int j=0; j < 2; j++) {
-
-      WellMat *w = Technology::T->well[j][i];
-      list_t *tiles = blob->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET), &mat);
       long wllx, wlly, wurx, wury;
+      _computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
 
-      LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
-      LayoutBlob::searchFree (tiles);
-      if (wurx >= wllx) {
-	/* bloat the region based on well overhang */
-	wllx -= w->getOverhang();
-	wlly -= w->getOverhang();
-	wurx += w->getOverhang();
-	wury += w->getOverhang();
-
-#if 0
-	fprintf (fp, "blly = %ld; wlly = %ld; wury = %ld; j = %d\n",
-		 blly, wlly, wury, j);
-#endif	
-	if (j == EDGE_PFET) {
-	  if (wlly+blly > 0) {
-	    wlly = -blly;
-#if 0	    
-	    fprintf (fp, "change\n");
-#endif
-	  }
-	}
-	else {
-	  if (wury+blly < 0) {
-	    wury = -blly;
-#if 0
-	    fprintf (fp, "change\n");
-#endif	    
-	  }
-	}
-
-	fprintf (fp, "        LAYER %s ;\n", w->getName());
+      if (wllx < wurx && wlly < wury) {
+	fprintf (fp, "        LAYER %s ;\n", Technology::T->well[j][i]->getName());
 	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
 		 scale*wllx, scale*wlly, scale*wurx, scale*wury);
 	fprintf (fp, "        END\n");
@@ -2311,9 +2363,8 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
     }
   }
   fprintf (fp, "    END VERSION\n");
-
   }
-
+  
   fprintf (fp, "END ");
   a->mfprintfproc (fp, p);
   fprintf (fp, "\n\n");
