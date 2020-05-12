@@ -661,9 +661,36 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 		 Technology::T->nmetals, material);
       }
       else {
+	int is_pin = 0;
 	l--;
 	/*--- draw metal ---*/
-	DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
+	if (n && n->v && n->v->v && n->v->v->id) {
+	  /* a real ACT boolean */
+	  for (int i=0; i < A_LEN (N->bN->ports); i++) {
+	    if (N->bN->ports[i].omit) continue;
+	    if (N->bN->ports[i].c == n->v->v->id) {
+	      if (N->bN->ports[i].input) {
+		is_pin = 1;
+	      }
+	      else {
+		is_pin = 2;
+	      }
+	      break;
+	    }
+	  }
+	}
+	if (is_pin) {
+	  if (is_pin == 1) {
+	    // input
+	    DrawMetalPin (l, rllx, rlly, rurx - rllx, rury - rlly, n, 0);
+	  }
+	  else {
+	    DrawMetalPin (l, rllx, rlly, rurx - rllx, rury - rlly, n, 1);
+	  }
+	}
+	else {
+	  DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
+	}
       }
     }
     else if (strcmp (material, base->mat->getName()) == 0) {
