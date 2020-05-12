@@ -704,7 +704,24 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	}
       }
       else {
-	warning ("Unknown material `%s'; skipped", material);
+	int iswell = 0;
+	for (int i=0; i < Technology::T->num_devs; i++) {
+	  for (int j=0; j < 2; j++) {
+	    if (Technology::T->well[j][i]) {
+	      if (strcmp (material, Technology::T->well[j][i]->getName()) == 0) {
+		iswell = 1;
+		break;
+	      }
+	    }
+	    if (iswell) {
+	      break;
+	    }
+	  }
+	}
+	if (!iswell) {
+	  warning ("Unknown material `%s'; skipped", material);
+	}
+	/* skip wells! */
       }
     }
   }
