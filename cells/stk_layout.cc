@@ -955,6 +955,9 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
   list_t *tiles = NULL;
   int type, flavor;
   long ymin, ymax;
+  long updiff, dndiff;
+  int set_diff = 0;
+  
   for (int i=0; i < Technology::T->num_devs; i++) {
     for (int j=0; j < 2; j++) {
       tiles = b->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET));
@@ -970,11 +973,20 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
 	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
 	/* calculate ymin, ymax */
 	LayoutBlob::searchFree (tiles);
-	break;
+	set_diff++;
+	if (type == EDGE_PFET) {
+	  updiff = ymin;
+	}
+	else {
+	  dndiff = ymax;
+	}
       }
     }
+    if (set_diff > 0) {
+      break;
+    }
   }
-  if (d == NULL) {
+  if (set_diff == 0) {
     warning ("Read %s; no diffusion found?", cname);
   }
   else {
@@ -983,9 +995,17 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
        to consistently align the wells, with the p-diff region on 
        top and the n-diff region on the bottom.
     */
-    
+
     //int diffspace = d->getOppDiffSpacing (flavor);
     int diffspace = _localdiffspace (p);
+
+    if (set_diff == 2) {
+      if ((updiff - dndiff) != diffspace) {
+	warning ("%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", p->getName(), diffspace, updiff-dndiff);
+	diffspace = updiff - dndiff;
+      }
+    }
+    
     int p = +diffspace/2;
     int n = p - diffspace;
     int xlate;
@@ -1373,6 +1393,12 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
   list_t *tiles = NULL;
   int type;
   long ymin, ymax;
+  long updiff, dndiff;
+  int set_diff = 0;
+
+  updiff = 0;
+  dndiff = 0;
+
   
   for (int j=0; j < 2; j++) {
     tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
@@ -1388,7 +1414,13 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
 	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
 	/* calculate ymin, ymax */
 	LayoutBlob::searchFree (tiles);
-	break;
+	set_diff++;
+	if (type == EDGE_PFET) {
+	  updiff = ymin;
+	}
+	else {
+	  dndiff = ymax;
+	}
       }
     }
   }
@@ -1403,6 +1435,14 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
     */
     
     int diffspace = d->getOppDiffSpacing (flavor);
+
+    if (set_diff == 2) {
+      if ((updiff - dndiff) != diffspace) {
+	warning ("welltap_%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", act_dev_value_to_string (flavor), diffspace, updiff-dndiff);
+	diffspace = updiff - dndiff;
+      }
+    }
+    
     int p = +diffspace/2;
     int n = p - diffspace;
     int xlate;
