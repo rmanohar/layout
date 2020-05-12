@@ -1604,6 +1604,18 @@ void ActStackLayoutPass::_emitwelltaprect (int flavor)
   strcat (name, ".rect");
   FILE *tfp = fopen (name, "w");
   b->PrintRect (tfp, &mat);
+
+  if (_rect_wells) {
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury);
+      if (wllx < wurx && wlly < wury) {
+	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
+		 Technology::T->well[j][flavor]->getName(),
+		 wllx, wlly, wurx, wury);
+      }
+    }
+  }
   fclose (tfp);
 }
 
@@ -1950,6 +1962,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 	/* emit local well lef */
 	WellMat *w;
 	DiffMat *d;
+	
 	int adjust = Technology::T->welltap_adjust;
 
 	fprintf (fpcell, "MACRO %s\n", name);
@@ -1957,54 +1970,21 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
 	fprintf (fpcell, "   PLUG\n");
 
 	for (int j=0; j < 2; j++) {
-	  w = Technology::T->well[j][i];
-	  d = Technology::T->welldiff[j][i];
-	  if (w) {
-	    long wllx, wlly, wurx, wury;
-	    list_t *tiles = b->search (TILE_FLGS_TO_ATTR(i,j,
-							 WDIFF_OFFSET), &mat);
-	    LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
-	    LayoutBlob::searchFree (tiles);
+	  long wllx, wlly, wurx, wury;
+	  _computeWell (b, i, j, &wllx, &wlly, &wurx, &wury, 1);
 
-	    if (wllx <= wurx) {
-	      fprintf (fpcell, "   LAYER %s ;\n", w->getName());
-	      wllx -= w->getOverhangWelldiff();
-	      wlly -= w->getOverhangWelldiff();
-	      wurx += w->getOverhangWelldiff();
-	      wury += w->getOverhangWelldiff();
-
-	      if (j == EDGE_PFET) {
-		if (wlly+blly > 0) {
-		  wlly = -blly;
-		}
-	      }
-	      else {
-		if (wury+blly < 0) {
-		  wury = -blly;
-		}
-	      }
-
-	      if (j == EDGE_PFET) {
-		wlly += adjust;
-	      }
-	      else {
-		wury += adjust;
-	      }
-	      
-	      fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
-		       wllx*scale, wlly*scale, wurx*scale, wury*scale);
-	      fprintf (fpcell, "   END\n");
-	    }
+	  if (wllx < wurx && wlly < wury) {
+	    fprintf (fpcell, "   LAYER %s ;\n", Technology::T->well[j][i]->getName());
+	    fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
+		     wllx*scale, wlly*scale, wurx*scale, wury*scale);
+	    fprintf (fpcell, "   END\n");
 	  }
 	}
 	fprintf (fpcell, "   END VERSION\n");
 	fprintf (fpcell, "END %s\n", name);
       }
-      
     }
   }
-
-
 }
 
 /*
@@ -2251,7 +2231,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
 
 
 void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
-				       long *llx, long *lly, long *urx, long *ury)
+				       long *llx, long *lly, long *urx, long *ury, int is_welltap)
 {
   TransformMat mat;
 
@@ -2269,18 +2249,33 @@ void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
 
   blob->getBloatBBox (&bllx, &blly, &burx, &bury);
   mat.applyTranslate (-bllx, -blly);
+
+  list_t *tiles;
+  if (is_welltap) {
+    tiles = blob->search (TILE_FLGS_TO_ATTR(flavor,type,WDIFF_OFFSET), &mat);
+  }
+  else {
+    tiles = blob->search (TILE_FLGS_TO_ATTR(flavor,type,DIFF_OFFSET), &mat);
+  }
   
-  list_t *tiles = blob->search (TILE_FLGS_TO_ATTR(flavor,type,DIFF_OFFSET), &mat);
   long wllx, wlly, wurx, wury;
 
   LayoutBlob::searchBBox (tiles, &wllx, &wlly, &wurx, &wury);
   LayoutBlob::searchFree (tiles);
   if (wurx >= wllx) {
     /* bloat the region based on well overhang */
-    wllx -= w->getOverhang();
-    wlly -= w->getOverhang();
-    wurx += w->getOverhang();
-    wury += w->getOverhang();
+    if (is_welltap) {
+      wllx -= w->getOverhangWelldiff();
+      wlly -= w->getOverhangWelldiff();
+      wurx += w->getOverhangWelldiff();
+      wury += w->getOverhangWelldiff();
+    }
+    else {
+      wllx -= w->getOverhang();
+      wlly -= w->getOverhang();
+      wurx += w->getOverhang();
+      wury += w->getOverhang();
+    }
 
     if (type == EDGE_PFET) {
       if (wlly+blly > 0) {
@@ -2292,11 +2287,25 @@ void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
 	wury = -blly;
       }
     }
+    if (is_welltap) {
+      if (type == EDGE_PFET) {
+	wlly += Technology::T->welltap_adjust;
+      }
+      else {
+	wury += Technology::T->welltap_adjust;
+      }
+    }
+    *llx = wllx;
+    *lly = wlly;
+    *urx = wurx;
+    *ury = wury;
   }
-  *llx = wllx;
-  *lly = wlly;
-  *urx = wurx;
-  *ury = wury;
+  else {
+    *llx = 0;
+    *lly = 0;
+    *urx = -1;
+    *ury = -1;
+  }
 }
 
 /*

@@ -86,7 +86,8 @@ class ActStackLayoutPass : public ActPass {
   void _emitLocalWellLEF (FILE *fp, Process *p);
 
   void _computeWell (LayoutBlob *blob, int flavor, int type,
-		     long *llx, long *lly, long *urx, long *ury);
+		     long *llx, long *lly, long *urx, long *ury,
+		     int is_welltap = 0);
 
   /* mode 2 */
   void _reportLocalStats(Process *p);
