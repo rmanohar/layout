@@ -2565,52 +2565,61 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     Contact *vup = mat->getUpC();
     double scale = Technology::T->scale/1000.0;
     double w, w2;
-    
-    fprintf (fp, "VIA %s_C DEFAULT\n", vup->getName());
+    int nvias = 1;
 
-    w = (vup->getWidth() + 2*vup->getSym())*scale/2;
     if (vup->isAsym()) {
-      w2 = (vup->getWidth() + 2*vup->getAsym())*scale/2;
-    }
-    else {
-      w2 = w;
-    }
-    if (w2 < w) {
-      fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
-    }
-    
-    fprintf (fp, "   LAYER %s ;\n", mat->getName());
-    if (IS_METAL_HORIZ (i+1)) {
-      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
-    }
-    else {
-      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
+      nvias = 3;
     }
 
-    w = vup->getWidth()*scale/2;
-    fprintf (fp, "   LAYER %s ;\n", vup->getName());
-    fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+    for (int j=0; j < nvias; j++) {
 
-    w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
-    if (vup->isAsym()) {
-      w2 = (vup->getWidth() + 2*vup->getAsymUp())*scale/2;
-    }
-    else {
-      w2 = 2;
-    }
-    if (w2 < w) {
-      fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
-    }
+      fprintf (fp, "VIA %s_C%s\n", vup->getName(),
+	       (j == 0 ? " DEFAULT" : (j == 1 ? "h" : "v")));
+
+      w = (vup->getWidth() + 2*vup->getSym())*scale/2;
+      if (vup->isAsym()) {
+	w2 = (vup->getWidth() + 2*vup->getAsym())*scale/2;
+      }
+      else {
+	w2 = w;
+      }
+      if (w2 < w) {
+	fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
+      }
+      
+      fprintf (fp, "   LAYER %s ;\n", mat->getName());
+      if (IS_METAL_HORIZ (i+1) || (j == 1)) {
+	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
+      }
+      else {
+	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
+      }
+
+      w = vup->getWidth()*scale/2;
+      fprintf (fp, "   LAYER %s ;\n", vup->getName());
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+
+      w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
+      if (vup->isAsym()) {
+	w2 = (vup->getWidth() + 2*vup->getAsymUp())*scale/2;
+      }
+      else {
+	w2 = 2;
+      }
+      if (w2 < w) {
+	fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
+      }
     
-    fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
-    if (IS_METAL_HORIZ (i+2)) {
-      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
+      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
+      if (IS_METAL_HORIZ (i+2) || (j == 1)) {
+	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
+      }
+      else {
+	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
+      }      
+      fprintf (fp, "END %s_C%s\n\n", vup->getName(),
+	       (j == 0 ? "" : (j == 1 ? "h" : "v")));
     }
-    else {
-      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
-    }      
-    
-    fprintf (fp, "END %s_C\n\n", vup->getName());
   }
   
 }
