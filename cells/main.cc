@@ -45,6 +45,7 @@ void usage (char *name)
   fprintf (stderr, " -s : emit spice netlist\n");
   fprintf (stderr, " -P : include PINS section in DEF file\n");
   fprintf (stderr, " -a <mult>: use <mult> as the area multiplier for the DEF fie (default 1.4)\n");
+  fprintf (stderr, " -r <ratio> : use this as the aspect ratio = x-size/y-size (default 1.0)\n");
   fprintf (stderr, " -c <cell>: Read in the <cell> ACT file as a starting point for cells,\n\toverwriting it with an updated version with any new cells\n");
   fprintf (stderr, " -S : share staticizers\n");
   //fprintf (stderr, " -A : report area\n");
@@ -66,10 +67,12 @@ int main (int argc, char **argv)
   char buf[1024];
   FILE *fp;
   double area_multiplier;
+  double aspect_ratio;
   int report = 0;
   int share_staticizers = 0;
 
   area_multiplier = 1.4;
+  aspect_ratio = 1.0;
   
   Act::Init (&argc, &argv);
   Act::config_info ("prs2net.conf");
@@ -87,7 +90,7 @@ int main (int argc, char **argv)
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
 
-  while ((ch = getopt (argc, argv, "c:p:o:sSPRa:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sSPRa:r:")) != -1) {
     switch (ch) {
     case 'S':
       share_staticizers = 1;
@@ -100,7 +103,11 @@ int main (int argc, char **argv)
     case 'a':
       area_multiplier = atof (optarg);
       break;
-      
+
+    case 'r':
+      aspect_ratio = atof (optarg);
+      break;
+
     case 'c':
       if (cellname) {
 	FREE (cellname);
@@ -238,7 +245,7 @@ int main (int argc, char **argv)
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitDEF (fp, p, area_multiplier, do_pins);
+  lp->emitDEF (fp, p, area_multiplier, aspect_ratio, do_pins);
   fclose (fp);
 
   if (report) {

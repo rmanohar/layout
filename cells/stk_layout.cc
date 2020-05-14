@@ -2912,7 +2912,7 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
 }
 
 void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
-				  int do_pins)
+				  double ratio, int do_pins)
 {
   emitDEFHeader (fp, p);
 
@@ -2939,11 +2939,13 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   _total_area *= pad;
   _total_stdcell_area *= pad;
 
-  double side = sqrt (_total_area);
+  double sidey = sqrt (_total_area/ratio);
+  double sidex = sidey*ratio;
 
   double unit_conv = Technology::T->scale*_micron_conv/1000.0;
 
-  side *= unit_conv;
+  sidex *= unit_conv;
+  sidey *= unit_conv;
 
   int pitchx, pitchy, track_gap;
   int nx, ny;
@@ -2958,8 +2960,8 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 
   track_gap = pitchy * TRACK_HEIGHT;
 
-  nx = (side + pitchx - 1)/pitchx;
-  ny = (side + track_gap - 1)/track_gap;
+  nx = (sidex + pitchx - 1)/pitchx;
+  ny = (sidey + track_gap - 1)/track_gap;
 
   fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
 	   10*pitchx, track_gap,
