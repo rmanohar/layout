@@ -84,7 +84,10 @@ protected:
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, void *net, int type = 0);
   int drawVia (long llx, long lly, unsigned long wx, unsigned long wy, int type = 0);
 
-  int isMetal ();		// 1 if it is a metal layer or a via layer
+  int isMetal ();		// 1 if it is a metal layer or a via
+				// layer
+
+  void markPins (void *net, int isinput); // mark pin tiles
   
   list_t *searchMat (void *net);
   list_t *searchMat (int attr);
@@ -141,6 +144,9 @@ public:
   Layer *getLayerWell () { return base; }
   Layer *getLayerFet ()  { return base; }
   Layer *getLayerMetal (int n) { return metals[n]; }
+
+
+  void markPins ();
   
 
   PolyMat *getPoly ();

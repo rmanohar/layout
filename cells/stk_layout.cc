@@ -954,10 +954,18 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
   }
   fclose (fp);
 
+#if 0
+  printf (" === processing %s\n", cname);
+#endif  
   /* found a .rect file! Override layout generation */
   Layout *tmp = new Layout (stk->getNL (p));
   tmp->ReadRect (cname);
   tmp->propagateAllNets ();
+  tmp->markPins ();
+#if 0 
+  printf (" ------ %s ------- \n", cname);
+#endif  
+  
   LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
 
   /* now shift all the tiles to line up 0,0 in the middle of the

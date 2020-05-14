@@ -280,6 +280,17 @@ Layout::Layout(netlist_t *_n)
 
   Layer *prev = base;
 
+  if (!hash_lookup (lmap, Technology::T->poly->getUpC()->getName())) {
+    NEW (lp, struct layermap);
+    lp->l = base;
+    lp->etype = -1;
+    lp->flavor = 0;
+    lp->lcase = LMAP_VIA;
+
+    b = hash_add (lmap, Technology::T->poly->getUpC()->getName());
+    b->v = lp;
+  }
+
   MALLOC (metals, Layer *, Technology::T->nmetals);
 
   /* create metal layers */
@@ -540,6 +551,46 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
   }
 }
 
+void Layer::markPins (void *net, int isinput)
+{
+  if (!net) return;
+
+  list_t *l = searchMat (net);
+
+  for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+    Tile *t = (Tile *) list_value (li);
+#if 0
+    printf ("  (%ld,%ld) -> (%ld,%ld)\n", t->getllx(), t->getlly(), t->geturx(), t->getury());
+#endif    
+    TILE_ATTR_MKPIN (t->attr);
+    if (!isinput) {
+      TILE_ATTR_MKOUTPUT (t->attr);
+    }
+  }
+  list_free (l);
+}
+
+void Layout::markPins ()
+{
+  if (!N || !N->bN) return;
+
+  for (int i=0; i < A_LEN (N->bN->ports); i++) {
+    node_t *n;
+    if (N->bN->ports[i].omit) continue;
+    n = ActNetlistPass::connection_to_node (N, N->bN->ports[i].c);
+#if 0
+    printf ("%cpin: ", N->bN->ports[i].input ? 'i' : 'o');
+    ActNetlistPass::emit_node (N, stdout, n, 0);
+    printf ("\n");
+#endif    
+    for (int j=0; j < nmetals; j++) {
+      metals[j]->markPins (n, N->bN->ports[i].input);
+    }
+  }
+}
+
+
+
 void Layout::ReadRect (const char *fname, int raw_mode)
 {
   FILE *fp;
@@ -661,36 +712,9 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 		 Technology::T->nmetals, material);
       }
       else {
-	int is_pin = 0;
-	l--;
 	/*--- draw metal ---*/
-	if (n && n->v && n->v->v && n->v->v->id) {
-	  /* a real ACT boolean */
-	  for (int i=0; i < A_LEN (N->bN->ports); i++) {
-	    if (N->bN->ports[i].omit) continue;
-	    if (N->bN->ports[i].c == n->v->v->id) {
-	      if (N->bN->ports[i].input) {
-		is_pin = 1;
-	      }
-	      else {
-		is_pin = 2;
-	      }
-	      break;
-	    }
-	  }
-	}
-	if (is_pin) {
-	  if (is_pin == 1) {
-	    // input
-	    DrawMetalPin (l, rllx, rlly, rurx - rllx, rury - rlly, n, 0);
-	  }
-	  else {
-	    DrawMetalPin (l, rllx, rlly, rurx - rllx, rury - rlly, n, 1);
-	  }
-	}
-	else {
-	  DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
-	}
+	l--;
+	DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
       }
     }
     else if (strcmp (material, base->mat->getName()) == 0) {
@@ -764,6 +788,16 @@ static void append_nonspacetile (void *cookie, Tile *t)
     list_append (l, t);
   }
 }
+
+static void append_nonspacebasetile (void *cookie, Tile *t)
+{
+  list_t *l = (list_t *) cookie;
+
+  if (!t->isBaseSpace()) {
+    list_append (l, t);
+  }
+}
+
 
 static void dump_node (FILE *fp, netlist_t *N, node_t *n)
 {
@@ -1706,10 +1740,19 @@ list_t *Layer::searchVia (int type)
 list_t *Layer::allNonSpaceMat ()
 {
   list_t *l = list_new ();
-  hint->applyTiles (MIN_VALUE, MIN_VALUE,
-		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
-		    (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l,
-		    append_nonspacetile);
+
+  if (isMetal()) {
+    hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		      (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		      (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l,
+		      append_nonspacetile);
+  }
+  else {
+    hint->applyTiles (MIN_VALUE, MIN_VALUE,
+		      (unsigned long)MAX_VALUE + -(MIN_VALUE + 1),
+		      (unsigned long)MAX_VALUE + -(MIN_VALUE + 1), l,
+		      append_nonspacebasetile);
+  }
   return l;
 }
 
@@ -2109,12 +2152,12 @@ void Layout::propagateAllNets ()
 	  flag = 0;
 	  for (li = list_first (tl[i]); li; li = list_next (li)) {
 	    Tile *t = (Tile *) list_value (li);
+	    Tile *neighbors[4];
+	    neighbors[0] = t->llxTile();
+	    neighbors[1] = t->llyTile();
+	    neighbors[2] = t->urxTile();
+	    neighbors[3] = t->uryTile();
 	    if (t->getNet()) {
-	      Tile *neighbors[4];
-	      neighbors[0] = t->llxTile();
-	      neighbors[1] = t->llyTile();
-	      neighbors[2] = t->urxTile();
-	      neighbors[3] = t->uryTile();
 	      for (int k=0; k < 4; k++) {
 		if (Tile::isConnected (L, t, neighbors[k])) {
 		  if (neighbors[k]->getNet()) {
@@ -2133,6 +2176,18 @@ void Layout::propagateAllNets ()
 		    neighbors[k]->setNet (t->getNet());
 		    flag = 1;
 		    rep = 1;
+		  }
+		}
+	      }
+	    }
+	    else {
+	      for (int k=0; k < 4; k++) {
+		if (Tile::isConnected (L, t, neighbors[k])) {
+		  if (neighbors[k]->getNet()) {
+		    t->setNet (neighbors[k]->getNet());
+		    flag = 1;
+		    rep = 1;
+		    break;
 		  }
 		}
 	      }

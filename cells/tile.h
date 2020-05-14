@@ -170,6 +170,7 @@ class Tile {
   unsigned int isVirt() { return virt; }
   void *getNet ()  { return net; }
   void setNet (void *n) { net = n; }
+  int isBaseSpace() { return isSpace() || (isVirt() && TILE_ATTR_ISDIFF(attr)); }
   int isFet() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISFET(attr); }
   int isPoly() { return TILE_ATTR_ISROUTE(attr) || (virt && TILE_ATTR_ISFET(attr)); }
   int isDiff() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISDIFF(attr); }

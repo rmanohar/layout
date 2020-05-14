@@ -797,21 +797,30 @@ Tile *Tile::splitY (long y)
 
 int Tile::isConnected (Layer *l, Tile *t1, Tile *t2)
 {
+  unsigned int a1, a2;
+
+  a1 = t1->getAttr();
+  a2 = t2->getAttr();
+
   if (t1->isSpace() || t2->isSpace()) {
     return 0;
   }
-  if (t1->isVirt() || t2->isVirt()) {
-    return 0;
-  }
-  unsigned int a1, a2;
-  a1 = t1->getAttr();
-  a2 = t2->getAttr();
+  
   if (l->isMetal()) {
-    if (TILE_ATTR_CLRPIN (a1) == TILE_ATTR_CLRPIN (a2)) {
-      return 1;
+    /* for metal layers */
+    if (t1->isVirt() || t2->isVirt()) {
+      /* virtual metal, ignore */
+      return 0;
     }
+    /* all metals are connected */
+    return 1;
   }
   else {
+    if ((t1->isVirt () && TILE_ATTR_ISDIFF (a1))
+	|| (t2->isVirt () && TILE_ATTR_ISDIFF (a2))) {
+      /* actually a space tile! */
+      return 0;
+    }
     if (a1 == a2) {
       /* exactly the same */
       return 1;
@@ -828,4 +837,3 @@ int Tile::isConnected (Layer *l, Tile *t1, Tile *t2)
   }
   return 0;
 }
-
