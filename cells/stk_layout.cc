@@ -1951,13 +1951,18 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
   for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
     if (wellplugs[i]) {
       LayoutBlob *b = wellplugs[i];
-      char name[1024];
+      char name[1024], nodename[1024];
 
       snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
       emit_header (fp, name, "CORE WELLTAP", b);
 
-      emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->nsc);
-      emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->psc);
+      ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+				   dummy_netlist->nsc);
+      emit_one_pin (a, fp, nodename, 1, "POWER", b, dummy_netlist->nsc);
+
+      ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+				   dummy_netlist->psc);
+      emit_one_pin (a, fp, nodename, 1, "GROUND", b, dummy_netlist->psc);
 
       emit_footer (fp, name);
 
