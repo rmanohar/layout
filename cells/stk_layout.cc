@@ -1956,8 +1956,8 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
       snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
       emit_header (fp, name, "CORE WELLTAP", b);
 
-      emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->psc);
-      emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->nsc);
+      emit_one_pin (a, fp, "Vdd", 1, "POWER", b, dummy_netlist->nsc);
+      emit_one_pin (a, fp, "GND", 1, "GROUND", b, dummy_netlist->psc);
 
       emit_footer (fp, name);
 
