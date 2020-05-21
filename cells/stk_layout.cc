@@ -2520,6 +2520,20 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       fatal_error ("Unknown runlength_mode %d\n", mat->complexSpacingMode());
       break;
     }
+
+    if (mat->numInfluence() > 0) {
+      int *table = mat->getInfluence();
+      fprintf (fp, "   SPACINGTABLE INFLUENCE\n");
+      for (int j=0; j < mat->numInfluence(); j++) {
+	fprintf (fp, "      WIDTH %.6f WITHIN %.6f SPACING %.6f ",
+		 table[3*j]*scale, table[3*j+1]*scale, table[3*j+2]*scale);
+	if (j == mat->numInfluence()-1) {
+	  fprintf (fp, " ;");
+	}
+	fprintf (fp, "\n");
+      }
+    }
+    
     fprintf (fp, "   PITCH %.6f %.6f ;\n",
 	     mat->getPitch()*scale, mat->getPitch()*scale);
 
