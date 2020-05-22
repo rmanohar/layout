@@ -2599,7 +2599,6 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
     }
 
     for (int j=0; j < nvias; j++) {
-
       fprintf (fp, "VIA %s_C%s\n", vup->getName(),
 	       (j == 0 ? " DEFAULT" : (j == 1 ? "h" : "v")));
 
@@ -2646,6 +2645,39 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       }      
       fprintf (fp, "END %s_C%s\n\n", vup->getName(),
 	       (j == 0 ? "" : (j == 1 ? "h" : "v")));
+
+    }
+    
+    if (vup->viaGenerate()) {
+      fprintf (fp, "VIARULE %s_gen GENERATE\n", vup->getName());
+      fprintf (fp, "   LAYER %s ;\n", mat->getName());
+      if (vup->isAsym()) {
+	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
+		 vup->getAsym()*scale, vup->getSym()*scale);
+      }
+      else {
+	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
+		 vup->getSym()*scale, vup->getSym()*scale);
+      }
+      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
+      if (vup->isAsym()) {
+	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
+		 vup->getAsymUp()*scale, vup->getSymUp()*scale);
+
+      }
+      else {
+	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
+		 vup->getSymUp()*scale, vup->getSymUp()*scale);
+      }
+
+      w = vup->getWidth()*scale/2;
+      fprintf (fp, "   LAYER %s ;\n", vup->getName());
+      fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
+
+      fprintf (fp, "   SPACING %.6f BY %.6f ;\n",
+	       vup->viaGenX()*scale, vup->viaGenY()*scale);
+
+      fprintf (fp, "END %s_gen\n\n", vup->getName());
     }
   }
   
