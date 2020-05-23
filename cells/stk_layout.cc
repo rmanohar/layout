@@ -2589,7 +2589,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
   /* -- overlap layer -- */
   fprintf (fp, "LAYER OVERLAP\n");
   fprintf (fp, "   TYPE OVERLAP ;\n");
-  fprintf (fp, "END\n");
+  fprintf (fp, "END OVERLAP\n");
   
   fprintf (fp, "\n");
 
