@@ -2585,6 +2585,12 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       fprintf (fp, "END %s\n\n", vup->getName());
     }
   }
+
+  /* -- overlap layer -- */
+  fprintf (fp, "LAYER OVERLAP\n");
+  fprintf (fp, "   TYPE OVERLAP ;\n");
+  fprintf (fp, "END\n");
+  
   fprintf (fp, "\n");
 
   for (i=0; i < Technology::T->nmetals-1; i++) {
@@ -2680,7 +2686,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       fprintf (fp, "END %s_gen\n\n", vup->getName());
     }
   }
-  
+
 }
 
 void ActStackLayoutPass::emitWellHeader (FILE *fp)
