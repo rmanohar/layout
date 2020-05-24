@@ -225,7 +225,31 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   else {
     _rect_wells = 0;
   }
-  
+
+  if (config_exists ("layout.lefdef.extra_tracks.top")) {
+    _extra_tracks_top = config_get_int ("layout.lefdef.extra_tracks.top");
+  }
+  else {
+    _extra_tracks_top = 0;
+  }
+  if (config_exists ("layout.lefdef.extra_tracks.bot")) {
+    _extra_tracks_bot = config_get_int ("layout.lefdef.extra_tracks.bot");
+  }
+  else {
+    _extra_tracks_bot = 0;
+  }
+  if (config_exists ("layout.lefdef.extra_tracks.left")) {
+    _extra_tracks_left = config_get_int ("layout.lefdef.extra_tracks.left");
+  }
+  else {
+    _extra_tracks_left = 0;
+  }
+  if (config_exists ("layout.lefdef.extra_tracks.right")) {
+    _extra_tracks_right = config_get_int ("layout.lefdef.extra_tracks.right");
+  }
+  else {
+    _extra_tracks_right = 0;
+  }
 }
 
 
@@ -3262,11 +3286,11 @@ LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
 
   Assert (Technology::T->nmetals >= 3, "Hmm");
 
-  nllx = snap_dn_x (llx);
-  nurx = snap_up_x (urx+1)-1;
+  nllx = snap_dn_x (llx) - _extra_tracks_left*_m_align_x->getPitch();
+  nurx = snap_up_x (urx+1)-1 + _extra_tracks_right*_m_align_x->getPitch();
 
-  nlly = snap_dn_y (lly);
-  nury = snap_up_y (ury+1)-1;
+  nlly = snap_dn_y (lly) - _extra_tracks_bot*_m_align_y->getPitch();
+  nury = snap_up_y (ury+1)-1 + _extra_tracks_top*_m_align_y->getPitch();
 
   LayoutBlob *box = new LayoutBlob (BLOB_BASE, NULL);
   box->setBBox (nllx, nlly, nurx, nury);

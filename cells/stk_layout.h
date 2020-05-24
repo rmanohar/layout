@@ -136,6 +136,11 @@ class ActStackLayoutPass : public ActPass {
   int _rect_import;
   int _rect_wells;
 
+  int _extra_tracks_top;
+  int _extra_tracks_bot;
+  int _extra_tracks_left;
+  int _extra_tracks_right;
+
   std::unordered_set<Process *> *visited;
 };
 
