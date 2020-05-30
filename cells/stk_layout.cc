@@ -929,6 +929,7 @@ static BBox print_singlestack (Layout *L, list_t *l,
   }
   Assert (li && !list_next (li), "Eh?");
   n = (node_t *) list_value (li);
+  
   return b;
 }
 
@@ -1105,6 +1106,12 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
     return BLOB;
   }
 
+  b.n.llx = 0;
+  b.n.lly = 0;
+  b.n.urx = 0;
+  b.n.ury = 0;
+  b.p = b.n;
+
   listitem_t *li;
 
   li = list_first (stks);
@@ -1176,8 +1183,8 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
       b = print_singlestack (l, sl, diffspace, pxpos);
       
-      l->DrawDiffBBox (b.flavor, EDGE_PFET, b.n.llx, b.n.lly,
-		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+      l->DrawDiffBBox (b.flavor, EDGE_PFET, b.p.llx, b.p.lly,
+		       b.p.urx - b.p.llx, b.p.ury - b.p.lly);
 
       BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
     }
@@ -3358,6 +3365,7 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   int flavor = -1;
   int poly_overhang;
   PolyMat *pmat = Technology::T->poly;
+  listitem_t *stki;
 
   list_t *stks = stk->getStacks (p);
   
@@ -3370,8 +3378,9 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   
   spc_default = 0;
   poly_overhang = 0;
-  
-  list_t *stklist = (list_t *) list_value (list_first (stks));
+
+  stki = list_first (stks);
+  list_t *stklist = (list_t *) list_value (stki);
 
   poly_potential = 0;
   
@@ -3442,17 +3451,22 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
     }
   }
 
-  stklist = (list_t *) list_value (list_next (list_first (stks)));
+  stki = list_next (stki);
+  stklist = (list_t *) list_value (stki);
  
   if (stklist && list_length (stklist) > 0) {
-    edge_t *e = (edge_t *) list_value (list_next (list_first (stklist)));
+    list_t *l = (list_t *) list_value (list_first (stklist));
+    edge_t *e = (edge_t *) list_value (list_next (list_first (l)));
     int x = Technology::T->diff[EDGE_NFET][e->flavor]->getOppDiffSpacing(e->flavor);
     spc_default = MAX (spc_default, x);
   }
-  
-  list_t *stklist2 = (list_t *)  list_value (list_next (list_next (list_first (stks))));
+
+  stki = list_next (stki);
+  list_t *stklist2 = (list_t *)  list_value (stki);
+
   if (stklist2 && list_length (stklist2) > 0) {
-    edge_t *e = (edge_t *) list_value (list_next (list_first (stklist2)));
+    list_t *l = (list_t *) list_value (list_first (stklist2));
+    edge_t *e = (edge_t *) list_value (list_next (list_first (l)));
     int x = Technology::T->diff[EDGE_NFET][e->flavor]->getOppDiffSpacing(e->flavor);
     spc_default = MAX (spc_default, x);
   }
