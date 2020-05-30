@@ -855,22 +855,23 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
 }
 
 
-static BBox print_singlestack (Layout *L, list_t *l)
+static BBox print_singlestack (Layout *L, list_t *l,
+			       int diffspace, int xoff)
 {
   int flavor;
   int type;
   node_t *n;
   edge_t *e;
   edge_t *prev;
-  int xpos = 0;
+  int xpos;
   int ypos = 0;
   BBox b;
   int idx = 0;
   int previdx = 0;
 
-  b.p.llx = 0;
+  b.p.llx = xpos;
   b.p.lly = 0;
-  b.p.urx = 0;
+  b.p.urx = xpos;
   b.p.ury = 0;
   b.n = b.p;
 
@@ -886,6 +887,12 @@ static BBox print_singlestack (Layout *L, list_t *l)
   DiffMat *diff = Technology::T->diff[type][flavor];
   FetMat *fet = Technology::T->fet[type][flavor];
   PolyMat *poly = Technology::T->poly;
+
+  ypos = diffspace/2;
+  if (type == EDGE_NFET) {
+    ypos = ypos - diffspace;
+  }
+  xpos = xoff;
 
   /* ok, now we can draw! */
   Assert (fet && diff && poly, "What?");
@@ -913,7 +920,8 @@ static BBox print_singlestack (Layout *L, list_t *l)
     }
 
     xpos = emit_rectangle (L, 0, xpos, ypos, flags, prev, previdx, 
-			   n, e, NULL, 0, idx, 1, &b);
+			   n, e, NULL, 0, idx,
+			   (type == EDGE_NFET ? -1 : 1), &b);
     prev = e;
     previdx = idx;
 
@@ -1135,6 +1143,9 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   stklist = (list_t *) list_value (li);
 
   /* XXX: check singlestack!!! */
+  int nxpos = b.n.urx;
+  int pxpos = b.p.urx;
+  
 
   if (stklist && (list_length (stklist) > 0)) {
     /* n stacks */
@@ -1144,7 +1155,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       list_t *sl = (list_t *) list_value (si);
       Layout *l = new Layout (stk->getNL (p));
 
-      b = print_singlestack (l, sl);
+      b = print_singlestack (l, sl, diffspace, nxpos);
       
       l->DrawDiffBBox (b.flavor, EDGE_NFET, b.n.llx, b.n.lly,
 		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
@@ -1163,7 +1174,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
       list_t *sl = (list_t *) list_value (si);
       Layout *l = new Layout (stk->getNL (p));
 
-      b = print_singlestack (l, sl);
+      b = print_singlestack (l, sl, diffspace, pxpos);
       
       l->DrawDiffBBox (b.flavor, EDGE_PFET, b.n.llx, b.n.lly,
 		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
@@ -3430,6 +3441,27 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
       }
     }
   }
+
+  stklist = (list_t *) list_value (list_next (list_first (stks)));
+ 
+  if (stklist && list_length (stklist) > 0) {
+    edge_t *e = (edge_t *) list_value (list_next (list_first (stklist)));
+    int x = Technology::T->diff[EDGE_NFET][e->flavor]->getOppDiffSpacing(e->flavor);
+    spc_default = MAX (spc_default, x);
+  }
+  
+  list_t *stklist2 = (list_t *)  list_value (list_next (list_next (list_first (stks))));
+  if (stklist2 && list_length (stklist2) > 0) {
+    edge_t *e = (edge_t *) list_value (list_next (list_first (stklist2)));
+    int x = Technology::T->diff[EDGE_NFET][e->flavor]->getOppDiffSpacing(e->flavor);
+    spc_default = MAX (spc_default, x);
+  }
+
+  if (stklist && stklist2 &&
+      list_length (stklist) > 0 && list_length (stklist2) > 0) {
+    poly_potential = 1;
+  }
+  
 #if 0
   printf (" poly_pot = %d; def = %d; ", poly_potential, spc_default);
 #endif  
