@@ -1563,10 +1563,10 @@ LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
     int mina = nplusdiff->minArea ();
     WellMat *w;
     if (mina > 0) {
-      mina = mina / nplusdiff->getWidth();
+      mina = mina / nplusdiff->minWidth();
     }
-    if (mina < nplusdiff->getWidth()) {
-      mina = nplusdiff->getWidth();
+    if (mina < nplusdiff->minWidth()) {
+      mina = nplusdiff->minWidth();
     }
     w = Technology::T->well[EDGE_NFET][flavor];
     if (w) {
@@ -1574,17 +1574,17 @@ LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
 	p = w->getOverhangWelldiff();
       }
     }
-    l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->getWidth (),
+    l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->minWidth (),
 		     mina, dummy_netlist->nsc);
   }
   if (pplusdiff) {
     WellMat *w;
     int mina = pplusdiff->minArea ();
     if (mina > 0) {
-      mina = mina / pplusdiff->getWidth();
+      mina = mina / pplusdiff->minWidth();
     }
-    if (mina < pplusdiff->getWidth()) {
-      mina = pplusdiff->getWidth();
+    if (mina < pplusdiff->minWidth()) {
+      mina = pplusdiff->minWidth();
     }
     w = Technology::T->well[EDGE_PFET][flavor];
     if (w) {
@@ -1593,7 +1593,7 @@ LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
       }
     }
     l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
-		     pplusdiff->getWidth(), mina, dummy_netlist->psc);
+		     pplusdiff->minWidth(), mina, dummy_netlist->psc);
   }
 
   BLOB = new LayoutBlob (BLOB_BASE, l);
