@@ -2597,8 +2597,8 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       Contact *vup = mat->getUpC();
       fprintf (fp, "LAYER %s\n", vup->getName());
       fprintf (fp, "    TYPE CUT ;\n");
-      fprintf (fp, "    SPACING %.6f ;\n", scale*vup->getSpacing());
-      fprintf (fp, "    WIDTH %.6f ;\n",  scale*vup->getWidth());
+      fprintf (fp, "    SPACING %.6f ;\n", scale*vup->minSpacing());
+      fprintf (fp, "    WIDTH %.6f ;\n",  scale*vup->minWidth());
       /* enclosure rules */
       if (vup->isSym()) {
 	fprintf (fp, "    ENCLOSURE ABOVE %.6f %.6f ;\n",
@@ -2650,9 +2650,9 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
       fprintf (fp, "VIA %s_C%s\n", vup->getName(),
 	       (j == 0 ? " DEFAULT" : (j == 1 ? "h" : "v")));
 
-      w = (vup->getWidth() + 2*vup->getSym())*scale/2;
+      w = (vup->minWidth() + 2*vup->getSym())*scale/2;
       if (vup->isAsym()) {
-	w2 = (vup->getWidth() + 2*vup->getAsym())*scale/2;
+	w2 = (vup->minWidth() + 2*vup->getAsym())*scale/2;
       }
       else {
 	w2 = w;
@@ -2669,13 +2669,13 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
       }
 
-      w = vup->getWidth()*scale/2;
+      w = vup->minWidth()*scale/2;
       fprintf (fp, "   LAYER %s ;\n", vup->getName());
       fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
 
-      w = (vup->getWidth() + 2*vup->getSymUp())*scale/2;
+      w = (vup->minWidth() + 2*vup->getSymUp())*scale/2;
       if (vup->isAsym()) {
-	w2 = (vup->getWidth() + 2*vup->getAsymUp())*scale/2;
+	w2 = (vup->minWidth() + 2*vup->getAsymUp())*scale/2;
       }
       else {
 	w2 = 2;
@@ -2718,7 +2718,7 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 		 vup->getSymUp()*scale, vup->getSymUp()*scale);
       }
 
-      w = vup->getWidth()*scale/2;
+      w = vup->minWidth()*scale/2;
       fprintf (fp, "   LAYER %s ;\n", vup->getName());
       fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
 
