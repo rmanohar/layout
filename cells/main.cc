@@ -75,8 +75,6 @@ int main (int argc, char **argv)
   aspect_ratio = 1.0;
   
   Act::Init (&argc, &argv);
-  Act::config_info ("prs2net.conf");
-  config_read ("prs2net.conf");
   {
     char *tmpfile = config_file_name ("macros.conf");
     if (tmpfile) {
