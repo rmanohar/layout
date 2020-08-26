@@ -2,3 +2,4 @@ i386_*
 *.o
 Makefile.deps
 *~
+*.i386_*

@@ -37,6 +37,9 @@ include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 $(EXE): $(OBJS1) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS1) -o $(EXE) $(LIBACTPASS)
 
+mag.pl: 
+	git checkout mag.pl
+
 $(EXE2): $(OBJS2) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS2) -o $(EXE2) $(LIBACTPASS)
 
