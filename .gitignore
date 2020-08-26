@@ -3,3 +3,5 @@ i386_*
 Makefile.deps
 *~
 *.i386_*
+act2lef.*
+actrectbbox.*
