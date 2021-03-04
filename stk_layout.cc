@@ -34,6 +34,10 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
+#define MULTIPLIER 4
+static int _manufac_grid_to_scale;
+static int _inv_grid_to_scale;
+
 static long snap_up (long w, unsigned long pitch)
 {
   if (w >= 0) {
@@ -137,6 +141,23 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   }
   else {
     _manufacturing_grid = 0.0005;
+  }
+
+  //_lambda_to_scale = lambda_to_scale;
+  
+  _manufac_grid_to_scale = (int)(MULTIPLIER*_manufacturing_grid*1e3/Technology::T->scale + 0.5);
+
+  if (_manufac_grid_to_scale == 0) {
+    _inv_grid_to_scale = 1;
+    _manufac_grid_to_scale = (int) (Technology::T->scale/(MULTIPLIER*_manufacturing_grid*1e3) + 0.5);
+    if (fabs (_manufac_grid_to_scale*MULTIPLIER*_manufacturing_grid*1e3 - Technology::T->scale) > 0.001) {
+      warning ("%d x manufacturing grid (%g) and technology scale factor (%g) are not integer multiples of each other; rounding down", MULTIPLIER, MULTIPLIER*_manufacturing_grid*1e3, Technology::T->scale);
+    }
+  }
+  else {
+    if (fabs (_manufac_grid_to_scale*Technology::T->scale - MULTIPLIER*_manufacturing_grid*1e3) > 0.001) {
+      warning ("%d x manufacturing grid (%g) and technology scale factor (%g) are not integer multiples of each other; rounding down", MULTIPLIER, MULTIPLIER*_manufacturing_grid*1e3, Technology::T->scale);
+    }
   }
 
   int x_align;
@@ -273,21 +294,35 @@ struct BBox {
 
 
 /* calculate actual edge width */
-static int _lambda_to_scale;
 static int getwidth (int idx, edge_t *e)
 {
   if (e->type == EDGE_NFET) {
-    return EDGE_WIDTH (e,idx)*_lambda_to_scale;
+    if (_inv_grid_to_scale) {
+      return EDGE_WIDTH (e,idx)*MULTIPLIER/_manufac_grid_to_scale;
+    }
+    else {
+      return EDGE_WIDTH (e,idx)*_manufac_grid_to_scale/MULTIPLIER;
+    }
   }
   else {
-    return EDGE_WIDTH (e,idx)*_lambda_to_scale;
+    if (_inv_grid_to_scale) {
+      return EDGE_WIDTH (e,idx)*MULTIPLIER/_manufac_grid_to_scale;
+    }
+    else {
+      return EDGE_WIDTH (e,idx)*_manufac_grid_to_scale/MULTIPLIER;
+    }
   }
 }
 
 
 static int getlength (edge_t *e, double adj)
 {
-  return e->l*_lambda_to_scale + adj;
+  if (_inv_grid_to_scale) {
+    return e->l*MULTIPLIER/_manufac_grid_to_scale + adj;
+  }
+  else {
+    return e->l*_manufac_grid_to_scale/MULTIPLIER + adj;
+  }
 }
 
 
@@ -1118,8 +1153,6 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
   li = list_first (stks);
   list_t *stklist = (list_t *) list_value (li);
-
-  _lambda_to_scale = lambda_to_scale;
 
   BLOB = new LayoutBlob (BLOB_HORIZ);
 
