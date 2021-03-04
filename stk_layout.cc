@@ -285,9 +285,9 @@ static int getwidth (int idx, edge_t *e)
 }
 
 
-static int getlength (edge_t *e)
+static int getlength (edge_t *e, double adj)
 {
-  return e->l*_lambda_to_scale;
+  return e->l*_lambda_to_scale + adj;
 }
 
 
@@ -349,6 +349,7 @@ static int locate_fetedge (Layout *L, int dx,
   int spc = 0;
 
   int e_w = getwidth (0, e);
+  double la = L->leak_adjust();
 
   /* XXX: THIS CODE IS COPIED FROM emit_rectangle!!!!! */
 
@@ -357,15 +358,15 @@ static int locate_fetedge (Layout *L, int dx,
   p = L->getPoly ();
 
   if (prev) {
-    spc = MAX (f->getSpacing (getlength (prev)),
-	       p->getSpacing (getlength (prev)));
+    spc = MAX (f->getSpacing (getlength (prev, la)),
+	       p->getSpacing (getlength (prev, la)));
   }
   else {
     spc = 0;
   }
   if (e) {
-    spc = MAX (MAX (spc, f->getSpacing (getlength (e))),
-	       p->getSpacing (getlength (e)));
+    spc = MAX (MAX (spc, f->getSpacing (getlength (e, la))),
+	       p->getSpacing (getlength (e, la)));
   }
   
 
@@ -447,6 +448,7 @@ static int emit_rectangle (Layout *L,
   BBox b;
 
   int e_w = getwidth (eidx, e);
+  double la = L->leak_adjust();
   
   if (ret) {
     b = *ret;
@@ -470,15 +472,15 @@ static int emit_rectangle (Layout *L,
 
   int spc;
   if (prev) {
-    spc = MAX (f->getSpacing (getlength (prev)),
-	       p->getSpacing (getlength (prev)));
+    spc = MAX (f->getSpacing (getlength (prev, la)),
+	       p->getSpacing (getlength (prev, la)));
   }
   else {
     spc = 0;
   }
   if (e) {
-    spc = MAX (MAX (spc, f->getSpacing (getlength (e))),
-	       p->getSpacing (getlength (e)));
+    spc = MAX (MAX (spc, f->getSpacing (getlength (e, la))),
+	       p->getSpacing (getlength (e, la)));
   }
   
 
@@ -575,18 +577,18 @@ static int emit_rectangle (Layout *L,
 
   /* now print fet */
   if (yup < 0) {
-    L->DrawFet (e->flavor, e->type, dx, dy + yup*e_w, getlength (e),
+    L->DrawFet (e->flavor, e->type, dx, dy + yup*e_w, getlength (e, la),
 		-yup*e_w, NULL);
   }
   else {
-    L->DrawFet (e->flavor, e->type, dx, dy, getlength (e), yup*e_w, NULL);
+    L->DrawFet (e->flavor, e->type, dx, dy, getlength (e, la), yup*e_w, NULL);
   }
 
-  int poverhang = p->getOverhang (getlength (e));
+  int poverhang = p->getOverhang (getlength (e, la));
   int uoverhang = poverhang;
 
   if (fet_type != 0) {
-    uoverhang = MAX (uoverhang, p->getNotchOverhang (getlength (e)));
+    uoverhang = MAX (uoverhang, p->getNotchOverhang (getlength (e, la)));
   }
   
 #if 0
@@ -594,13 +596,13 @@ static int emit_rectangle (Layout *L,
 #endif  
   /* now print poly edges */
   if (yup < 0) {
-    L->DrawPoly (dx, dy, getlength (e), -yup*poverhang, e->g);
-    L->DrawPoly (dx, dy + yup*(e_w+uoverhang), getlength(e), -yup*uoverhang, NULL);
+    L->DrawPoly (dx, dy, getlength (e, la), -yup*poverhang, e->g);
+    L->DrawPoly (dx, dy + yup*(e_w+uoverhang), getlength(e, la), -yup*uoverhang, NULL);
   }
   else {
     int oppoverhang;
     if (eopp) {
-      oppoverhang = p->getOverhang (getlength (eopp));
+      oppoverhang = p->getOverhang (getlength (eopp, la));
     }
     else {
       oppoverhang = -1;
@@ -617,18 +619,18 @@ static int emit_rectangle (Layout *L,
       //L->DrawPoly (dx, dy - yup*poverhang, getlength (e),
       //yup*poverhang, e->g);
       //printf ("adjust: %d, ht %d\n", endpoly, ht);
-      L->DrawPoly (dx, endpoly, getlength (e), ht, e->g);
+      L->DrawPoly (dx, endpoly, getlength (e, la), ht, e->g);
     }
     else {
-      L->DrawPoly (dx, dy - yup*poverhang, getlength (e), yup*poverhang, e->g);
+      L->DrawPoly (dx, dy - yup*poverhang, getlength (e, la), yup*poverhang, e->g);
     }
     
-    L->DrawPoly (dx, dy + yup*e_w, getlength (e), yup*uoverhang, NULL);
+    L->DrawPoly (dx, dy + yup*e_w, getlength (e, la), yup*uoverhang, NULL);
   }
   //printf ("done!\n");
   
 
-  dx += getlength (e);
+  dx += getlength (e, la);
   
   if (flags & EDGE_FLAGS_RIGHT) {
     node_t *right;
@@ -3368,6 +3370,9 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   listitem_t *stki;
 
   list_t *stks = stk->getStacks (p);
+  netlist_t *nl = stk->getNL (p);
+
+  double la = nl->leak_correct ? Layout::getLeakAdjust() : 0;
   
   if (!stks || list_length (stks) == 0) {
     return 0;
@@ -3394,9 +3399,9 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
       if (gp->basepair) {
 	if (gp->u.e.n && gp->u.e.p) {
 	  poly_overhang = MAX (poly_overhang,
-			       pmat->getOverhang (getlength (gp->u.e.n)));
+			       pmat->getOverhang (getlength (gp->u.e.n, la)));
 	  poly_overhang = MAX (poly_overhang,
-			       pmat->getOverhang (getlength (gp->u.e.p)));
+			       pmat->getOverhang (getlength (gp->u.e.p, la)));
 	  if (gp->u.e.n->g != gp->u.e.p->g) {
 	    poly_potential = 1;
 	  }
@@ -3424,9 +3429,9 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
 	  Assert (tmp->basepair, "What?");
 	  if (tmp->u.e.n && tmp->u.e.p) {
 	    poly_overhang = MAX (poly_overhang,
-				 pmat->getOverhang (getlength (tmp->u.e.n)));
+				 pmat->getOverhang (getlength (tmp->u.e.n, la)));
 	    poly_overhang = MAX (poly_overhang,
-				 pmat->getOverhang (getlength (tmp->u.e.p)));
+				 pmat->getOverhang (getlength (tmp->u.e.p, la)));
 				 
 	    if (tmp->u.e.n->g != tmp->u.e.p->g) {
 	      poly_potential = 1;

@@ -92,12 +92,19 @@ void Layer::setDownLink (Layer *x)
 }
 
 bool Layout::_initdone = false;
+double Layout::_leak_adjust = 0.0;
   
 void Layout::Init()
 {
   if (_initdone) return;
   _initdone = true;
   Technology::Init ("layout.conf");
+  if (config_exists ("net.leakage_adjust")) {
+    _leak_adjust = config_get_real ("net.leakage_adjust");
+  }
+  else {
+    _leak_adjust = 0;
+  }
 }
 
 #define LMAP_VIA 0

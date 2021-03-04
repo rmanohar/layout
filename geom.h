@@ -115,6 +115,7 @@ class Layout {
 public:
   static bool _initdone;
   static void Init();
+  static double getLeakAdjust () { return _leak_adjust; }
   
   /* 
      The base layer is special as this is where the transistors are
@@ -172,6 +173,11 @@ public:
 
   void flushBBox() { _rllx = 0; _rlly = 0; _rurx = -1; _rury = -1; }
 
+  double leak_adjust() {
+    if (!N->leak_correct) { return 0.0; }
+    else { return _leak_adjust; }
+  }
+
 private:
   bool _readrect;
   long _rllx, _rlly, _rurx, _rury;
@@ -180,7 +186,10 @@ private:
   int nflavors;
   int nmetals;
   netlist_t *N;
-  struct Hashtable *lmap;	// map from layer string to base layer name
+  struct Hashtable *lmap;	// map from layer string to base layer
+				// name
+
+  static double _leak_adjust;
 };
 
 
