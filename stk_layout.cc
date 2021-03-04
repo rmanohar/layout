@@ -34,9 +34,7 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-#define MULTIPLIER 4
-static int _manufac_grid_to_scale;
-static int _inv_grid_to_scale;
+static double manufacturing_grid_in_nm;
 
 static long snap_up (long w, unsigned long pitch)
 {
@@ -142,23 +140,7 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   else {
     _manufacturing_grid = 0.0005;
   }
-
-  //_lambda_to_scale = lambda_to_scale;
-  
-  _manufac_grid_to_scale = (int)(MULTIPLIER*_manufacturing_grid*1e3/Technology::T->scale + 0.5);
-
-  if (_manufac_grid_to_scale == 0) {
-    _inv_grid_to_scale = 1;
-    _manufac_grid_to_scale = (int) (Technology::T->scale/(MULTIPLIER*_manufacturing_grid*1e3) + 0.5);
-    if (fabs (_manufac_grid_to_scale*MULTIPLIER*_manufacturing_grid*1e3 - Technology::T->scale) > 0.001) {
-      warning ("%d x manufacturing grid (%g) and technology scale factor (%g) are not integer multiples of each other; rounding down", MULTIPLIER, MULTIPLIER*_manufacturing_grid*1e3, Technology::T->scale);
-    }
-  }
-  else {
-    if (fabs (_manufac_grid_to_scale*Technology::T->scale - MULTIPLIER*_manufacturing_grid*1e3) > 0.001) {
-      warning ("%d x manufacturing grid (%g) and technology scale factor (%g) are not integer multiples of each other; rounding down", MULTIPLIER, MULTIPLIER*_manufacturing_grid*1e3, Technology::T->scale);
-    }
-  }
+  manufacturing_grid_in_nm = _manufacturing_grid*1e3;
 
   int x_align;
   int v;
@@ -296,33 +278,13 @@ struct BBox {
 /* calculate actual edge width */
 static int getwidth (int idx, edge_t *e)
 {
-  if (e->type == EDGE_NFET) {
-    if (_inv_grid_to_scale) {
-      return EDGE_WIDTH (e,idx)*MULTIPLIER/_manufac_grid_to_scale;
-    }
-    else {
-      return EDGE_WIDTH (e,idx)*_manufac_grid_to_scale/MULTIPLIER;
-    }
-  }
-  else {
-    if (_inv_grid_to_scale) {
-      return EDGE_WIDTH (e,idx)*MULTIPLIER/_manufac_grid_to_scale;
-    }
-    else {
-      return EDGE_WIDTH (e,idx)*_manufac_grid_to_scale/MULTIPLIER;
-    }
-  }
+  return EDGE_WIDTH (e,idx)*manufacturing_grid_in_nm/Technology::T->scale;
 }
 
-
+/* XXXX: adj : convert from absolute number to T->scale */
 static int getlength (edge_t *e, double adj)
 {
-  if (_inv_grid_to_scale) {
-    return e->l*MULTIPLIER/_manufac_grid_to_scale + adj;
-  }
-  else {
-    return e->l*_manufac_grid_to_scale/MULTIPLIER + adj;
-  }
+  return e->l*manufacturing_grid_in_nm/Technology::T->scale;
 }
 
 
