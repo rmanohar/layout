@@ -121,21 +121,21 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   dummy_netlist = NULL;
 
   /* more parameters */
-  if (config_exists ("layout.lefdef.version")) {
-    _version = config_get_string ("layout.lefdef.version");
+  if (config_exists ("lefdef.version")) {
+    _version = config_get_string ("lefdef.version");
   }
   else {
     _version = "5.8";
   }
-  if (config_exists ("layout.lefdef.micron_conversion")) {
-    _micron_conv = config_get_int ("layout.lefdef.micron_conversion");
+  if (config_exists ("lefdef.micron_conversion")) {
+    _micron_conv = config_get_int ("lefdef.micron_conversion");
   }
   else {
     _micron_conv = 2000;
   }
   
-  if (config_exists ("layout.lefdef.manufacturing_grid")) {
-    _manufacturing_grid = config_get_real ("layout.lefdef.manufacturing_grid");
+  if (config_exists ("lefdef.manufacturing_grid")) {
+    _manufacturing_grid = config_get_real ("lefdef.manufacturing_grid");
   }
   else {
     _manufacturing_grid = 0.0005;
@@ -144,8 +144,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 
   int x_align;
   int v;
-  if (config_exists ("layout.lefdef.metal_align.x_dim")) {
-    v = config_get_int ("layout.lefdef.metal_align.x_dim");
+  if (config_exists ("lefdef.metal_align.x_dim")) {
+    v = config_get_int ("lefdef.metal_align.x_dim");
   }
   else {
     v = 2;
@@ -157,8 +157,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   _m_align_x = Technology::T->metal[v-1];
   x_align = v-1;
 
-  if (config_exists ("layout.lefdef.metal_align.y_dim")) {
-    v = config_get_int ("layout.lefdef.metal_align.y_dim");
+  if (config_exists ("lefdef.metal_align.y_dim")) {
+    v = config_get_int ("lefdef.metal_align.y_dim");
   }
   else {
     v = 1;
@@ -169,8 +169,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   }
   _m_align_y = Technology::T->metal[v-1];
 
-  if (config_exists ("layout.lefdef.horiz_metal")) {
-    _horiz_metal = config_get_int ("layout.lefdef.horiz_metal");
+  if (config_exists ("lefdef.horiz_metal")) {
+    _horiz_metal = config_get_int ("lefdef.horiz_metal");
     if (_horiz_metal != 0 && _horiz_metal != 1) {
       fatal_error ("lefdef.horiz_metal: must be 0 or 1");
     }
@@ -179,8 +179,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
     _horiz_metal = 1;
   }
 
-  if (config_exists ("layout.lefdef.pin_layer")) {
-    v = config_get_int ("layout.lefdef.pin_layer");
+  if (config_exists ("lefdef.pin_layer")) {
+    v = config_get_int ("lefdef.pin_layer");
   }
   else {
     v = 2;
@@ -209,8 +209,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
     }
   }
 
-  if (config_exists ("layout.lefdef.rect_import")) {
-    _rect_import = config_get_int ("layout.lefdef.rect_import");
+  if (config_exists ("lefdef.rect_import")) {
+    _rect_import = config_get_int ("lefdef.rect_import");
     if (_rect_import != 0 && _rect_import != 1) {
       fatal_error ("lefdef.rect_import: must be 0 or 1");
     }
@@ -219,8 +219,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
     _rect_import = 0;
   }
 
-  if (config_exists ("layout.lefdef.rect_wells")) {
-    _rect_wells = config_get_int ("layout.lefdef.rect_wells");
+  if (config_exists ("lefdef.rect_wells")) {
+    _rect_wells = config_get_int ("lefdef.rect_wells");
     if (_rect_wells != 0 && _rect_wells != 1) {
       fatal_error ("lefdef.rect_wells: must be 0 or 1");
     }
@@ -229,26 +229,26 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
     _rect_wells = 0;
   }
 
-  if (config_exists ("layout.lefdef.extra_tracks.top")) {
-    _extra_tracks_top = config_get_int ("layout.lefdef.extra_tracks.top");
+  if (config_exists ("lefdef.extra_tracks.top")) {
+    _extra_tracks_top = config_get_int ("lefdef.extra_tracks.top");
   }
   else {
     _extra_tracks_top = 0;
   }
-  if (config_exists ("layout.lefdef.extra_tracks.bot")) {
-    _extra_tracks_bot = config_get_int ("layout.lefdef.extra_tracks.bot");
+  if (config_exists ("lefdef.extra_tracks.bot")) {
+    _extra_tracks_bot = config_get_int ("lefdef.extra_tracks.bot");
   }
   else {
     _extra_tracks_bot = 0;
   }
-  if (config_exists ("layout.lefdef.extra_tracks.left")) {
-    _extra_tracks_left = config_get_int ("layout.lefdef.extra_tracks.left");
+  if (config_exists ("lefdef.extra_tracks.left")) {
+    _extra_tracks_left = config_get_int ("lefdef.extra_tracks.left");
   }
   else {
     _extra_tracks_left = 0;
   }
-  if (config_exists ("layout.lefdef.extra_tracks.right")) {
-    _extra_tracks_right = config_get_int ("layout.lefdef.extra_tracks.right");
+  if (config_exists ("lefdef.extra_tracks.right")) {
+    _extra_tracks_right = config_get_int ("lefdef.extra_tracks.right");
   }
   else {
     _extra_tracks_right = 0;
@@ -281,10 +281,10 @@ static int getwidth (int idx, edge_t *e)
   return EDGE_WIDTH (e,idx)*manufacturing_grid_in_nm/Technology::T->scale;
 }
 
-/* XXXX: adj : convert from absolute number to T->scale */
+/* actual edge length */
 static int getlength (edge_t *e, double adj)
 {
-  return e->l*manufacturing_grid_in_nm/Technology::T->scale;
+  return (e->l*manufacturing_grid_in_nm+adj)/Technology::T->scale;
 }
 
 

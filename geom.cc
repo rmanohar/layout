@@ -233,7 +233,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, WDIFF_OFFSET),
 		    Technology::T->welldiff[EDGE_NFET][i]);
 
-    if (Technology::T->welldiff[EDGE_NFET]) {
+    if (Technology::T->welldiff[EDGE_NFET][i]) {
       NEW (lp, struct layermap);
       lp->l = base;
       lp->etype = EDGE_NFET;
@@ -260,7 +260,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, WDIFF_OFFSET),
 		    Technology::T->welldiff[EDGE_PFET][i]);
 
-    if (Technology::T->welldiff[EDGE_PFET]) {
+    if (Technology::T->welldiff[EDGE_PFET][i]) {
       NEW (lp, struct layermap);
       lp->l = base;
       lp->etype = EDGE_PFET;
