@@ -284,7 +284,7 @@ static int getwidth (int idx, edge_t *e)
 /* actual edge length */
 static int getlength (edge_t *e, double adj)
 {
-  return (e->l*manufacturing_grid_in_nm+adj)/Technology::T->scale;
+  return (e->l*manufacturing_grid_in_nm+adj*1e9)/Technology::T->scale;
 }
 
 
