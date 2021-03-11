@@ -26,8 +26,8 @@ TARGETCONF=layout.conf
 TARGETINCS=stk_pass.h stk_layout.h geom.h tile.h
 TARGETINCSUBDIR=act/layout
 
-OBJS1=stk_pass.o main.o geom.o stk_layout.o tile.o
-OBJS2=stk_pass.o main2.o geom.o stk_layout.o tile.o
+OBJS1=stk_pass.o main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
+OBJS2=stk_pass.o main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 
 SRCS=$(OBJS1:.o=.cc) main2.cc
 

@@ -68,6 +68,22 @@ struct gate_pairs {
   int available_mark ();
 };
 
+class RawActStackPass {
+public:
+  RawActStackPass (ActPass *p) { me = p; }
+  
+  int isEmpty (list_t *stk);
+  list_t *getStacks (Process *p = NULL);
+  netlist_t *getNL (Process *p = NULL) { return nl->getNL (p); }
+
+  void setNL (ActNetlistPass *_nl) { nl = _nl; }
+  void *getMap (Process *p) { return me->getMap (p); }
+  ActPass *getPass () { return me; }
+
+private:
+  ActNetlistPass *nl;
+  ActPass *me;
+};
 
 class ActStackPass : public ActPass {
  public:
@@ -84,10 +100,8 @@ class ActStackPass : public ActPass {
   void *local_op (Process *p, int mode = 0);
   void free_local (void *);
 
-  ActNetlistPass *nl;
+  RawActStackPass *raw;
 };
-
-
 
 
 #endif /* __ACT_STK_PASS_H__ */
