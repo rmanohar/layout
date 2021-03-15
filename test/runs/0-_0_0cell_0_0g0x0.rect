@@ -1,0 +1,15 @@
+bbox 0 0 32 40
+rect out ndiff 15 7 20 10 right
+rect out pdiff 15 22 20 27 right
+rect # polysilicon 13 5 15 7
+rect # ntransistor 13 7 15 10
+rect in[0] polysilicon 13 10 15 12
+rect in[0] polysilicon 13 20 15 22
+rect # ptransistor 13 22 15 27
+rect # polysilicon 13 27 15 29
+rect GND ndiff 8 7 13 10 left
+rect Vdd pdiff 8 22 13 27 left
+inrect GND m2 24 28 28 32
+inrect Vdd m2 16 28 20 32
+outrect out m2 8 8 12 12
+inrect in[0] m2 8 28 12 32

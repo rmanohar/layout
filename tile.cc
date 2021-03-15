@@ -22,8 +22,8 @@
 #include <stdio.h>
 #include <list.h>
 #include <misc.h>
-#include <act/layout/tile.h>
-#include <act/layout/geom.h>
+#include "tile.h"
+#include "geom.h"
 
 //static int tcnt = 0;
 

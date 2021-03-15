@@ -28,7 +28,7 @@
 #include <act/passes/netlist.h>
 #include <act/tech.h>
 #include <qops.h>
-#include <act/layout/geom.h>
+#include "geom.h"
 
 #ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))

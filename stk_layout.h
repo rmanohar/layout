@@ -23,8 +23,8 @@
 #define __ACT_STK_LAYOUT_PASS_H__
 
 #include <act/act.h>
-#include <act/layout/geom.h>
-#include <act/layout/stk_pass.h>
+#include "geom.h"
+#include "stk_pass.h"
 #include <map>
 #include <unordered_set>
 #include <hash.h>

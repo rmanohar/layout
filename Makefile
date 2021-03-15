@@ -22,20 +22,20 @@ EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
 TARGETS=$(EXE) $(EXE2) mag.pl
-TARGETCONF=layout.conf
-TARGETINCS=stk_pass.h stk_layout.h geom.h tile.h
-TARGETINCSUBDIR=act/layout
+TARGETLIBS=pass_stk.so
 
 OBJS1=stk_pass.o main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 OBJS2=stk_pass.o main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 
 SRCS=$(OBJS1:.o=.cc) main2.cc
 
-
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
 $(EXE): $(OBJS1) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS1) -o $(EXE) $(LIBACTPASS)
+
+pass_stk.so: stk_pass_dyn.os $(ACTPASSDEPEND)
+	$(CXX) $(SH_LINK_OPTIONS) -o pass_stk.so stk_pass_dyn.os $(LIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl

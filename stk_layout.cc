@@ -20,13 +20,13 @@
  **************************************************************************
  */
 #include <stdio.h>
-#include <act/layout/stk_pass.h>
-#include <act/layout/stk_layout.h>
 #include <act/iter.h>
 #include <act/passes.h>
 #include <config.h>
 #include <math.h>
 #include <string.h>
+#include "stk_pass.h"
+#include "stk_layout.h"
 
 #define IS_METAL_HORIZ(i) ((((i) % 2) == _horiz_metal) ? 1 : 0)
 
@@ -193,7 +193,7 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   _pin_metal = Technology::T->metal[v-1];
   
   if (((_pin_layer+1) % 2) == _horiz_metal) {
-    warning ("lefdef.pin_layer (%d) is a horizontal metal layer.\n\t[default pin locations are in a line at the top/bottom of the cell]", _pin_layer);
+    warning ("lefdef.pin_layer (%d) is a horizontal metal layer.\n\t[default pin locations are in a line at the top/bottom of the cell]", _pin_layer+1);
   }
   if (_pin_metal->getPitch() != _m_align_x->getPitch()) {
     warning ("Pin metal (%d) and x-alignment metal (%d) have different pitches"

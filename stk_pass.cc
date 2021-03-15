@@ -23,57 +23,62 @@
 #include <act/act.h>
 #include <act/iter.h>
 #include <act/passes/netlist.h>
-#include <act/layout/stk_pass.h>
+#include "stk_pass.h"
 #include "stk_pass_dyn.h"
 
 
 ActStackPass::ActStackPass(Act *a) : ActPass (a, "net2stk")
 {
   stk_init (this);
-  raw = stk_get ();
 }
 
 
 ActStackPass::~ActStackPass()
 {
-  stk_done ();
+  stk_done (this);
 }
 
 
 netlist_t *ActStackPass::getNL (Process *p)
 {
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
   return raw->getNL (p);
 }
 
 void *ActStackPass::local_op (Process *proc, int mode)
 {
-  return stk_proc (proc, mode);
+  return stk_proc (this, proc, mode);
 }
 
 
 int ActStackPass::run (Process *p)
 {
   int ret = ActPass::run (p);
-  stk_run (p);
+  stk_run (this, p);
   return ret;
 }
 
 
 list_t *ActStackPass::getStacks(Process *p)
 {
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
   return raw->getStacks (p);
 }
 
 
 int ActStackPass::isEmpty (list_t *stk)
 {
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
   return raw->isEmpty (stk);
 }
 
 
 void ActStackPass::free_local (void *v)
 {
-  stk_free (v);
+  stk_free (this, v);
 }
 
 

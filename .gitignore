@@ -1,7 +1,8 @@
 i386_*
+arm64_*
 *.o
 Makefile.deps
 *~
-*.i386_*
 act2lef.*
 actrectbbox.*
+pass_stk.so

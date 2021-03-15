@@ -21,8 +21,7 @@
  */
 #include <stdio.h>
 #include <config.h>
-#include <act/layout/geom.h>
-#include <act/layout/stk_layout.h>
+#include "stk_layout.h"
 
 int main (int argc, char **argv)
 {

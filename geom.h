@@ -25,7 +25,7 @@
 #include <act/act.h>
 #include <act/tech.h>
 #include <act/passes/netlist.h>
-#include <act/layout/tile.h>
+#include "tile.h"
 
 
 class TransformMat {

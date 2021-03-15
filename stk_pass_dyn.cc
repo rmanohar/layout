@@ -642,23 +642,16 @@ static list_t *compute_raw_stacks (netlist_t *N, list_t *l, int type)
 }
 
 
-static RawActStackPass *_sp = NULL;
-
-
-RawActStackPass *stk_get (void)
-{
-  return _sp;
-}
-
 void stk_init (ActPass *a)
 {
   ActNetlistPass *nl = NULL;
+  RawActStackPass *_sp;
   
-  if (_sp) {
-    warning ("Stack pass already created. Skipping.");
+  if (a->getStash()) {
+    warning ("stk_init(): Stack pass already created. Skipping.");
     return;
   }
-  
+
   if (!a->getAct()->pass_find ("prs2net")) {
     nl = new ActNetlistPass (a->getAct());
   }
@@ -671,21 +664,25 @@ void stk_init (ActPass *a)
 
   _sp = new RawActStackPass (a);
   _sp->setNL (nl);
+  a->setStash (_sp);
 }
   
-void stk_run (Process *p)
+void stk_run (ActPass *ap, Process *p)
 {
   /* nothing to do */
 }
 
-void stk_recursive (Process *p, int mode)
+void stk_recursive (ActPass *ap, Process *p, int mode)
 {
   /* nothing extra */
 }
 
 
-void *stk_proc (Process *p, int mode)
+void *stk_proc (ActPass *ap, Process *p, int mode)
 {
+  RawActStackPass *_sp = (RawActStackPass *)ap->getStash ();
+  Assert (_sp, "What?");
+  
   netlist_t *N = _sp->getNL (p);
   Assert (N, "What?");
 
@@ -1118,17 +1115,17 @@ void *stk_proc (Process *p, int mode)
   return retlist;
 }
 
-void *stk_data (Data *d, int mode)
+void *stk_data (ActPass *ap, Data *d, int mode)
 {
   return NULL;
 }
 
-void *stk_chan (Channel *c, int mode)
+void *stk_chan (ActPass *ap, Channel *c, int mode)
 {
   return NULL;
 }
 
-void stk_free (void *v)
+void stk_free (ActPass *ap, void *v)
 {
   if (v) {
     list_t *stk = (list_t *)v;
@@ -1138,10 +1135,12 @@ void stk_free (void *v)
 }
 
 
-void stk_done ()
+void stk_done (ActPass *ap)
 {
+  RawActStackPass *_sp = (RawActStackPass *)ap->getStash ();
+  Assert (_sp, "What?");
   delete _sp;
-  _sp = NULL;
+  ap->setStash (NULL);
 }
 
 

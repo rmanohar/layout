@@ -26,16 +26,14 @@
 
 extern "C" {
 
-  void stk_init (ActPass *p);
-  void stk_run (Process *p);
-  void stk_recursive (UserDef *u, int mode);
-  void *stk_proc (Process *p, int mode);
-  void *stk_data (Data *d, int mode);
-  void *stk_chan (Channel *c, int mode);
-  void stk_free (void *v);
-  void stk_done (void);
-
-  RawActStackPass *stk_get (void);
+  void stk_init (ActPass *ap);
+  void stk_run (ActPass *ap, Process *p);
+  void stk_recursive (ActPass *ap, UserDef *u, int mode);
+  void *stk_proc (ActPass *ap, Process *p, int mode);
+  void *stk_data (ActPass *ap, Data *d, int mode);
+  void *stk_chan (ActPass *ap, Channel *c, int mode);
+  void stk_free (ActPass *ap, void *v);
+  void stk_done (ActPass *ap);
 
 }
 
