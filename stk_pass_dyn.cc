@@ -647,10 +647,12 @@ void stk_init (ActPass *a)
 {
   ActNetlistPass *nl = NULL;
   RawActStackPass *_sp;
-
-  config_set_state (a->getConfig());
+  ActDynamicPass *dp = dynamic_cast<ActDynamicPass *> (a);
   
-  if (a->getStash()) {
+  Assert (dp, "What?");
+  config_set_state (dp->getConfig());
+  
+  if (dp->getPtrParam("raw")) {
     warning ("stk_init(): Stack pass already created. Skipping.");
     return;
   }
@@ -667,7 +669,7 @@ void stk_init (ActPass *a)
 
   _sp = new RawActStackPass (a);
   _sp->setNL (nl);
-  a->setStash (_sp);
+  dp->setParam ("raw", (void *)_sp);
 }
   
 void stk_run (ActPass *ap, Process *p)
@@ -681,9 +683,10 @@ void stk_recursive (ActPass *ap, Process *p, int mode)
 }
 
 
-void *stk_proc (ActPass *ap, Process *p, int mode)
+void *stk_proc (ActPass *_ap, Process *p, int mode)
 {
-  RawActStackPass *_sp = (RawActStackPass *)ap->getStash ();
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  RawActStackPass *_sp = (RawActStackPass *)ap->getPtrParam ("raw");
   Assert (_sp, "What?");
   
   netlist_t *N = _sp->getNL (p);
@@ -1139,12 +1142,11 @@ void stk_free (ActPass *ap, void *v)
 }
 
 
-void stk_done (ActPass *ap)
+void stk_done (ActPass *_ap)
 {
-  RawActStackPass *_sp = (RawActStackPass *)ap->getStash ();
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  RawActStackPass *_sp = (RawActStackPass *)ap->getPtrParam ("raw");
   Assert (_sp, "What?");
   delete _sp;
-  ap->setStash (NULL);
+  ap->setParam ("raw", (void *)NULL);
 }
-
-
