@@ -95,13 +95,13 @@ long ActStackLayoutPass::snap_dn_y (long w)
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
   if (!a->pass_find ("net2stk")) {
-    stk = new ActStackPass (a);
+    stk = new ActStackPassDyn (a);
   }
   AddDependency ("net2stk");
 
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
-  stk = dynamic_cast<ActStackPass *>(pass);
+  stk = dynamic_cast<ActStackPassDyn *>(pass);
   Assert (stk, "Hmm too...");
 
   _total_area = -1;
@@ -1094,7 +1094,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   LayoutBlob *BLOB;
 
   Assert (stk, "What?");
-
+ 
   stks = stk->getStacks (p);
   if (!stks || list_length (stks) == 0) {
     return NULL;

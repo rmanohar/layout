@@ -8,6 +8,14 @@ export defcell g0x0 (bool? in[1]; bool! out)
    }
 }
 
+export defcell g1x0 (bool? in[2]; bool! out)
+{
+   prs {
+   in[0] & in[1] -> out-
+   ~in[0] & ~in[1] -> out+
+   }
+}
+
 export template<pint w,l> defcell p0(bool? in[2]; bool! out) {
   prs { passp<w,l> (in[0],in[1],out) }
 }

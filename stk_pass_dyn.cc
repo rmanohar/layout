@@ -21,6 +21,7 @@
  */
 #include <heap.h>
 #include "stk_pass_dyn.h"
+#include "config.h"
 
 #ifndef MIN
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
@@ -646,6 +647,8 @@ void stk_init (ActPass *a)
 {
   ActNetlistPass *nl = NULL;
   RawActStackPass *_sp;
+
+  config_set_state (a->getConfig());
   
   if (a->getStash()) {
     warning ("stk_init(): Stack pass already created. Skipping.");
@@ -694,7 +697,7 @@ void *stk_proc (ActPass *ap, Process *p, int mode)
   /* check we have already handled this process */
 #if 0
   printf ("--------------------------------------------\n");
-  printf ("creating stacks for: %s\n", proc->getName());
+  printf ("creating stacks for: %s\n", p->getName());
 #endif  
 
   /* nodes to be processed */
@@ -782,7 +785,7 @@ void *stk_proc (ActPass *ap, Process *p, int mode)
 	  e2 = (edge_t *) list_value (ej);
 	  if (e2->type != EDGE_PFET) continue;
 				      
-	  if (e1->g == e2->g) {
+	  if (e1->g == e2->g && e1->nfolds == e2->nfolds) {
 	    /* pairing opportunity */
 	    struct gate_pairs *p, *p2;
 
@@ -814,7 +817,8 @@ void *stk_proc (ActPass *ap, Process *p, int mode)
 	    p->share = MIN(e1->nfolds, e2->nfolds);
 	    p->n_start = 0;
 	    p->p_start = 0;
-	    if (!(p->share & 1)) {
+
+	    if (0 && !(p->share & 1)) {
 	      /* even, make it odd since otherwise you can have a
 		 disconnection chance */
 	      p->share--;

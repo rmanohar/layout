@@ -108,3 +108,31 @@ list_t *RawActStackPass::getStacks (Process *p)
   }
   return (list_t *)getMap (p);
 }
+
+
+ActStackPassDyn::ActStackPassDyn (Act *a) : ActDynamicPass (a, "net2stk", "pass_stk.so", "stk")
+{
+  
+}
+
+list_t *ActStackPassDyn::getStacks(Process *p)
+{
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
+  return raw->getStacks (p);
+}
+
+netlist_t *ActStackPassDyn::getNL (Process *p)
+{
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
+  return raw->getNL (p);
+}
+
+int ActStackPassDyn::isEmpty (list_t *stk)
+{
+  RawActStackPass *raw = (RawActStackPass *) getStash ();
+  Assert (raw, "What?");
+  return raw->isEmpty (stk);
+}
+

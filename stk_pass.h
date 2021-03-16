@@ -101,5 +101,16 @@ class ActStackPass : public ActPass {
   void free_local (void *);
 };
 
+class ActStackPassDyn : public ActDynamicPass {
+public:
+  ActStackPassDyn (Act *a);
+  ~ActStackPassDyn ();
+
+  netlist_t *getNL (Process *p = NULL);
+  list_t *getStacks (Process *p = NULL);
+  int isEmpty (list_t *stk); 
+};
+
+
 
 #endif /* __ACT_STK_PASS_H__ */

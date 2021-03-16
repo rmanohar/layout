@@ -183,6 +183,8 @@ int main (int argc, char **argv)
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
 
+  new ActNetlistPass (a);
+
   ActStackLayoutPass *lp = new ActStackLayoutPass (a);
 
   ActNetlistPass *netinfo;

@@ -110,7 +110,7 @@ class ActStackLayoutPass : public ActPass {
   /* aligned LEF boundary */
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
-  ActStackPass *stk;
+  ActStackPassDyn *stk;
 
   int lambda_to_scale;
 
