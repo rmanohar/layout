@@ -24,8 +24,8 @@ EXE2=actrectbbox.$(EXT)
 TARGETS=$(EXE) $(EXE2) mag.pl
 TARGETLIBS=pass_stk.so
 
-OBJS1=stk_pass.o main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
-OBJS2=stk_pass.o main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
+OBJS1=main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
+OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 
 SRCS=$(OBJS1:.o=.cc) main2.cc
 

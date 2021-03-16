@@ -25,7 +25,7 @@
 #include <config.h>
 #include <math.h>
 #include <string.h>
-#include "stk_pass.h"
+#include "stk_pass_dyn.h"
 #include "stk_layout.h"
 
 #define IS_METAL_HORIZ(i) ((((i) % 2) == _horiz_metal) ? 1 : 0)
@@ -95,14 +95,19 @@ long ActStackLayoutPass::snap_dn_y (long w)
 ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
 {
   if (!a->pass_find ("net2stk")) {
-    stk = new ActStackPassDyn (a);
+    stk = new ActDynamicPass (a, "net2stk", "pass_stk.so", "stk");
   }
   AddDependency ("net2stk");
 
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
-  stk = dynamic_cast<ActStackPassDyn *>(pass);
+  stk = dynamic_cast<ActDynamicPass *>(pass);
   Assert (stk, "Hmm too...");
+
+  pass = a->pass_find ("prs2net");
+  Assert (pass, "Missing netlist pass...");
+  nl = dynamic_cast<ActNetlistPass *> (pass);
+  Assert (nl, "What?");
 
   _total_area = -1;
   _total_stdcell_area = -1;
@@ -990,7 +995,7 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
   printf (" === processing %s\n", cname);
 #endif  
   /* found a .rect file! Override layout generation */
-  Layout *tmp = new Layout (stk->getNL (p));
+  Layout *tmp = new Layout (nl->getNL (p));
   tmp->ReadRect (cname);
   tmp->propagateAllNets ();
   tmp->markPins ();
@@ -1095,7 +1100,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
   Assert (stk, "What?");
  
-  stks = stk->getStacks (p);
+  stks = (list_t *) stk->getMap (p);
   if (!stks || list_length (stks) == 0) {
     return NULL;
   }
@@ -1128,7 +1133,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       struct gate_pairs *gp;
-      Layout *l = new Layout(stk->getNL (p));
+      Layout *l = new Layout(nl->getNL (p));
       gp = (struct gate_pairs *) list_value (si);
 
       /*--- process gp ---*/
@@ -1157,7 +1162,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       list_t *sl = (list_t *) list_value (si);
-      Layout *l = new Layout (stk->getNL (p));
+      Layout *l = new Layout (nl->getNL (p));
 
       b = print_singlestack (l, sl, diffspace, nxpos);
       
@@ -1176,7 +1181,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       list_t *sl = (list_t *) list_value (si);
-      Layout *l = new Layout (stk->getNL (p));
+      Layout *l = new Layout (nl->getNL (p));
 
       b = print_singlestack (l, sl, diffspace, pxpos);
       
@@ -1203,7 +1208,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
   BLOB = computeLEFBoundary (BLOB);
 
   /* --- add pins --- */
-  netlist_t *n = stk->getNL (p);
+  netlist_t *n = nl->getNL (p);
 
   if (!dummy_netlist && n->psc && n->nsc) {
     dummy_netlist = n;
@@ -2059,7 +2064,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
     return 0;
   }
 
-  n = stk->getNL (p);
+  n = nl->getNL (p);
   if (!n) {
     return 0;
   }
@@ -2376,7 +2381,7 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
     return;
   }
 
-  n = stk->getNL (p);
+  n = nl->getNL (p);
   if (!n) {
     return;
   }
@@ -3249,12 +3254,12 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
 	  Technology::T->scale/1000.0);
   printf ("area: %.2f%%\n", (area*blob->getCount()*100.0/getArea()));
 
-  netlist_t *nl = stk->getNL (p);
+  netlist_t *mynl = nl->getNL (p);
   node_t *n;
   unsigned long ncount = 0;
   unsigned long ecount = 0;
   unsigned long keeper = 0;
-  for (n = nl->hd; n; n = n->next) {
+  for (n = mynl->hd; n; n = n->next) {
     ncount++;
     listitem_t *li;
     edge_t *e;
@@ -3364,10 +3369,10 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   PolyMat *pmat = Technology::T->poly;
   listitem_t *stki;
 
-  list_t *stks = stk->getStacks (p);
-  netlist_t *nl = stk->getNL (p);
+  list_t *stks = (list_t *)stk->getMap (p);
+  netlist_t *n = nl->getNL (p);
 
-  double la = nl->leak_correct ? Layout::getLeakAdjust() : 0;
+  double la = n->leak_correct ? Layout::getLeakAdjust() : 0;
   
   if (!stks || list_length (stks) == 0) {
     return 0;
@@ -3488,4 +3493,21 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   printf (" final = %d\n", spc_default);
 #endif  
   return spc_default;
+}
+
+int ActStackLayoutPass::isEmpty (list_t *stk)
+{
+  if (!stk) return 1;
+  
+  list_t *dual, *n, *p;
+  
+  dual = (list_t *) list_value (list_first (stk));
+  n = (list_t *) list_value (list_next (list_first (stk)));
+  p = (list_t *) list_value (list_next (list_next (list_first (stk))));
+
+  if (list_length (dual) > 0) return 0;
+  if (n && list_length (n) > 0) return 0;
+  if (p && list_length (p) > 0) return 0;
+  
+  return 1;
 }

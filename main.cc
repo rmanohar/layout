@@ -32,7 +32,6 @@
 #include <hash.h>
 #include <config.h>
 
-#include "stk_pass.h"
 #include "stk_layout.h"
 #include "geom.h"
 

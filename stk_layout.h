@@ -23,11 +23,10 @@
 #define __ACT_STK_LAYOUT_PASS_H__
 
 #include <act/act.h>
-#include "geom.h"
-#include "stk_pass.h"
 #include <map>
 #include <unordered_set>
 #include <hash.h>
+#include "geom.h"
 
 /*-- data structures --*/
 
@@ -110,8 +109,11 @@ class ActStackLayoutPass : public ActPass {
   /* aligned LEF boundary */
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
-  ActStackPassDyn *stk;
+  ActDynamicPass *stk;
+  ActNetlistPass *nl;
 
+  int isEmpty (list_t *stk);
+  
   int lambda_to_scale;
 
   /* temporary variables */
