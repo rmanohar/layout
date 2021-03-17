@@ -34,25 +34,7 @@ class ActStackLayout {
 public:
   ActStackLayout (ActPass *a);
 
-  /* computes the maximum cell height needed for all the cells
-     involved in process p */
-  int maxHeight (Process *p = NULL);
-
   LayoutBlob *getLayout (Process *p = NULL);
-
-  /* this is mode 1 */
-  void emitLEFHeader (FILE *fp);
-  void emitWellHeader (FILE *fp);
-  void emitLEF (FILE *fp, FILE *fpcell, Process *p);
-
-  /* this is mode 4 */
-  void emitRect (Process *p);
-
-  void emitDEFHeader (FILE *fp, Process *p);
-  void emitDEF (FILE *fp, Process *p, double pad = 1.4, double ratio = 1.0, int do_pins = 1);
-
-  /* this is mode 2 */
-  void reportStats(Process *p);
 
   long snap_up_x (long);
   long snap_up_y (long);
@@ -82,6 +64,9 @@ public:
 		     long *llx, long *lly, long *urx, long *ury,
 		     int is_welltap = 0);
 
+  void emitLEFHeader (FILE *fp);
+  void emitWellHeader (FILE *fp);
+
   /* mode 2 */
   void _reportLocalStats(Process *p);
 
@@ -90,6 +75,10 @@ public:
 
   /* mode 4 */
   void _emitlocalRect (Process *p);
+
+  /* this is mode 5 */
+  void emitDEFHeader (FILE *fp, Process *p);
+  void emitDEF (FILE *fp, Process *p, double pad = 1.4, double ratio = 1.0, int do_pins = 1);
   
   /* welltap */
   LayoutBlob **wellplugs;
