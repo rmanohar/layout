@@ -6,3 +6,4 @@ Makefile.deps
 act2lef.*
 actrectbbox.*
 pass_stk.so
+pass_layout.so
