@@ -102,6 +102,8 @@ void layout_init (ActPass *a)
   Assert (dp, "What?");
   config_set_state (dp->getConfig ());
   Technology::T = dp->getTech ();
+  
+  Layout::Init ();
 
   if (dp->getPtrParam ("raw")) {
     warning ("layout_init(): Layout pass already created. Skipping.");
