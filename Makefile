@@ -22,7 +22,7 @@ EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
 TARGETS=$(EXE) $(EXE2) mag.pl
-TARGETLIBS=pass_stk.so
+TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
@@ -36,6 +36,9 @@ $(EXE): $(OBJS1) $(ACTPASSDEPEND)
 
 pass_stk.so: stk_pass_dyn.os $(ACTPASSDEPEND)
 	$(CXX) $(SH_LINK_OPTIONS) -o pass_stk.so stk_pass_dyn.os $(LIBACTPASS)
+
+pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
+	$(CXX) $(SH_LINK_OPTIONS) -o pass_layout.so stk_layout.os geom.os tile.os $(LIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl

@@ -26,8 +26,7 @@
 #include <string.h>
 #include <map>
 
-#include <act/passes/cells.h>
-#include <act/passes/netlist.h>
+#include <act/passes.h>
 #include <act/iter.h>
 #include <hash.h>
 #include <config.h>
@@ -182,9 +181,11 @@ int main (int argc, char **argv)
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
 
+  new ActApplyPass (a);
   new ActNetlistPass (a);
+  new ActDynamicPass (a, "net2stk", "pass_stk.so", "stk");
 
-  ActStackLayoutPass *lp = new ActStackLayoutPass (a);
+  ActDynamicPass *lp = new ActDynamicPass(a, "stk2layout", "pass_layout.so", "layout");
 
   ActNetlistPass *netinfo;
   netinfo = dynamic_cast<ActNetlistPass *>(a->pass_find ("prs2net"));
@@ -216,7 +217,7 @@ int main (int argc, char **argv)
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitLEFHeader (fp);
+  lp->setParam ("lef_file", (void *)fp);
 
   FILE *fpcell;
   snprintf (buf, 1024, "%s.cell", outname);
@@ -224,12 +225,20 @@ int main (int argc, char **argv)
   if (!fpcell) {
     fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitWellHeader (fpcell);
-  lp->emitRect (p);
-  lp->emitLEF (fp, fpcell, p);
+  lp->setParam ("cell_file", (void *)fpcell);
+
+  /* emit lef and cell files */
+  lp->run_recursive (p, 1);
+  
   fclose (fp);
   fclose (fpcell);
 
+  lp->setParam ("cell_file", (void*)NULL);
+  lp->setParam ("lef_file", (void*)NULL);
+
+  /* emit rect */
+  lp->run_recursive (p, 4);
+  
   /* 
      preparation for DEF file generation: create flat netlist using
      special method in the booleanize pass
@@ -244,12 +253,19 @@ int main (int argc, char **argv)
   if (!fp) {
     fatal_error ("Could not open file `%s' for writing", buf);
   }
-  lp->emitDEF (fp, p, area_multiplier, aspect_ratio, do_pins);
+  lp->setParam ("def_file", (void *)fp);
+  lp->setParam ("do_pins", do_pins);
+  lp->setParam ("area_mult", area_multiplier);
+  lp->setParam ("aspect_ratio", aspect_ratio);
+
+  lp->run_recursive (p, 5);
+
   fclose (fp);
+  lp->setParam ("def_file", (void*)NULL);
 
   if (report) {
-    double a = lp->getArea();
-    double as = lp->getStdCellArea();
+    double a = lp->getRealParam ("total_area");
+    double as = lp->getRealParam ("stdcell_area");
     a *= Technology::T->scale/1000.0;
     a *= Technology::T->scale/1000.0;
     as *= Technology::T->scale/1000.0;
@@ -264,10 +280,12 @@ int main (int argc, char **argv)
       printf ("Total Area: %.3g um^2\n", a);
       printf ("Total StdCell Area: %.3g um^2 ", as);
     }
+    int stdcellht = lp->getIntParam ("cell_maxheight");
     printf (" (%.2g%%) [height=%d, #tracks=%d]\n", 
-	    (as-a)/a*100.0, lp->getStdCellHeight(),
-	    lp->getStdCellHeight()/Technology::T->metal[0]->getPitch());
-    lp->reportStats (p);
+	    (as-a)/a*100.0, stdcellht,
+	    stdcellht/Technology::T->metal[0]->getPitch());
+
+    lp->run_recursive (p, 2);
   }
 
   /* -- dump updated cells file, if necessary -- */

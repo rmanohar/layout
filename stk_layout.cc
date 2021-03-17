@@ -20,6 +20,7 @@
  **************************************************************************
  */
 #include <stdio.h>
+#include <act/act.h>
 #include <act/iter.h>
 #include <act/passes.h>
 #include <config.h>
@@ -72,33 +73,53 @@ static long snap_dn (long w, unsigned long pitch)
   return w;
 }
 
-long ActStackLayoutPass::snap_up_x (long w)
+long ActStackLayout::snap_up_x (long w)
 {
   return snap_up (w, _m_align_x->getPitch());
 }
 
-long ActStackLayoutPass::snap_dn_x (long w)
+long ActStackLayout::snap_dn_x (long w)
 {
   return snap_dn (w, _m_align_x->getPitch());
 }
 
-long ActStackLayoutPass::snap_up_y (long w)
+long ActStackLayout::snap_up_y (long w)
 {
   return snap_up (w, _m_align_y->getPitch());
 }
 
-long ActStackLayoutPass::snap_dn_y (long w)
+long ActStackLayout::snap_dn_y (long w)
 {
   return snap_dn (w, _m_align_y->getPitch());
 }
 
-ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
+void layout_init (ActPass *a)
 {
-  if (!a->pass_find ("net2stk")) {
-    stk = new ActDynamicPass (a, "net2stk", "pass_stk.so", "stk");
-  }
-  AddDependency ("net2stk");
+  ActDynamicPass *dp = dynamic_cast<ActDynamicPass *> (a);
 
+  ActNamespace::setAct (a->getAct());
+
+  Assert (dp, "What?");
+  config_set_state (dp->getConfig ());
+  Technology::T = dp->getTech ();
+
+  if (dp->getPtrParam ("raw")) {
+    warning ("layout_init(): Layout pass already created. Skipping.");
+    return;
+  }
+
+  if (!a->getAct()->pass_find ("net2stk")) {
+    new ActDynamicPass (a->getAct(), "net2stk", "pass_stk.so", "stk");
+  }
+  a->AddDependency ("net2stk");
+  dp->setParam ("raw", (void *)new ActStackLayout(a));
+}
+
+ActStackLayout::ActStackLayout (ActPass *ap) 
+{
+  me = ap;
+  a = ap->getAct();
+  
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
   stk = dynamic_cast<ActDynamicPass *>(pass);
@@ -113,6 +134,8 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   _total_stdcell_area = -1;
   _total_instances = -1;
   _maxht = -1;
+  _ymin = 0;
+  _ymax = 0;
 
   double net_lambda;
   net_lambda = config_get_real ("net.lambda");
@@ -258,15 +281,13 @@ ActStackLayoutPass::ActStackLayoutPass(Act *a) : ActPass (a, "stk2layout")
   else {
     _extra_tracks_right = 0;
   }
+
+  _lef_header = 0;
+  _cell_header = 0;
 }
-
-
-ActStackLayoutPass::~ActStackLayoutPass() { }
 
 #define EDGE_FLAGS_LEFT 0x1
 #define EDGE_FLAGS_RIGHT 0x2
-
-
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -937,13 +958,22 @@ static BBox print_singlestack (Layout *L, list_t *l,
   return b;
 }
 
-
-void *ActStackLayoutPass::local_op (Process *p, int mode)
+void *ActStackLayout::localop (ActPass *ap, Process *p, int mode)
 {
+  ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(ap);
+  Assert (dp, "What?");
+  if (!_fp) {
+    _fp = (FILE *)dp->getPtrParam ("lef_file");
+  }
+  if (!_fpcell) {
+    _fpcell = (FILE *)dp->getPtrParam ("cell_file");
+  }
   if (mode == 0) {
     return _createlocallayout (p);
   }
   else if (mode == 1) {
+    emitLEFHeader (_fp);
+    emitWellHeader (_fpcell);
     _emitlocalLEF (p);
   }
   else if (mode == 2) {
@@ -955,10 +985,20 @@ void *ActStackLayoutPass::local_op (Process *p, int mode)
   else if (mode == 4) {
     _emitlocalRect (p);
   }
-  return getMap (p);
+  return ap->getMap (p);
 }
 
-void ActStackLayoutPass::free_local (void *v)
+void *layout_proc (ActPass *_ap, Process *p, int mode)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  Assert (ap, "What?");
+  
+  ActStackLayout *lp = (ActStackLayout *)ap->getPtrParam ("raw");
+  
+  return lp->localop (_ap, p, mode);
+}
+
+void layout_free (ActPass *ap, void *v)
 {
   LayoutBlob *b = (LayoutBlob *)v;
   if (b) {
@@ -966,8 +1006,7 @@ void ActStackLayoutPass::free_local (void *v)
   }
 }
 
-
-LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
+LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
 {
   char cname[10240];
   int len;
@@ -1092,7 +1131,7 @@ LayoutBlob *ActStackLayoutPass::_readlocalRect (Process *p)
  * for the local circuits within the process
  *
  */
-LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
+LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 {
   list_t *stks;
   BBox b;
@@ -1429,7 +1468,7 @@ LayoutBlob *ActStackLayoutPass::_createlocallayout (Process *p)
 }
 
 
-LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
+LayoutBlob *ActStackLayout::_readwelltap (int flavor)
 {
   char cname[128];
   
@@ -1530,7 +1569,7 @@ LayoutBlob *ActStackLayoutPass::_readwelltap (int flavor)
 }
 
 
-LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
+LayoutBlob *ActStackLayout::_createwelltap (int flavor)
 {
   Layout *l;
   DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
@@ -1636,7 +1675,7 @@ LayoutBlob *ActStackLayoutPass::_createwelltap (int flavor)
 }
 
 
-void ActStackLayoutPass::_emitwelltaprect (int flavor)
+void ActStackLayout::_emitwelltaprect (int flavor)
 {
   if (!wellplugs[flavor]) {
     return;
@@ -1671,27 +1710,31 @@ void ActStackLayoutPass::_emitwelltaprect (int flavor)
   fclose (tfp);
 }
 
-
-int ActStackLayoutPass::run (Process *p)
+void layout_run (ActPass *_ap, Process *p)
 {
-  int ret = ActPass::run (p);
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  ActStackLayout *lp;
+  Assert (ap, "What?");
 
+  lp = (ActStackLayout *)ap->getPtrParam ("raw");
+  lp->run_post ();
+}
+
+void ActStackLayout::run_post (void)
+{
   if (!dummy_netlist) {
     fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
   }
-  
+
   /* create welltap cells */
   int ntaps = config_get_table_size ("act.dev_flavors");
   MALLOC (wellplugs, LayoutBlob *, ntaps);
   for (int flavor=0; flavor < ntaps; flavor++) {
     wellplugs[flavor] = _createwelltap (flavor);
   }
-
-  return ret;
 }
 
-
-void ActStackLayoutPass::_emitlocalRect (Process *p)
+void ActStackLayout::_emitlocalRect (Process *p)
 {
   LayoutBlob *blob = getLayout (p);
 
@@ -1741,24 +1784,6 @@ void ActStackLayoutPass::_emitlocalRect (Process *p)
   }
   
   fclose (fp);
-}
-
-int ActStackLayoutPass::haveRect (Process *p)
-{
-  if (!completed ()) {
-    return 0;
-  }
-  if (!p) {
-    return 0;
-  }
-
-  LayoutBlob *blob = getLayout (p);
-  if (!blob) {
-    return 0;
-  }
-  else {
-    return 1;
-  }
 }
 
 static void emit_header (FILE *fp, const char *name, const char *lefclass,
@@ -1967,81 +1992,117 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   fprintf (fp, "\n");
 }
 
-void ActStackLayoutPass::emitRect (Process *p)
-{
-  if (!completed()) {
-    return;
-  }
-  run_recursive (p, 4);
 
-  for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-    _emitwelltaprect (i);
+void ActStackLayout::runrec (int mode, UserDef *u)
+{
+  if (mode == 1) {
+    /* emitLEF */
+    
+    /*-- emit lef for the welltap cells --*/
+    double scale = Technology::T->scale/1000.0;
+    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+      if (wellplugs[i]) {
+	LayoutBlob *b = wellplugs[i];
+	char name[1024], nodename[1024];
+
+	snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
+	emit_header (_fp, name, "CORE WELLTAP", b);
+
+	ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+				   dummy_netlist->nsc);
+	emit_one_pin (a, _fp, nodename, 1, "POWER", b, dummy_netlist->nsc);
+
+	ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+				     dummy_netlist->psc);
+	emit_one_pin (a, _fp, nodename, 1, "GROUND", b, dummy_netlist->psc);
+	
+	emit_footer (_fp, name);
+
+	long bllx, blly, burx, bury;
+	TransformMat mat;
+	b->getBloatBBox (&bllx, &blly, &burx, &bury);
+	mat.applyTranslate (-bllx, -blly);
+
+	if (_fpcell) {
+	  /* emit local well lef */
+	  WellMat *w;
+	  DiffMat *d;
+	
+	  int adjust = Technology::T->welltap_adjust;
+
+	  fprintf (_fpcell, "MACRO %s\n", name);
+	  fprintf (_fpcell, "   VERSION %s\n", name);
+	  fprintf (_fpcell, "   PLUG\n");
+
+	  for (int j=0; j < 2; j++) {
+	    long wllx, wlly, wurx, wury;
+	    _computeWell (b, i, j, &wllx, &wlly, &wurx, &wury, 1);
+
+	    if (wllx < wurx && wlly < wury) {
+	      fprintf (_fpcell, "   LAYER %s ;\n", Technology::T->well[j][i]->getName());
+	      fprintf (_fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
+		       wllx*scale, wlly*scale, wurx*scale, wury*scale);
+	      fprintf (_fpcell, "   END\n");
+	    }
+	  }
+	  fprintf (_fpcell, "   END VERSION\n");
+	  fprintf (_fpcell, "END %s\n", name);
+	}
+      }
+    }
+
+    /* done with LEF */
+    _lef_header = 0;
+    _cell_header = 0;
+  }
+  else if (mode == 2) {
+    /* nothing */
+  }
+  else if (mode == 3) {
+    _maxht = _ymax - _ymin + 1;
+  }
+  else if (mode == 4) {
+    /* emitRect */
+    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+      _emitwelltaprect (i);
+    }
+  }
+  else if (mode == 5) {
+    FILE *fp;
+    Process *p = dynamic_cast<Process *> (u);
+    double area_mult;
+    double aspect_ratio;
+    int do_pins;
+    ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
+    if (!p || !dp) {
+      return;
+    }
+
+    dp->run_recursive (p, 3);
+    dp->setParam ("cell_maxheight", _maxht);
+    
+    fp = (FILE *) dp->getPtrParam ("def_file");
+    do_pins = dp->getIntParam ("do_pins");
+    area_mult = dp->getRealParam ("area_mult");
+    aspect_ratio = dp->getRealParam ("aspect_ratio");
+    emitDEF (fp, p, area_mult, aspect_ratio, do_pins);
+
+    dp->setParam ("total_area", _total_area);
+    dp->setParam ("stdcell_area", _total_stdcell_area);
+
   }
 }
 
-void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
+void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 {
-  if (!completed ()) {
+  ActDynamicPass *dp;
+  if (!_ap->completed()) {
     return;
   }
-  /* pass arguments */
-  _fp = fp;
-  _fpcell = fpcell;
-
-  run_recursive (p, 1);
-
-  /*-- emit lef for the welltap cells --*/
-  double scale = Technology::T->scale/1000.0;
-  for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-    if (wellplugs[i]) {
-      LayoutBlob *b = wellplugs[i];
-      char name[1024], nodename[1024];
-
-      snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
-      emit_header (fp, name, "CORE WELLTAP", b);
-
-      ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-				   dummy_netlist->nsc);
-      emit_one_pin (a, fp, nodename, 1, "POWER", b, dummy_netlist->nsc);
-
-      ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-				   dummy_netlist->psc);
-      emit_one_pin (a, fp, nodename, 1, "GROUND", b, dummy_netlist->psc);
-
-      emit_footer (fp, name);
-
-      long bllx, blly, burx, bury;
-      TransformMat mat;
-      b->getBloatBBox (&bllx, &blly, &burx, &bury);
-      mat.applyTranslate (-bllx, -blly);
-
-      if (fpcell) {
-	/* emit local well lef */
-	WellMat *w;
-	DiffMat *d;
-	
-	int adjust = Technology::T->welltap_adjust;
-
-	fprintf (fpcell, "MACRO %s\n", name);
-	fprintf (fpcell, "   VERSION %s\n", name);
-	fprintf (fpcell, "   PLUG\n");
-
-	for (int j=0; j < 2; j++) {
-	  long wllx, wlly, wurx, wury;
-	  _computeWell (b, i, j, &wllx, &wlly, &wurx, &wury, 1);
-
-	  if (wllx < wurx && wlly < wury) {
-	    fprintf (fpcell, "   LAYER %s ;\n", Technology::T->well[j][i]->getName());
-	    fprintf (fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
-		     wllx*scale, wlly*scale, wurx*scale, wury*scale);
-	    fprintf (fpcell, "   END\n");
-	  }
-	}
-	fprintf (fpcell, "   END VERSION\n");
-	fprintf (fpcell, "END %s\n", name);
-      }
-    }
-  }
+  dp = dynamic_cast<ActDynamicPass *>(_ap);
+  Assert (dp, "What?");
+  ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
+  lp->runrec (mode, u);
 }
 
 /*
@@ -2050,7 +2111,7 @@ void ActStackLayoutPass::emitLEF (FILE *fp, FILE *fpcell, Process *p)
  * specified by the file pointer fp
  *
  */
-int ActStackLayoutPass::_emitlocalLEF (Process *p)
+int ActStackLayout::_emitlocalLEF (Process *p)
 {
   FILE *fp = _fp;
   FILE *fpcell = _fpcell;
@@ -2287,7 +2348,7 @@ int ActStackLayoutPass::_emitlocalLEF (Process *p)
 }
 
 
-void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
+void ActStackLayout::_computeWell (LayoutBlob *blob, int flavor, int type,
 				       long *llx, long *lly, long *urx, long *ury, int is_welltap)
 {
   TransformMat mat;
@@ -2368,7 +2429,7 @@ void ActStackLayoutPass::_computeWell (LayoutBlob *blob, int flavor, int type,
 /*
  * Called from LEF generation pass
  */
-void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
+void ActStackLayout::_emitLocalWellLEF (FILE *fp, Process *p)
 {
   netlist_t *n;
 
@@ -2439,9 +2500,14 @@ void ActStackLayoutPass::_emitLocalWellLEF (FILE *fp, Process *p)
 }
 
 
-void ActStackLayoutPass::emitLEFHeader (FILE *fp)
+void ActStackLayout::emitLEFHeader (FILE *fp)
 {
   double scale = Technology::T->scale/1000.0;
+
+  if (_lef_header) {
+    return;
+  }
+  _lef_header = 1;
   
   /* -- lef header -- */
   fprintf (fp, "VERSION %s ;\n\n", _version);
@@ -2733,9 +2799,14 @@ void ActStackLayoutPass::emitLEFHeader (FILE *fp)
 
 }
 
-void ActStackLayoutPass::emitWellHeader (FILE *fp)
+void ActStackLayout::emitWellHeader (FILE *fp)
 {
   double scale = Technology::T->scale/1000.0;
+
+  if (_cell_header) {
+    return;
+  }
+  _cell_header = 1;
 
   fprintf (fp, "LAYER LEGALIZER\n");
   fprintf (fp, "   SAME_DIFF_SPACING %.6f ;\n", Technology::T->getMaxSameDiffSpacing()*scale);
@@ -2762,13 +2833,13 @@ void ActStackLayoutPass::emitWellHeader (FILE *fp)
 }
 
 
-LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
+LayoutBlob *ActStackLayout::getLayout (Process *p)
 {
-  if (!completed ()) {
+  if (!me->completed ()) {
     return 0;
   }
   if (!p) return NULL;
-  return (LayoutBlob *) getMap (p);
+  return (LayoutBlob *) me->getMap (p);
 }
 
 
@@ -2776,7 +2847,7 @@ LayoutBlob *ActStackLayoutPass::getLayout (Process *p)
   Returns the max height of all layout blocks within p that have not
   been visited yet 
 */
-void ActStackLayoutPass::_maxHeightlocal (Process *p)
+void ActStackLayout::_maxHeightlocal (Process *p)
 {
   LayoutBlob *b;
 
@@ -2794,27 +2865,6 @@ void ActStackLayoutPass::_maxHeightlocal (Process *p)
 }
 
 
-int ActStackLayoutPass::maxHeight (Process *p)
-{
-  int maxval = 0;
-
-  if (!completed()) {
-    return 0;
-  }
-
-  _ymin = 0;
-  _ymax = 0;
-
-  run_recursive (p, 3);
-
-  maxval = _ymax - _ymin + 1;
-  
-  return maxval;
-}
-
-
-
-
 /*------------------------------------------------------------------------
  *  
  *  Routines for DEF file generation
@@ -2828,7 +2878,7 @@ static int _maximum_height;
 
 static void count_inst (void *x, ActId *prefix, Process *p)
 {
-  ActStackLayoutPass *ap = (ActStackLayoutPass *)x;
+  ActStackLayout *ap = (ActStackLayout *)x;
   LayoutBlob *b;
   
   if ((b = ap->getLayout (p))) {
@@ -2850,7 +2900,7 @@ static void count_inst (void *x, ActId *prefix, Process *p)
  * Flat instance dump
  */
 static Act *global_act;
-static ActStackLayoutPass *_alp;
+static ActStackLayout *_alp;
 
 static void dump_inst (void *x, ActId *prefix, Process *p)
 {
@@ -3006,7 +3056,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 }
 
 
-void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
+void ActStackLayout::emitDEFHeader (FILE *fp, Process *p)
 {
   /* -- def header -- */
   fprintf (fp, "VERSION %s ;\n\n", _version);
@@ -3020,11 +3070,14 @@ void ActStackLayoutPass::emitDEFHeader (FILE *fp, Process *p)
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", _micron_conv);
 }
 
-void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
+void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 				  double ratio, int do_pins)
 {
+  ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
+  Assert (dp, "What?");
+  
   emitDEFHeader (fp, p);
-
+  
   /* -- get area -- */
   ActPass *tap = a->pass_find ("apply");
   if (!tap) {
@@ -3035,7 +3088,7 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
   _instcount = 0;
   _areacount = 0;
   _areastdcell = 0;
-  _maximum_height = getStdCellHeight ();
+  _maximum_height = dp->getIntParam ("cell_maxheight");
   ap->setCookie (this);
   ap->setInstFn (count_inst);
   ap->run (p);
@@ -3222,21 +3275,10 @@ void ActStackLayoutPass::emitDEF (FILE *fp, Process *p, double pad,
 }
 
 
-
-
-/*
- * Layout generation statistics
- *
- */
-void ActStackLayoutPass::reportStats (Process *p)
-{
-  run_recursive (p, 2);
-}
-
-
-void ActStackLayoutPass::_reportLocalStats(Process *p)
+void ActStackLayout::_reportLocalStats(Process *p)
 {
   LayoutBlob *blob = getLayout (p);
+  ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
   if (!blob) {
     return;
   }
@@ -3245,6 +3287,7 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
   if (bllx > burx || blly > bury) return;
 
   char *tmp = p->getns()->Name();
+  double all_area = dp->getRealParam ("total_area");
   printf ("--- Cell %s::%s ---\n", tmp, p->getName());
   FREE (tmp);
 
@@ -3252,7 +3295,7 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
   printf ("  count=%lu; ", blob->getCount());
   printf ("cell_area=%.3g um^2; ", area*Technology::T->scale/1000.0*
 	  Technology::T->scale/1000.0);
-  printf ("area: %.2f%%\n", (area*blob->getCount()*100.0/getArea()));
+  printf ("area: %.2f%%\n", area*blob->getCount()*100.0/all_area);
 
   netlist_t *mynl = nl->getNL (p);
   node_t *n;
@@ -3285,7 +3328,7 @@ void ActStackLayoutPass::_reportLocalStats(Process *p)
 /*
   Returns LEF boundary in blob coordinate system
 */
-LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
+LayoutBlob *ActStackLayout::computeLEFBoundary (LayoutBlob *b)
 {
   long llx, lly, urx, ury;
   long nllx, nlly, nurx, nury;
@@ -3360,7 +3403,7 @@ LayoutBlob *ActStackLayoutPass::computeLEFBoundary (LayoutBlob *b)
  * Assumed that if there is a notch, then the poly overhang out of the
  * notch is not more than the normal poly overhang...
  */
-int ActStackLayoutPass::_localdiffspace (Process *p)
+int ActStackLayout::_localdiffspace (Process *p)
 {
   int poly_potential;
   int spc_default, spc2;
@@ -3495,7 +3538,7 @@ int ActStackLayoutPass::_localdiffspace (Process *p)
   return spc_default;
 }
 
-int ActStackLayoutPass::isEmpty (list_t *stk)
+int ActStackLayout::isEmpty (list_t *stk)
 {
   if (!stk) return 1;
   

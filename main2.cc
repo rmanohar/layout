@@ -40,10 +40,15 @@ int main (int argc, char **argv)
   }
 
   Act *a = new Act (argv[1]);
-  ActStackLayoutPass *lp = new ActStackLayoutPass (a);
+
+  new ActNetlistPass (a);
+  new ActDynamicPass (a, "net2stk", "pass_stk.so", "stk");
+  ActDynamicPass *dp = new ActDynamicPass(a, "stk2layout", "pass_layout.so", "layout");
 
   Layout *l = new Layout (NULL);
   l->ReadRect (argv[2], 1);
+
+  ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
   
   long llx, lly, urx, ury;
 

@@ -30,12 +30,9 @@
 
 /*-- data structures --*/
 
-class ActStackLayoutPass : public ActPass {
- public:
-  ActStackLayoutPass (Act *a);
-  ~ActStackLayoutPass ();
-
-  int run (Process *p = NULL);
+class ActStackLayout {
+public:
+  ActStackLayout (ActPass *a);
 
   /* computes the maximum cell height needed for all the cells
      involved in process p */
@@ -54,12 +51,6 @@ class ActStackLayoutPass : public ActPass {
   void emitDEFHeader (FILE *fp, Process *p);
   void emitDEF (FILE *fp, Process *p, double pad = 1.4, double ratio = 1.0, int do_pins = 1);
 
-  int haveRect (Process *p);
-
-  double getArea () { return _total_area; }
-  double getStdCellArea() { return _total_stdcell_area; }
-  int getStdCellHeight() { if (_maxht == -1) { _maxht = maxHeight (NULL); } return _maxht; }
-
   /* this is mode 2 */
   void reportStats(Process *p);
 
@@ -68,11 +59,12 @@ class ActStackLayoutPass : public ActPass {
   long snap_dn_x (long);
   long snap_dn_y (long);
 
+  void *localop (ActPass *ap, Process *p, int mode);
+
+  void run_post (void);
+  void runrec (int mode, UserDef *u);
+
  private:
-  void *local_op (Process *p, int mode = 0);
-  void free_local (void *v);
-
-
   int _localdiffspace (Process *p);
 
   LayoutBlob *_readlocalRect (Process *p);
@@ -81,6 +73,8 @@ class ActStackLayoutPass : public ActPass {
   LayoutBlob *_createlocallayout (Process *p);
 
   /* mode 1 */
+  int _lef_header;
+  int _cell_header;
   int _emitlocalLEF (Process *p);
   void _emitLocalWellLEF (FILE *fp, Process *p);
 
@@ -113,6 +107,9 @@ class ActStackLayoutPass : public ActPass {
   ActNetlistPass *nl;
 
   int isEmpty (list_t *stk);
+
+  Act *a;
+  ActPass *me;
   
   int lambda_to_scale;
 
@@ -146,5 +143,17 @@ class ActStackLayoutPass : public ActPass {
   std::unordered_set<Process *> *visited;
 };
 
+extern "C" {
+
+  void layout_init (ActPass *ap);
+  void layout_run (ActPass *ap, Process *p);
+  void layout_recursive (ActPass *ap, UserDef *u, int mode);
+  void *layout_proc (ActPass *ap, Process *p, int mode);
+  void *layout_data (ActPass *ap, Data *d, int mode);
+  void *layout_chan (ActPass *ap, Channel *c, int mode);
+  void layout_free (ActPass *ap, void *v);
+  void layout_done (ActPass *ap);
+
+}
 
 #endif /* __ACT_STK_LAYOUT_PASS_H__ */
