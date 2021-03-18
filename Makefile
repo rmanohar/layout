@@ -29,16 +29,18 @@ OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
 
 SRCS=$(OBJS1:.o=.cc) main2.cc
 
+SHOBJS1=$(OBJS1:.o=.os)
+
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 
-$(EXE): $(OBJS1) $(ACTPASSDEPEND)
-	$(CXX) $(CFLAGS) $(OBJS1) -o $(EXE) $(LIBACTPASS)
+$(EXE): main.os
+	$(CXX) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
 
 pass_stk.so: stk_pass_dyn.os $(ACTPASSDEPEND)
-	$(CXX) $(SH_LINK_OPTIONS) -o pass_stk.so stk_pass_dyn.os $(LIBACTPASS)
+	$(VLSI_TOOLS_SRC)/scripts/linkso pass_stk.so stk_pass_dyn.os $(SHLIBACTPASS)
 
 pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
-	$(CXX) $(SH_LINK_OPTIONS) -o pass_layout.so stk_layout.os geom.os tile.os $(LIBACTPASS)
+	$(VLSI_TOOLS_SRC)/scripts/linkso pass_layout.so stk_layout.os geom.os tile.os $(SHLIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl

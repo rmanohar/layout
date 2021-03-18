@@ -97,11 +97,18 @@ void layout_init (ActPass *a)
 {
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *> (a);
 
+#if 0
+  printf ("[lay] cur state: %p\n", config_get_state ());
+  printf ("[lay] set to: %p\n", dp->getConfig());
+#endif
+
   ActNamespace::setAct (a->getAct());
 
   Assert (dp, "What?");
+#if 0
   config_set_state (dp->getConfig ());
   Technology::T = dp->getTech ();
+#endif
   
   Layout::Init ();
 
@@ -312,6 +319,13 @@ static int getwidth (int idx, edge_t *e)
 /* actual edge length */
 static int getlength (edge_t *e, double adj)
 {
+  static int min_length = -1;
+  if (min_length == -1) {
+    min_length = config_get_int ("net.min_length");
+  }
+  if (e->l != min_length) {
+    adj = 0;
+  }
   return (e->l*manufacturing_grid_in_nm+adj*1e9)/Technology::T->scale;
 }
 

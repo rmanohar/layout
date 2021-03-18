@@ -80,11 +80,12 @@ int main (int argc, char **argv)
       config_read ("macros.conf");
     }
   }
-  Layout::Init();
   
+#if 0
   if (Technology::T->nmetals < 2) {
     fatal_error ("Can't handle a process with fewer than two metal layers!");
   }
+#endif
 
   while ((ch = getopt (argc, argv, "c:p:o:sSPRa:r:")) != -1) {
     switch (ch) {
@@ -180,10 +181,6 @@ int main (int argc, char **argv)
   /*--- core passes ---*/
   ActCellPass *cp = new ActCellPass (a);
   cp->run (p);
-
-  new ActApplyPass (a);
-  new ActNetlistPass (a);
-  new ActDynamicPass (a, "net2stk", "pass_stk.so", "stk");
 
   ActDynamicPass *lp = new ActDynamicPass(a, "stk2layout", "pass_layout.so", "layout");
 

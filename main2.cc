@@ -33,7 +33,6 @@ int main (int argc, char **argv)
       config_read ("macros.conf");
     }
   }
-  Layout::Init();
   
   if (argc != 3) {
     fatal_error ("Usage: %s <actfile> <rectfile>\n", argv[0]);

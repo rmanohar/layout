@@ -650,7 +650,12 @@ void stk_init (ActPass *a)
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *> (a);
   
   Assert (dp, "What?");
+
+#if 0
+  printf ("[stk] cur state: %p\n", config_get_state ());
+  printf ("[stk] set to: %p\n", dp->getConfig());
   config_set_state (dp->getConfig());
+#endif
   
   if (dp->getPtrParam("raw")) {
     warning ("stk_init(): Stack pass already created. Skipping.");
