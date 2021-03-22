@@ -20,7 +20,7 @@
  **************************************************************************
  */
 #include <heap.h>
-#include "stk_pass_dyn.h"
+#include "stk_pass.h"
 #include "config.h"
 
 #ifndef MIN

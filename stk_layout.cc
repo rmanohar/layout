@@ -26,7 +26,7 @@
 #include <config.h>
 #include <math.h>
 #include <string.h>
-#include "stk_pass_dyn.h"
+#include "stk_pass.h"
 #include "stk_layout.h"
 
 #define IS_METAL_HORIZ(i) ((((i) % 2) == _horiz_metal) ? 1 : 0)
