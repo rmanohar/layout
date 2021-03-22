@@ -128,6 +128,8 @@ ActStackLayout::ActStackLayout (ActPass *ap)
 {
   me = ap;
   a = ap->getAct();
+
+  
   
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
@@ -293,6 +295,8 @@ ActStackLayout::ActStackLayout (ActPass *ap)
 
   _lef_header = 0;
   _cell_header = 0;
+  _fp = NULL;
+  _fpcell = NULL;
 }
 
 #define EDGE_FLAGS_LEFT 0x1
@@ -469,14 +473,38 @@ static int locate_fetedge (Layout *L, int dx,
   emits rectangles needed upto the FET.
   If it is right edge, also emits the final diffusion of the right edge.
 */
-static int emit_rectangle (Layout *L,
-			   int pad,
-			   int dx, int dy,
-			   unsigned int flags,
-			   edge_t *prev, int previdx,
-			   node_t *left, edge_t *e, edge_t *eopp, int oup,
-			   int eidx, int yup,
-			   BBox *ret)
+static int emit_rectangle (Layout *L,  /* where we are drawing */
+			   
+			   int pad,    /* extra x-padding for
+					  diffusion, used to line up
+					  fets */
+			   
+			   int dx,     /* (dx,dy) : start coord of diffusion */
+			   int dy,
+			   
+			   unsigned int flags, /* left/right edge? */
+			   
+			   edge_t *prev,
+			   int previdx,    /* previous edge: used to
+					      check for notches */
+			   
+			   node_t *left,   /* left node */
+
+			   edge_t *e, /* edge to draw */
+			   edge_t *eopp, /* edge opposing it; used
+					    to check poly overhang */
+
+			   int oup, /* amount of space available in
+				       y-direction until you encroach
+				       on the "other half" of the layout */
+			   
+			   int eidx, /* finger # */
+			   
+			   int yup,   /* +1 for p-type, -1 for n-type
+					 */
+			   
+			   BBox *ret /* bounding box */
+			   )
 {
   DiffMat *d;
   FetMat *f;
@@ -752,31 +780,70 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
   int yn = yp - diffspace;
   
   if (gp->basepair) {
-    fposn = locate_fetedge (L, xpos, EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			    NULL, 0, gp->l.n, gp->u.e.n, gp->n_start);
-    fposp = locate_fetedge (L, xpos, EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			    NULL, 0, gp->l.p, gp->u.e.p, gp->p_start);
-    
-    if (fposn > fposp) {
-      padp = fposn - fposp;
-      padn = 0;
-    }
-    else {
-      padn = fposp - fposn;
-      padp = 0;
-    }
+    for (int i=0; i < gp->share; i++) {
+      int flags = 0;
 
-    xpos = emit_rectangle (L, padn, xpos, yn,
-			   EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			   NULL, 0,
-			   gp->l.n, gp->u.e.n, gp->u.e.p, yp,
-			   gp->n_start, -1, &b);
+      if (i == 0) {
+	flags |= EDGE_FLAGS_LEFT;
+      }
+      if (i == gp->share-1) {
+	flags |= EDGE_FLAGS_RIGHT;
+      }
+
+      edge_t *n_prev, *p_prev;
+      int n_previdx, p_previdx;
+      node_t *n_left, *p_left;
+      int n_idx, p_idx;
+
+      if (i == 0) {
+	n_prev = NULL;
+	n_previdx = 0;
+
+	p_prev = NULL;
+	p_previdx = 0;
+      }
+      else {
+	n_prev = gp->u.e.n;
+	n_previdx = gp->n_start + i - 1;
+
+	p_prev = gp->u.e.p;
+	p_previdx = gp->p_start + i - 1;
+      }
+
+      if (i % 2 == 0) {
+	n_left = gp->l.n;
+	p_left = gp->l.p;
+      }
+      else {
+	n_left = gp->r.n;
+	p_left = gp->r.p;
+      }
+      
+      fposn = locate_fetedge (L, xpos, flags, n_prev, n_previdx, n_left,
+			      gp->u.e.n, gp->n_start + i);
+      
+      fposp = locate_fetedge (L, xpos, flags, p_prev, p_previdx, p_left,
+			      gp->u.e.p, gp->p_start + i);
+      
+      if (fposn > fposp) {
+	padp = fposn - fposp;
+	padn = 0;
+      }
+      else {
+	padn = fposp - fposn;
+	padp = 0;
+      }
+
+      xpos = emit_rectangle (L, padn, xpos, yn, flags,
+			     n_prev, n_previdx, n_left,
+			     gp->u.e.n, gp->u.e.p, yp,
+			     gp->n_start + i, -1, &b);
     
-    xpos_p = emit_rectangle (L, padp, xpos_p, yp,
-			     EDGE_FLAGS_LEFT|EDGE_FLAGS_RIGHT,
-			     NULL, 0,
-			     gp->l.p, gp->u.e.p, gp->u.e.n, yn,
-			     gp->p_start, 1, &b);
+      xpos_p = emit_rectangle (L, padp, xpos_p, yp, flags,
+			       p_prev, p_previdx, p_left,
+			       gp->u.e.p, gp->u.e.n, yn,
+			       gp->p_start + i, 1, &b);
+    }
   }
   else {
     listitem_t *li;

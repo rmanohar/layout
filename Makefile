@@ -24,8 +24,8 @@ EXE2=actrectbbox.$(EXT)
 TARGETS=$(EXE) $(EXE2) mag.pl
 TARGETLIBS=pass_stk.so pass_layout.so
 
-OBJS1=main.o geom.o stk_layout.o tile.o stk_pass_dyn.o
-OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass_dyn.o
+OBJS1=main.o geom.o stk_layout.o tile.o stk_pass.o
+OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass.o
 
 SRCS=$(OBJS1:.o=.cc) main2.cc
 
@@ -36,8 +36,8 @@ include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 $(EXE): main.os
 	$(CXX) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
 
-pass_stk.so: stk_pass_dyn.os $(ACTPASSDEPEND)
-	$(VLSI_TOOLS_SRC)/scripts/linkso pass_stk.so stk_pass_dyn.os $(SHLIBACTPASS)
+pass_stk.so: stk_pass.os $(ACTPASSDEPEND)
+	$(VLSI_TOOLS_SRC)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
 
 pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
 	$(VLSI_TOOLS_SRC)/scripts/linkso pass_layout.so stk_layout.os geom.os tile.os $(SHLIBACTPASS)
