@@ -24,12 +24,14 @@ EXE2=actrectbbox.$(EXT)
 TARGETS=$(EXE) $(EXE2) mag.pl
 TARGETLIBS=pass_stk.so pass_layout.so
 
-OBJS1=main.o geom.o stk_layout.o tile.o stk_pass.o
-OBJS2=main2.o geom.o stk_layout.o tile.o stk_pass.o
+OBJS1=main.o
+OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o
+SHOBJS=main.os stk_pass.os stk_layout.os geom.os tile.os
 
-SRCS=$(OBJS1:.o=.cc) main2.cc
+OBJS=$(OBJS1) $(OBJS2) $(SHOBJS)
 
-SHOBJS1=$(OBJS1:.o=.os)
+
+SRCS=$(OBJS1:.o=.cc)
 
 include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
 

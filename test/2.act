@@ -1,0 +1,29 @@
+defproc inv (bool? A; bool! Y)
+{
+  prs {
+    A => Y-
+  }
+}
+
+
+  
+template<pint nf>
+defproc szinv <: inv()
+{
+  [nf = 0 -> sizing { Y {-1} }
+  [] else -> sizing { Y {-2*nf,svt,nf} }
+  ]
+}
+
+export defcell INVX1 <: szinv<0>() { } 
+export defcell INVX2 <: szinv<1>() { } 
+export defcell INVX4 <: szinv<2>() { }
+export defcell INVX8 <: szinv<4>() { }
+
+
+defproc test()
+{
+  INVX8 x;
+}
+
+test t;

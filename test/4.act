@@ -1,0 +1,19 @@
+export defcell XOR2X1 (bool? A, B; bool! Y)
+{
+   bool _A, _B;
+   prs {
+     A => _A-
+     B => _B-
+
+    [keeper=0] ~B & ~_A | ~_B & ~A -> Y+
+     _B & _A | B & A -> Y-
+   }
+   sizing { _A{-1}; _B{-1}; Y{-1} }
+}
+
+defproc test()
+{
+  XOR2X1 x;
+}
+
+test t;

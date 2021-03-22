@@ -1,0 +1,19 @@
+export defcell XNOR2X1 (bool? A, B; bool! Y)
+{
+   bool _A, _B;
+   prs {
+     A => _A-
+     B => _B-
+
+    [keeper=0] ~B & ~A | ~_B & ~_A -> Y+
+     B & _A | _B & A -> Y-
+   }
+   sizing { _A{-1}; _B{-1}; Y{-1} }
+}
+
+defproc test()
+{
+  XNOR2X1 x;
+}
+
+test t;
