@@ -793,7 +793,7 @@ void *stk_proc (ActPass *_ap, Process *p, int mode)
 	  e2 = (edge_t *) list_value (ej);
 	  if (e2->type != EDGE_PFET) continue;
 				      
-	  if (e1->g == e2->g && e1->nfolds == e2->nfolds) {
+	  if (e1->g == e2->g) {
 	    /* pairing opportunity */
 	    struct gate_pairs *p, *p2;
 
@@ -826,7 +826,7 @@ void *stk_proc (ActPass *_ap, Process *p, int mode)
 	    p->n_start = 0;
 	    p->p_start = 0;
 
-	    if (0 && !(p->share & 1)) {
+	    if (!(p->share & 1)) {
 	      /* even, make it odd since otherwise you can have a
 		 disconnection chance */
 	      p->share--;
