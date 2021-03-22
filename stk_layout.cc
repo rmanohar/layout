@@ -321,7 +321,8 @@ static int getlength (edge_t *e, double adj)
 {
   static int min_length = -1;
   if (min_length == -1) {
-    min_length = config_get_int ("net.min_length");
+    min_length = config_get_int ("net.min_length") *
+      ActNetlistPass::getGridsPerLambda();
   }
   if (e->l != min_length) {
     adj = 0;
