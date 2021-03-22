@@ -861,101 +861,104 @@ static BBox print_dualstack (Layout *L, struct gate_pairs *gp, int diffspace)
       tmp = (struct gate_pairs *) list_value (li);
 
       Assert (tmp->basepair, "Hmm");
+
+      for (int i=0; i < tmp->share; i++) {
       
-      if (firstp && tmp->u.e.p) {
-	flagsp |= EDGE_FLAGS_LEFT;
-	firstp = 0;
-      }
-      if (firstn && tmp->u.e.n) {
-	firstn = 0;
-	flagsn |= EDGE_FLAGS_LEFT;
-      }
-      if (!list_next (li)) {
-	flagsp |= EDGE_FLAGS_RIGHT;
-	flagsn |= EDGE_FLAGS_RIGHT;
-      }
-      else {
-	struct gate_pairs *tnext;
-	tnext = (struct gate_pairs *) list_value (list_next (li));
-	if (!tnext->u.e.p) {
-	  flagsp |= EDGE_FLAGS_RIGHT;
+	if (firstp && tmp->u.e.p) {
+	  flagsp |= EDGE_FLAGS_LEFT;
+	  firstp = 0;
 	}
-	if (!tnext->u.e.n) {
+	if (firstn && tmp->u.e.n) {
+	  firstn = 0;
+	  flagsn |= EDGE_FLAGS_LEFT;
+	}
+	if (!list_next (li) && i == (tmp->share-1)) {
+	  flagsp |= EDGE_FLAGS_RIGHT;
 	  flagsn |= EDGE_FLAGS_RIGHT;
 	}
-      }
-
-      if (tmp->u.e.n) {
-	if (!leftn) {
-	  leftn = gp->l.n;
+	else if (i == (tmp->share-1)) {
+	  struct gate_pairs *tnext;
+	  tnext = (struct gate_pairs *) list_value (list_next (li));
+	  if (!tnext->u.e.p) {
+	    flagsp |= EDGE_FLAGS_RIGHT;
+	  }
+	  if (!tnext->u.e.n) {
+	    flagsn |= EDGE_FLAGS_RIGHT;
+	  }
 	}
-	else {
-	  Assert (prevn, "Hmm");
-	  if (prevn->a == leftn) {
-	    leftn = prevn->b;
+
+	if (tmp->u.e.n) {
+	  if (!leftn) {
+	    leftn = gp->l.n;
 	  }
 	  else {
-	    Assert (prevn->b == leftn, "Hmm");
-	    leftn = prevn->a;
+	    Assert (prevn, "Hmm");
+	    if (prevn->a == leftn) {
+	      leftn = prevn->b;
+	    }
+	    else {
+	      Assert (prevn->b == leftn, "Hmm");
+	      leftn = prevn->a;
+	    }
 	  }
 	}
-      }
-      if (tmp->u.e.p) {
-	if (!leftp) {
-	  leftp  = gp->l.p;
-	}
-	else {
-	  Assert (prevp, "Hmm");
-	  if (prevp->a == leftp) {
-	    leftp = prevp->b;
+	if (tmp->u.e.p) {
+	  if (!leftp) {
+	    leftp  = gp->l.p;
 	  }
 	  else {
-	    Assert (prevp->b == leftp, "Hmm");
-	    leftp = prevp->a;
+	    Assert (prevp, "Hmm");
+	    if (prevp->a == leftp) {
+	      leftp = prevp->b;
+	    }
+	    else {
+	      Assert (prevp->b == leftp, "Hmm");
+	      leftp = prevp->a;
+	    }
 	  }
 	}
-      }
 
-      /* compute padding */
-      padn = 0;
-      padp = 0;
-      if (tmp->u.e.n && tmp->u.e.p) {
-	fposn = locate_fetedge (L, xpos, flagsn,
-				prevn, prevnidx, leftn, tmp->u.e.n,
-				tmp->n_start);
-	fposp = locate_fetedge (L, xpos_p, flagsp,
-				prevp, prevpidx, leftp, tmp->u.e.p,
-				tmp->p_start);
-	if (fposn > fposp) {
-	  padp = padp + fposn - fposp;
+	/* compute padding */
+	padn = 0;
+	padp = 0;
+	if (tmp->u.e.n && tmp->u.e.p) {
+	  fposn = locate_fetedge (L, xpos, flagsn,
+				  prevn, prevnidx, leftn, tmp->u.e.n,
+				  tmp->n_start + i);
+	  fposp = locate_fetedge (L, xpos_p, flagsp,
+				  prevp, prevpidx, leftp, tmp->u.e.p,
+				  tmp->p_start + i);
+	  if (fposn > fposp) {
+	    padp = padp + fposn - fposp;
+	  }
+	  else {
+	    padn = padn + fposp - fposn;
+	  }
 	}
-	else {
-	  padn = padn + fposp - fposn;
-	}
-      }
       
-      if (tmp->u.e.n) {
-	xpos = emit_rectangle (L, padn, xpos, yn, flagsn,
-			       prevn, prevnidx, leftn, tmp->u.e.n,
-			       tmp->u.e.p, yp,
-			       tmp->n_start, -1, &b);
-	prevn = tmp->u.e.n;
-	prevnidx = tmp->n_start;
-	if (!tmp->u.e.p) {
-	  xpos_p = xpos;
+	if (tmp->u.e.n) {
+	  xpos = emit_rectangle (L, padn, xpos, yn, flagsn,
+				 prevn, prevnidx, leftn, tmp->u.e.n,
+				 tmp->u.e.p, yp,
+				 tmp->n_start + i, -1, &b);
+	  prevn = tmp->u.e.n;
+	  prevnidx = tmp->n_start + i;
+	  if (!tmp->u.e.p) {
+	    xpos_p = xpos;
+	  }
 	}
-      }
       
-      if (tmp->u.e.p) {
-	xpos_p = emit_rectangle (L, padp, xpos_p, yp, flagsp,
-				 prevp, prevpidx, leftp, tmp->u.e.p,
-				 tmp->u.e.n, yn,
-				 tmp->p_start, 1, &b);
+	if (tmp->u.e.p) {
+	  xpos_p = emit_rectangle (L, padp, xpos_p, yp, flagsp,
+				   prevp, prevpidx, leftp, tmp->u.e.p,
+				   tmp->u.e.n, yn,
+				   tmp->p_start + i, 1, &b);
 
-	prevp = tmp->u.e.p;
-	prevpidx = tmp->p_start;
-	if (!tmp->u.e.n) {
-	  xpos = xpos_p;
+	  prevp = tmp->u.e.p;
+	  prevpidx = tmp->p_start + i;
+	  if (!tmp->u.e.n) {
+	    xpos = xpos_p;
+	  }
 	}
       }
     }
