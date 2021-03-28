@@ -25,7 +25,6 @@
 #include <act/act.h>
 #include <map>
 #include <unordered_set>
-#include <hash.h>
 #include "geom.h"
 
 /*-- data structures --*/

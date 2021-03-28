@@ -21,13 +21,12 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <list.h>
-#include <config.h>
+#include <common/list.h>
 #include <act/act.h>
 #include <act/passes.h>
 #include <act/passes/netlist.h>
 #include <act/tech.h>
-#include <qops.h>
+#include <common/qops.h>
 #include "geom.h"
 
 #ifndef MAX

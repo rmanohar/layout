@@ -20,7 +20,6 @@
  **************************************************************************
  */
 #include <stdio.h>
-#include <config.h>
 #include "stk_layout.h"
 
 int main (int argc, char **argv)

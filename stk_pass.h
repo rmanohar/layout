@@ -24,7 +24,7 @@
 
 #include <act/passes/netlist.h>
 #include <map>
-#include <hash.h>
+#include <common/hash.h>
 
 /*-- data structures --*/
 

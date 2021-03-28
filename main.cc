@@ -20,7 +20,7 @@
  **************************************************************************
  */
 #include <stdio.h>
-#include <list.h>
+#include <common/list.h>
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
@@ -28,8 +28,6 @@
 
 #include <act/passes.h>
 #include <act/iter.h>
-#include <hash.h>
-#include <config.h>
 
 #include "stk_layout.h"
 #include "geom.h"

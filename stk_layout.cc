@@ -23,7 +23,6 @@
 #include <act/act.h>
 #include <act/iter.h>
 #include <act/passes.h>
-#include <config.h>
 #include <math.h>
 #include <string.h>
 #include "stk_pass.h"
@@ -3053,10 +3052,7 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
       /* omit */
     }
     else {
-      ActId *tmp = net->net->toid();
-      fprintf (fp, " ( PIN ");
-      tmp->Print (fp);
-      fprintf (fp, " )");
+      fprintf (fp, " ( PIN %s )", buf);
     }
   }
 

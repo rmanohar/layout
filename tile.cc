@@ -20,8 +20,8 @@
  **************************************************************************
  */
 #include <stdio.h>
-#include <list.h>
-#include <misc.h>
+#include <common/list.h>
+#include <common/misc.h>
 #include "tile.h"
 #include "geom.h"
 

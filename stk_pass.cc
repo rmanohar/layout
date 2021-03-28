@@ -19,9 +19,9 @@
  *
  **************************************************************************
  */
-#include <heap.h>
+#include <common/heap.h>
 #include "stk_pass.h"
-#include "config.h"
+#include <common/config.h>
 
 #ifndef MIN
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
