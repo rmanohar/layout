@@ -33,16 +33,16 @@ OBJS=$(OBJS1) $(OBJS2) $(SHOBJS)
 
 SRCS=$(OBJS1:.o=.cc)
 
-include $(VLSI_TOOLS_SRC)/scripts/Makefile.std
+include $(ACT_HOME)/scripts/Makefile.std
 
 $(EXE): main.os
 	$(CXX) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
 
 pass_stk.so: stk_pass.os $(ACTPASSDEPEND)
-	$(VLSI_TOOLS_SRC)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
+	$(ACT_HOME)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
 
 pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
-	$(VLSI_TOOLS_SRC)/scripts/linkso pass_layout.so stk_layout.os geom.os tile.os $(SHLIBACTPASS)
+	$(ACT_HOME)/scripts/linkso pass_layout.so stk_layout.os geom.os tile.os $(SHLIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl
