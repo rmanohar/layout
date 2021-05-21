@@ -355,7 +355,11 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 	  _llx + wx - 1, _lly + wy - 1);
   //printall();
   fflush (stdout);
-#endif  
+#endif
+
+  if (wx == 0 || wy == 0) {
+    return NULL;
+  }
   
   /*
     we first collect all the tiles within the region.
