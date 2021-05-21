@@ -1,0 +1,14 @@
+export defcell mycell (bool? in[5]; bool! out)
+{
+   prs * {
+   in[0]<15> & (in[1]<11> & in[2]<23> | in[3]<11> & in[4]<23>) -> out-
+   ~in[0]<21> & ~in[2]<21> & ~in[4]<21> -> out+
+   }
+}
+
+defproc test()
+{
+  mycell x;
+}
+
+test t;

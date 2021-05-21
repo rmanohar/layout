@@ -1,0 +1,77 @@
+bbox 0 0 112 72
+rect #13 ndiff 33 23 38 26 right
+rect out polysilicon 29 26 33 28
+rect out polysilicon 29 36 33 38
+rect #13 pdiff 33 38 38 43 right
+rect # polysilicon 29 21 33 23
+rect # ntransistor 29 23 33 26
+rect # ptransistor 29 38 33 43
+rect # polysilicon 29 43 33 45
+rect # ndiff 26 23 29 26
+rect # pdiff 26 38 29 43
+rect GND ndiff 23 11 26 26 right
+rect in[0] polysilicon 21 26 23 28
+rect in[0] polysilicon 21 36 23 38
+rect Vdd pdiff 23 38 26 59 right
+rect # polysilicon 21 59 23 61
+rect # polysilicon 21 9 23 11
+rect # ntransistor 21 11 23 26
+rect # ptransistor 21 38 23 59
+rect # ndiff 18 11 21 26
+rect #3 ndiff 15 15 18 26 right
+rect #12 pdiff 15 38 21 59 left
+rect # polysilicon 13 13 15 15
+rect # ntransistor 13 15 15 26
+rect in[3] polysilicon 13 26 15 28
+rect #8 ndiff 8 15 13 26 left
+rect #11 pdiff 75 38 80 59 right
+rect # polysilicon 73 59 75 61
+rect in[4] polysilicon 73 26 75 28
+rect in[4] polysilicon 73 36 75 38
+rect # ptransistor 73 38 75 59
+rect # pdiff 70 38 73 59
+rect #8 ndiff 75 3 80 26 right
+rect out ndiff 67 23 70 26 right
+rect out pdiff 67 38 70 41 right
+rect # polysilicon 65 41 67 43
+rect # polysilicon 73 1 75 3
+rect # ntransistor 73 3 75 26
+rect # polysilicon 65 21 67 23
+rect # ntransistor 65 23 67 26
+rect #13 polysilicon 65 26 67 28
+rect #13 polysilicon 65 36 67 38
+rect # ptransistor 65 38 67 41
+rect # ndiff 70 3 73 26
+rect # ndiff 62 23 65 26
+rect # pdiff 51 38 65 41
+rect # polysilicon 47 21 62 23
+rect # ntransistor 47 23 62 26
+rect Vdd polysilicon 47 26 62 28
+rect GND polysilicon 47 36 51 38
+rect # ptransistor 47 38 51 41
+rect # polysilicon 47 41 51 43
+rect GND ndiff 42 23 47 26 left
+rect Vdd pdiff 42 38 47 41 left
+rect #3 ndiff 97 15 102 26 right
+rect # polysilicon 95 13 97 15
+rect # ntransistor 95 15 97 26
+rect in[1] polysilicon 95 26 97 28
+rect # ndiff 94 15 95 26
+rect # ndiff 91 3 94 26
+rect #11 pdiff 91 38 96 59 right
+rect # polysilicon 89 1 91 3
+rect # ntransistor 89 3 91 26
+rect in[2] polysilicon 89 26 91 28
+rect in[2] polysilicon 89 36 91 38
+rect # ptransistor 89 38 91 59
+rect # polysilicon 89 59 91 61
+rect out ndiff 84 3 89 26 left
+rect #12 pdiff 84 38 89 59 left
+inrect GND m2 104 60 108 64
+inrect Vdd m2 88 60 92 64
+inrect in[4] m2 72 60 76 64
+inrect in[3] m2 56 60 60 64
+inrect in[2] m2 40 60 44 64
+inrect in[1] m2 24 60 28 64
+outrect out m2 8 8 12 12
+inrect in[0] m2 8 60 12 64

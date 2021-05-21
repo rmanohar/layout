@@ -1,0 +1,49 @@
+VERSION 5.6 ;
+
+BUSBITCHARS "[]" ;
+
+DIVIDERCHAR "/" ;
+
+DESIGN test ;
+
+UNITS DISTANCE MICRONS 2000 ;
+
+DIEAREA ( 48000 86400 ) ( 115200 172800 ) ;
+TRACKS X 49200 DO 14 STEP 4800 LAYER m1 ;
+TRACKS Y 87600 DO 18 STEP 4800 LAYER m1 ;
+
+TRACKS X 49200 DO 14 STEP 4800 LAYER m2 ;
+TRACKS Y 87600 DO 18 STEP 4800 LAYER m2 ;
+
+TRACKS X 49800 DO 11 STEP 6000 LAYER m3 ;
+TRACKS Y 88200 DO 14 STEP 6000 LAYER m3 ;
+
+COMPONENTS 1 ;
+- x mycell ;
+END COMPONENTS
+
+PINS 0 ;
+END PINS
+
+NETS            6 ;
+- x.in[0]
+   ( x in_50_6 )
+;
+- x.in[1]
+   ( x in_51_6 )
+;
+- x.in[2]
+   ( x in_52_6 )
+;
+- x.in[3]
+   ( x in_53_6 )
+;
+- x.in[4]
+   ( x in_54_6 )
+;
+- x.out
+   ( x out )
+;
+END NETS
+
+END DESIGN
