@@ -21,7 +21,8 @@
 EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
-TARGETS=$(EXE) $(EXE2) mag.pl
+TARGETS=$(EXE) $(EXE2)
+TARGETSCRIPTS=mag.pl
 TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o
