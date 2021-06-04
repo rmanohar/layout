@@ -32,7 +32,7 @@ SHOBJS=main.os stk_pass.os stk_layout.os geom.os tile.os
 OBJS=$(OBJS1) $(OBJS2) $(SHOBJS)
 
 
-SRCS=$(OBJS1:.o=.cc)
+SRCS=$(OBJS1:.o=.cc) $(OBJS2:.o=.cc)
 
 include $(ACT_HOME)/scripts/Makefile.std
 
