@@ -37,7 +37,7 @@ SRCS=$(OBJS1:.o=.cc) $(OBJS2:.o=.cc)
 include $(ACT_HOME)/scripts/Makefile.std
 
 $(EXE): main.os
-	$(CXX) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
+	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
 
 pass_stk.so: stk_pass.os $(ACTPASSDEPEND)
 	$(ACT_HOME)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
