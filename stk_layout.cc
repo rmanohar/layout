@@ -127,6 +127,7 @@ ActStackLayout::ActStackLayout (ActPass *ap)
 {
   me = ap;
   a = ap->getAct();
+  boxH = NULL;
 
   
   
@@ -2936,11 +2937,9 @@ LayoutBlob *ActStackLayout::getLayout (Process *p)
 void ActStackLayout::_maxHeightlocal (Process *p)
 {
   LayoutBlob *b;
+  long llx, lly, urx, ury;
 
-  b = getLayout (p);
-  if (b) {
-    long llx, lly, urx, ury;
-    b->getBloatBBox (&llx, &lly, &urx, &ury);
+  if (getBBox (p, &llx, &lly, &urx, &ury)) {
     if (lly < _ymin) {
       _ymin = lly;
     }
@@ -2966,15 +2965,15 @@ static void count_inst (void *x, ActId *prefix, Process *p)
 {
   ActStackLayout *ap = (ActStackLayout *)x;
   LayoutBlob *b;
-  
-  if ((b = ap->getLayout (p))) {
-    /* there is a circuit */
-    long llx, lly, urx, ury;
+  long llx, lly, urx, ury;
 
-    b->getBloatBBox (&llx, &lly, &urx, &ury);
+  b = ap->getLayout (p);
+  if (ap->getBBox (p, &llx, &lly, &urx, &ury)) {
     if ((llx > urx) || (lly > ury)) return;
-    
-    b->incCount();
+
+    if (b) {
+      b->incCount();
+    }
     _instcount++;
     
     _areacount += (urx - llx + 1)*(ury - lly + 1);
@@ -2993,14 +2992,11 @@ static void dump_inst (void *x, ActId *prefix, Process *p)
   FILE *fp = (FILE *)x;
   char buf[10240];
   LayoutBlob *b;
+  long llx, lly, urx, ury;
   
-
-  if ((b = _alp->getLayout (p))) {
-    long llx, lly, urx, ury;
-    
-    b->getBloatBBox (&llx, &lly, &urx, &ury);
+  if (_alp->getBBox (p, &llx, &lly, &urx, &ury)) {
     if ((llx > urx) || (lly > ury)) return;
-    
+
     /* FORMAT: 
          - inst2591 NAND4X2 ;
          - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
@@ -3637,3 +3633,68 @@ int ActStackLayout::isEmpty (list_t *stk)
   
   return 1;
 }
+
+
+struct bbox_elem {
+  long llx, lly, urx, ury;
+};
+
+void ActStackLayout::setBBox (Process *p,
+			      long llx, long lly, long urx, long ury)
+{
+  LayoutBlob *b;
+  phash_bucket_t *pb;
+  struct bbox_elem *be;
+
+  b = getLayout (p);
+  if (b) {
+    warning ("Process `%s': setting BBox for a cell with existing layout!",
+	     p ? p->getName() : "-top-");
+  }
+  if (!boxH) {
+    boxH = phash_new (4);
+  }
+  pb = phash_lookup (boxH, p);
+  if (pb) {
+    warning ("Process `%s': already has a BBox set!", p ? p->getName() : "-top-");
+  }
+  else {
+    pb = phash_add (boxH, p);
+    NEW (be, struct bbox_elem);
+    pb->v = be;
+  }
+  be = (struct bbox_elem *) pb->v;
+  be->llx = llx;
+  be->lly = lly;
+  be->urx = urx;
+  be->ury = ury;
+}
+
+
+int ActStackLayout::getBBox (Process *p, long *llx, long *lly,
+			     long *urx, long *ury)
+{
+  LayoutBlob *b;
+  phash_bucket_t *pb;
+  struct bbox_elem *be;
+  
+  b = getLayout (p);
+  if (b) {
+    /* layout exists, use the bounding box from here */
+    b->getBloatBBox (llx, lly, urx, ury);
+    return 1;
+  }
+  if (boxH) {
+    pb = phash_lookup (boxH, p);
+    if (pb) {
+      be = (struct bbox_elem *) pb->v;
+      *llx = be->llx;
+      *lly = be->lly;
+      *urx = be->urx;
+      *ury = be->ury;
+      return 1;
+    }
+  }
+  return 0;
+}
+

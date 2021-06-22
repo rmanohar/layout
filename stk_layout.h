@@ -45,6 +45,9 @@ public:
   void run_post (void);
   void runrec (int mode, UserDef *u);
 
+  void setBBox (Process *p, long llx, long lly, long urx, long ury);
+  int getBBox (Process *p, long *llx, long *lly, long *urx, long *ury);
+
  private:
   int _localdiffspace (Process *p);
 
@@ -93,6 +96,9 @@ public:
 
   ActDynamicPass *stk;
   ActNetlistPass *nl;
+
+  /*-- bounding box for black boxes --*/
+  struct pHashtable *boxH;
 
   int isEmpty (list_t *stk);
 
