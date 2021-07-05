@@ -3648,7 +3648,7 @@ void ActStackLayout::setBBox (Process *p,
 
   b = getLayout (p);
   if (b) {
-    warning ("Process `%s': setting BBox for a cell with existing layout!",
+    warning ("Process `%s': setting bounding box for a cell with existing layout!",
 	     p ? p->getName() : "-top-");
   }
   if (!boxH) {
@@ -3698,3 +3698,51 @@ int ActStackLayout::getBBox (Process *p, long *llx, long *lly,
   return 0;
 }
 
+
+int layout_runcmd (ActPass *_ap)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  ActStackLayout *lp;
+  Process *p;
+  Assert (ap, "What?");
+
+  lp = (ActStackLayout *)ap->getPtrParam ("raw");
+
+  if (!ap->completed()) {
+    return 0;
+  }
+
+  const char *x = (const char *) ap->getPtrParam ("cell_name");
+  if (!x) {
+    return 0;
+  }
+
+  /* now find this process! */
+  char buf[10240];
+
+  ap->getAct()->unmangle_string (x, buf, 10240);
+
+  int w = ap->getIntParam ("cell_width");
+  int h = ap->getIntParam ("cell_height");
+
+  if (w == -1 || h == -1) {
+    fprintf (stderr, "stk2layout pass: runcmd failed, w/h not found!\n");
+    return 0;
+  }
+
+  int len = strlen (buf);
+  if (buf[len-1] != '>' && len < 10238) {
+    strcat (buf, "<>");
+  }
+
+  p = ap->getAct()->findProcess (buf);
+
+  if (!p) {
+    fprintf (stderr, "stk2layout pass: runcmd failed, could not find process `%s'", buf);
+    return 0;
+  }
+
+  lp->setBBox (p, 0, 0, w, h);
+
+  return 1;
+}

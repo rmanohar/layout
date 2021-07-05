@@ -147,6 +147,7 @@ extern "C" {
   void *layout_chan (ActPass *ap, Channel *c, int mode);
   void layout_free (ActPass *ap, void *v);
   void layout_done (ActPass *ap);
+  int layout_runcmd (ActPass *ap);
 
 }
 
