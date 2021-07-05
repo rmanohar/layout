@@ -3699,12 +3699,17 @@ int ActStackLayout::getBBox (Process *p, long *llx, long *lly,
 }
 
 
-int layout_runcmd (ActPass *_ap)
+int layout_runcmd (ActPass *_ap, const char *name)
 {
   ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
   ActStackLayout *lp;
   Process *p;
   Assert (ap, "What?");
+
+  if (strcmp (name, "setbbox") != 0) {
+    fprintf (stderr, "Unknown command `%s'!\n", name);
+    return -1;
+  }
 
   lp = (ActStackLayout *)ap->getPtrParam ("raw");
 
