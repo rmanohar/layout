@@ -232,19 +232,25 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   _pin_metal = Technology::T->metal[v-1];
   
   if (((_pin_layer+1) % 2) == _horiz_metal) {
-    warning ("lefdef.pin_layer (%d) is a horizontal metal layer.\n\t[default pin locations are in a line at the top/bottom of the cell]", _pin_layer+1);
+    if (!config_exists ("lefdef.warnings") ||
+	(config_get_int ("lefdef.warnings") == 1)) {
+      warning ("lefdef.pin_layer (%d) is a horizontal metal layer.\n\t[default pin locations are in a line at the top/bottom of the cell]", _pin_layer+1);
+    }
   }
   if (_pin_metal->getPitch() != _m_align_x->getPitch()) {
-    warning ("Pin metal (%d) and x-alignment metal (%d) have different pitches"
-	     "\n\tpin metal: %d; x-alignment: %d (using x-alignment pitch)",
-	     _pin_layer + 1, x_align + 1,
-	     _pin_metal->getPitch(), _m_align_x->getPitch());
+    if (!config_exists ("lefdef.warnings") ||
+	(config_get_int ("lefdef.warnings") == 1)) {
+      warning ("Pin metal (%d) and x-alignment metal (%d) have different pitches"
+	       "\n\tpin metal: %d; x-alignment: %d (using x-alignment pitch)",
+	       _pin_layer + 1, x_align + 1,
+	       _pin_metal->getPitch(), _m_align_x->getPitch());
 	     
-    if (_pin_metal->getPitch() < _m_align_x->getPitch()) {
-      fprintf (stderr, "\tpins may not be on the pin metal pitch.\n");
-    }
-    else {
-      fprintf (stderr, "\tgeneric pins might violate spacing rules.\n");
+      if (_pin_metal->getPitch() < _m_align_x->getPitch()) {
+	fprintf (stderr, "\tpins may not be on the pin metal pitch.\n");
+      }
+      else {
+	fprintf (stderr, "\tgeneric pins might violate spacing rules.\n");
+      }
     }
   }
 
