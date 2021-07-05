@@ -47,6 +47,8 @@ public:
 
   void setBBox (Process *p, long llx, long lly, long urx, long ury);
   int getBBox (Process *p, long *llx, long *lly, long *urx, long *ury);
+  void incBBox (Process *p);
+  long getBBoxCount (Process *p);
 
  private:
   int _localdiffspace (Process *p);

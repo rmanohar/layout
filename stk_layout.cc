@@ -2980,6 +2980,9 @@ static void count_inst (void *x, ActId *prefix, Process *p)
     if (b) {
       b->incCount();
     }
+    else {
+      ap->incBBox (p);
+    }
     _instcount++;
     
     _areacount += (urx - llx + 1)*(ury - lly + 1);
@@ -3364,49 +3367,62 @@ void ActStackLayout::_reportLocalStats(Process *p)
 {
   LayoutBlob *blob = getLayout (p);
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
-  if (!blob) {
+
+  long bllx, blly, burx, bury;
+  long count;
+  if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
     return;
   }
-  long bllx, blly, burx, bury;
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
   if (bllx > burx || blly > bury) return;
 
   char *tmp = p->getns()->Name();
+
+  if (tmp[0] == ':' && tmp[1] == ':' && tmp[2] == '\0') {
+    tmp[0] = '\0';
+  }
   double all_area = dp->getRealParam ("total_area");
   printf ("--- Cell %s::%s ---\n", tmp, p->getName());
   FREE (tmp);
 
   unsigned long area = (burx-bllx+1)*(bury-blly+1);
-  printf ("  count=%lu; ", blob->getCount());
+  if (blob) {
+    count = blob->getCount();
+  }
+  else {
+    count = getBBoxCount (p);
+  }
+  printf ("  count=%lu; ", count);
   printf ("cell_area=%.3g um^2; ", area*Technology::T->scale/1000.0*
 	  Technology::T->scale/1000.0);
-  printf ("area: %.2f%%\n", area*blob->getCount()*100.0/all_area);
+  printf ("area: %.2f%%\n", area*count*100.0/all_area);
 
-  netlist_t *mynl = nl->getNL (p);
-  node_t *n;
-  unsigned long ncount = 0;
-  unsigned long ecount = 0;
-  unsigned long keeper = 0;
-  for (n = mynl->hd; n; n = n->next) {
-    ncount++;
-    listitem_t *li;
-    edge_t *e;
-    for (li = list_first (n->e); li; li = list_next (li)) {
-      e = (edge_t *) list_value (li);
-      if (e->keeper) {
-	keeper++;
-      }
-      else {
-	ecount++;
+  if (blob) {
+    netlist_t *mynl = nl->getNL (p);
+    node_t *n;
+    unsigned long ncount = 0;
+    unsigned long ecount = 0;
+    unsigned long keeper = 0;
+    for (n = mynl->hd; n; n = n->next) {
+      ncount++;
+      listitem_t *li;
+      edge_t *e;
+      for (li = list_first (n->e); li; li = list_next (li)) {
+	e = (edge_t *) list_value (li);
+	if (e->keeper) {
+	  keeper++;
+	}
+	else {
+	  ecount++;
+	}
       }
     }
-  }
-  ecount /= 2;
-  keeper /= 2;
+    ecount /= 2;
+    keeper /= 2;
   
-  printf ("  nodes=%lu; ", ncount);
-  printf ("fets: std=%lu; ", ecount);
-  printf ("keeper=%lu\n", keeper);
+    printf ("  nodes=%lu; ", ncount);
+    printf ("fets: std=%lu; ", ecount);
+    printf ("keeper=%lu\n", keeper);
+  }
 }
   
 
@@ -3643,6 +3659,7 @@ int ActStackLayout::isEmpty (list_t *stk)
 
 struct bbox_elem {
   long llx, lly, urx, ury;
+  long count;
 };
 
 void ActStackLayout::setBBox (Process *p,
@@ -3674,6 +3691,7 @@ void ActStackLayout::setBBox (Process *p,
   be->lly = lly;
   be->urx = urx;
   be->ury = ury;
+  be->count = 0;
 }
 
 
@@ -3702,6 +3720,30 @@ int ActStackLayout::getBBox (Process *p, long *llx, long *lly,
     }
   }
   return 0;
+}
+
+void ActStackLayout::incBBox (Process *p) 
+{
+  phash_bucket_t *pb;
+  struct bbox_elem *be;
+
+  Assert (boxH, "What?");
+  pb = phash_lookup (boxH, p);
+  Assert (pb, "What?");
+  be = (struct bbox_elem *) pb->v;
+  be->count++;
+}
+
+long ActStackLayout::getBBoxCount (Process *p)
+{
+  phash_bucket_t *pb;
+  struct bbox_elem *be;
+
+  Assert (boxH, "What?");
+  pb = phash_lookup (boxH, p);
+  Assert (pb, "What?");
+  be = (struct bbox_elem *) pb->v;
+  return be->count;
 }
 
 
