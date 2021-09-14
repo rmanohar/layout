@@ -129,8 +129,6 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   a = ap->getAct();
   boxH = NULL;
 
-  
-  
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
   stk = dynamic_cast<ActDynamicPass *>(pass);
@@ -2967,11 +2965,17 @@ static double _areacount;
 static double _areastdcell;
 static int _maximum_height;
 
-static void count_inst (void *x, ActId *prefix, Process *p)
+static void count_inst (void *x, ActId *prefix, UserDef *u)
 {
   ActStackLayout *ap = (ActStackLayout *)x;
   LayoutBlob *b;
   long llx, lly, urx, ury;
+  Process *p;
+
+  p = dynamic_cast<Process *>(u);
+  if (!p) {
+    return;
+  }
 
   b = ap->getLayout (p);
   if (ap->getBBox (p, &llx, &lly, &urx, &ury)) {
@@ -2996,12 +3000,17 @@ static void count_inst (void *x, ActId *prefix, Process *p)
 static Act *global_act;
 static ActStackLayout *_alp;
 
-static void dump_inst (void *x, ActId *prefix, Process *p)
+static void dump_inst (void *x, ActId *prefix, UserDef *u)
 {
   FILE *fp = (FILE *)x;
   char buf[10240];
   LayoutBlob *b;
   long llx, lly, urx, ury;
+
+  Process *p = dynamic_cast<Process *>(u);
+  if (!p) {
+    return;
+  }
   
   if (_alp->getBBox (p, &llx, &lly, &urx, &ury)) {
     if ((llx > urx) || (lly > ury)) return;
