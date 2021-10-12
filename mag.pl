@@ -29,7 +29,7 @@ sub process_rect {
     $base = $name;
     $base =~ s/.rect$//;
 
-    print "load $base\n";
+    print "xload $base\n";
 
     while (<FILE>) {
 	next if /^#/;
