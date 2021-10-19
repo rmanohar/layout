@@ -1255,6 +1255,8 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
   int diffspace = _localdiffspace (p);
 
+  int has_both_types = 0;
+
   //printf ("Creating local layout: %s\n", p->getName());
 
   if (list_length (stklist) > 0) {
@@ -1265,6 +1267,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       struct gate_pairs *gp;
       Layout *l = new Layout(nl->getNL (p));
       gp = (struct gate_pairs *) list_value (si);
+      has_both_types = 1;
 
       /*--- process gp ---*/
       b = print_dualstack (l, gp, diffspace);
@@ -1284,11 +1287,15 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
   /* XXX: check singlestack!!! */
   int nxpos = b.n.urx;
   int pxpos = b.p.urx;
-  
 
   if (stklist && (list_length (stklist) > 0)) {
     /* n stacks */
     listitem_t *si;
+
+    if (!has_both_types && list_value (list_next (li)) &&
+	(list_length ((list_t*) list_value (list_next (li))) > 0)) {
+      has_both_types = 1;
+    }
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       list_t *sl = (list_t *) list_value (si);
@@ -1298,6 +1305,16 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       
       l->DrawDiffBBox (b.flavor, EDGE_NFET, b.n.llx, b.n.lly,
 		       b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+
+      if (!has_both_types && !Technology::T->well[EDGE_NFET][b.flavor]) {
+	l->DrawDiff (b.flavor, EDGE_PFET, b.n.llx, b.n.lly + diffspace +
+		     (b.n.ury - b.n.lly),
+		     b.n.urx - b.n.llx, b.n.ury - b.n.lly, l->getVdd());
+	l->DrawDiffBBox (b.flavor, EDGE_PFET, b.n.llx, b.n.lly + diffspace +
+			 (b.n.ury - b.n.lly),
+			 b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+	has_both_types = 1;
+      }
 
       BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
     }
@@ -1317,6 +1334,16 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       
       l->DrawDiffBBox (b.flavor, EDGE_PFET, b.p.llx, b.p.lly,
 		       b.p.urx - b.p.llx, b.p.ury - b.p.lly);
+
+      if (!has_both_types && !Technology::T->well[EDGE_PFET][b.flavor]) {
+	l->DrawDiff (b.flavor, EDGE_NFET, b.p.llx, b.p.lly - diffspace -
+		     (b.p.ury - b.p.lly),
+		     b.p.urx - b.p.llx, b.p.ury - b.p.lly, l->getGND());
+	l->DrawDiffBBox (b.flavor, EDGE_NFET, b.p.llx, b.p.lly - diffspace -
+			 (b.p.ury - b.p.lly),
+			 b.p.urx - b.p.llx, b.p.ury - b.p.lly);
+	has_both_types = 1;
+      }
 
       BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
     }

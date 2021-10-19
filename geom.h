@@ -178,6 +178,9 @@ public:
     else { return _leak_adjust; }
   }
 
+  node_t *getVdd() { return N->Vdd; }
+  node_t *getGND() { return N->GND; }
+
 private:
   bool _readrect;
   long _rllx, _rlly, _rurx, _rury;
