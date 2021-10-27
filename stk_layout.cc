@@ -1722,7 +1722,7 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
     int mina = nplusdiff->minArea ();
     WellMat *w;
     if (mina > 0) {
-      mina = mina / nplusdiff->minWidth();
+      mina = (mina + nplusdiff->minWidth() - 1)/ nplusdiff->minWidth();
     }
     if (mina < nplusdiff->minWidth()) {
       mina = nplusdiff->minWidth();
@@ -1740,7 +1740,7 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
     WellMat *w;
     int mina = pplusdiff->minArea ();
     if (mina > 0) {
-      mina = mina / pplusdiff->minWidth();
+      mina = (mina + pplusdiff->minWidth() - 1)/ pplusdiff->minWidth();
     }
     if (mina < pplusdiff->minWidth()) {
       mina = pplusdiff->minWidth();
