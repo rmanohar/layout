@@ -2864,7 +2864,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	w2 = (vup->minWidth() + 2*vup->getAsymUp())*scale/2;
       }
       else {
-	w2 = 2;
+	w2 = w;
       }
       if (w2 < w) {
 	fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
