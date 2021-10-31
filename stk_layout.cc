@@ -1390,8 +1390,8 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     /* move the top edge if there isn't enough space for two
        rows of pins 
     */
-    while (tedge - _pin_metal->minWidth() <=
-	   _m_align_y->getPitch() + _pin_metal->minWidth() +
+    while (tedge - _pin_metal->getLEFWidth() <=
+	   _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
 	   _pin_metal->minSpacing())
       {
        tedge += _m_align_y->getPitch();
@@ -1512,13 +1512,13 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       Assert (av, "Problem..");
 
       if (n->bN->ports[i].input) {
-	int w = _pin_metal->minWidth ();
+	int w = _pin_metal->getLEFWidth ();
 	pins->DrawMetalPin (_pin_layer,
 			    bllx + p_in, blly + tedge - w, w, w, av->n, 0);
 	p_in += _m_align_x->getPitch()*s_in;
       }
       else {
-	int w = _pin_metal->minWidth ();
+	int w = _pin_metal->getLEFWidth ();
 	pins->DrawMetalPin (_pin_layer, bllx + p_out, blly + _m_align_y->getPitch(), w, w, av->n, 1);
 	p_out += _m_align_x->getPitch()*s_out;
       }
@@ -1542,7 +1542,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       struct act_nl_varinfo *av = (struct act_nl_varinfo *)bv->extra;
       Assert (av, "Hmm");
 
-      int w = _pin_metal->minWidth ();
+      int w = _pin_metal->getLEFWidth ();
       pins->DrawMetalPin (_pin_layer,
 			  bllx + p_in, blly + tedge - w, w, w, av->n, 0);
       p_in += _m_align_x->getPitch()*s_in;
@@ -1556,14 +1556,14 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     }
     if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
       found_vdd = 1;
-      int w = _pin_metal->minWidth ();
+      int w = _pin_metal->getLEFWidth ();
       pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
       p_in += _m_align_x->getPitch()*s_in;
       
     }
     if (!found_gnd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
       found_gnd = 1;
-      int w = _pin_metal->minWidth ();
+      int w = _pin_metal->getLEFWidth ();
       pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
       p_in += _m_align_x->getPitch()*s_in;
     }
@@ -1765,8 +1765,8 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
   int tedge;
   tedge = snap_up_y (bury - blly + 1);
 
-  while (tedge - _pin_metal->minWidth() <=
-	 _m_align_y->getPitch() + _pin_metal->minWidth() +
+  while (tedge - _pin_metal->getLEFWidth() <=
+	 _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
 	 _pin_metal->minSpacing())
     {
       tedge += _m_align_y->getPitch();
@@ -1774,7 +1774,7 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
 
   p = _m_align_x->getPitch();
   Layout *pins = new Layout (dummy_netlist);
-  int w = _pin_metal->minWidth();
+  int w = _pin_metal->getLEFWidth();
   pins->DrawMetalPin (_pin_layer, bllx + p, blly + tedge - w, w, w,
 		      dummy_netlist->nsc, 0);
     
@@ -2654,11 +2654,11 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 
     fprintf (fp, "   DIRECTION %s ;\n",
 	     IS_METAL_HORIZ(i+1) ? "HORIZONTAL" : "VERTICAL");
-    fprintf (fp, "   MINWIDTH %.6f ;\n", mat->minWidth()*scale);
+    fprintf (fp, "   MINWIDTH %.6f ;\n", mat->getLEFWidth()*scale);
     if (mat->minArea() > 0) {
       fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
     }
-    fprintf (fp, "   WIDTH %.6f ;\n", mat->minWidth()*scale);
+    fprintf (fp, "   WIDTH %.6f ;\n", mat->getLEFWidth()*scale);
 
     RangeTable *maxwidths = NULL;
 
@@ -2784,7 +2784,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
       fprintf (fp, "LAYER %s\n", vup->getName());
       fprintf (fp, "    TYPE CUT ;\n");
       fprintf (fp, "    SPACING %.6f ;\n", scale*vup->minSpacing());
-      fprintf (fp, "    WIDTH %.6f ;\n",  scale*vup->minWidth());
+      fprintf (fp, "    WIDTH %.6f ;\n",  scale*vup->getLEFWidth());
       /* enclosure rules */
       if (vup->isSym()) {
 	fprintf (fp, "    ENCLOSURE ABOVE %.6f %.6f ;\n",
@@ -2836,9 +2836,9 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
       fprintf (fp, "VIA %s_C%s\n", vup->getName(),
 	       (j == 0 ? " DEFAULT" : (j == 1 ? "h" : "v")));
 
-      w = (vup->minWidth() + 2*vup->getSym())*scale/2;
+      w = (vup->getLEFWidth() + 2*vup->getSym())*scale/2;
       if (vup->isAsym()) {
-	w2 = (vup->minWidth() + 2*vup->getAsym())*scale/2;
+	w2 = (vup->getLEFWidth() + 2*vup->getAsym())*scale/2;
       }
       else {
 	w2 = w;
@@ -2855,13 +2855,13 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w2, w, w2);
       }
 
-      w = vup->minWidth()*scale/2;
+      w = vup->getLEFWidth()*scale/2;
       fprintf (fp, "   LAYER %s ;\n", vup->getName());
       fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
 
-      w = (vup->minWidth() + 2*vup->getSymUp())*scale/2;
+      w = (vup->getLEFWidth() + 2*vup->getSymUp())*scale/2;
       if (vup->isAsym()) {
-	w2 = (vup->minWidth() + 2*vup->getAsymUp())*scale/2;
+	w2 = (vup->getLEFWidth() + 2*vup->getAsymUp())*scale/2;
       }
       else {
 	w2 = w;
@@ -2904,7 +2904,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 		 vup->getSymUp()*scale, vup->getSymUp()*scale);
       }
 
-      w = vup->minWidth()*scale/2;
+      w = vup->getLEFWidth()*scale/2;
       fprintf (fp, "   LAYER %s ;\n", vup->getName());
       fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w, -w, w, w);
 
@@ -3261,7 +3261,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   for (int i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mx = Technology::T->metal[i];
     int pitchxy = mx->getPitch()*unit_conv;
-    int startxy = mx->minWidth()*unit_conv/2;
+    int startxy = mx->getLEFWidth()*unit_conv/2;
     
     int ntracksx = (pitchx*nx)/pitchxy;
     int ntracksy = (track_gap*ny)/pitchxy;
