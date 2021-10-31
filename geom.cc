@@ -247,14 +247,14 @@ Layout::Layout(netlist_t *_n)
       b->v = lp;
 
       if (Technology::T->welldiff[EDGE_NFET][i]->getUpC()) {
-	if (!hash_lookup (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName())) {
+	if (!hash_lookup (lmap, Technology::T->welldiff[EDGE_NFET][i]->getUpC()->getName())) {
 	  NEW (lp, struct layermap);
 	  lp->l = base;
 	  lp->etype = EDGE_NFET;
 	  lp->flavor = i;
 	  lp->lcase = LMAP_VIA;
 
-	  b = hash_add (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName());
+	  b = hash_add (lmap, Technology::T->welldiff[EDGE_NFET][i]->getUpC()->getName());
 	  b->v = lp;
 	}
       }
@@ -274,14 +274,14 @@ Layout::Layout(netlist_t *_n)
       b->v = lp;
 
       if (Technology::T->welldiff[EDGE_PFET][i]->getUpC()) {
-	if (!hash_lookup (lmap, Technology::T->diff[EDGE_PFET][i]->getUpC()->getName())) {
+	if (!hash_lookup (lmap, Technology::T->welldiff[EDGE_PFET][i]->getUpC()->getName())) {
 	  NEW (lp, struct layermap);
 	  lp->l = base;
 	  lp->etype = EDGE_PFET;
 	  lp->flavor = i;
 	  lp->lcase = LMAP_VIA;
 
-	  b = hash_add (lmap, Technology::T->diff[EDGE_PFET][i]->getUpC()->getName());
+	  b = hash_add (lmap, Technology::T->welldiff[EDGE_PFET][i]->getUpC()->getName());
 	  b->v = lp;
 	}
       }
