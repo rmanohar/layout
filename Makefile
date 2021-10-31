@@ -22,7 +22,7 @@ EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
 TARGETS=$(EXE) $(EXE2)
-TARGETSCRIPTS=mag.pl
+TARGETSCRIPTS=mag.pl rect2lef.pl
 TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o
@@ -47,6 +47,9 @@ pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
 
 mag.pl: 
 	git checkout mag.pl
+
+rect2lef.pl:
+	git checkout rect2lef.pl
 
 $(EXE2): $(OBJS2) $(ACTPASSDEPEND)
 	$(CXX) $(CFLAGS) $(OBJS2) -o $(EXE2) $(LIBACTPASS)
