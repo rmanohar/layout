@@ -1751,7 +1751,7 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
 	n = -w->getOverhangWelldiff();
       }
     }
-    l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina, 
+    l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina + 1,
 		     pplusdiff->minWidth(), mina, dummy_netlist->psc);
   }
 
