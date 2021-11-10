@@ -104,7 +104,7 @@ void layout_init (ActPass *a)
   ActNamespace::setAct (a->getAct());
 
   Assert (dp, "What?");
-#if 0
+#if 1
   config_set_state (dp->getConfig ());
   Technology::T = dp->getTech ();
 #endif

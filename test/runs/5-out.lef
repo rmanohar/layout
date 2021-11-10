@@ -97,7 +97,7 @@ MACRO mycell
     CLASS CORE ;
     FOREIGN mycell 0.000000 0.000000 ;
     ORIGIN 0.000000 0.000000 ;
-    SIZE 33.600000 BY 21.600000 ;
+    SIZE 33.600000 BY 24.000000 ;
     SYMMETRY X Y ;
     SITE CoreSite ;
     PIN in_50_6
@@ -105,7 +105,7 @@ MACRO mycell
         USE SIGNAL ;
         PORT
         LAYER m2 ;
-        RECT 2.400000 18.000000 3.600000 19.200000 ;
+        RECT 2.400000 20.400000 3.600000 21.600000 ;
         END
     END in_50_6
     PIN in_51_6
@@ -113,7 +113,7 @@ MACRO mycell
         USE SIGNAL ;
         PORT
         LAYER m2 ;
-        RECT 7.200000 18.000000 8.400000 19.200000 ;
+        RECT 7.200000 20.400000 8.400000 21.600000 ;
         END
     END in_51_6
     PIN in_52_6
@@ -121,7 +121,7 @@ MACRO mycell
         USE SIGNAL ;
         PORT
         LAYER m2 ;
-        RECT 12.000000 18.000000 13.200000 19.200000 ;
+        RECT 12.000000 20.400000 13.200000 21.600000 ;
         END
     END in_52_6
     PIN in_53_6
@@ -129,7 +129,7 @@ MACRO mycell
         USE SIGNAL ;
         PORT
         LAYER m2 ;
-        RECT 16.800000 18.000000 18.000000 19.200000 ;
+        RECT 16.800000 20.400000 18.000000 21.600000 ;
         END
     END in_53_6
     PIN in_54_6
@@ -137,7 +137,7 @@ MACRO mycell
         USE SIGNAL ;
         PORT
         LAYER m2 ;
-        RECT 21.600000 18.000000 22.800000 19.200000 ;
+        RECT 21.600000 20.400000 22.800000 21.600000 ;
         END
     END in_54_6
     PIN out
@@ -154,7 +154,7 @@ MACRO mycell
         USE POWER ;
         PORT
         LAYER m2 ;
-        RECT 26.400000 18.000000 27.600000 19.200000 ;
+        RECT 26.400000 20.400000 27.600000 21.600000 ;
         END
         ANTENNADIFFAREA 7.020000 ;
     END Vdd
@@ -163,13 +163,13 @@ MACRO mycell
         USE GROUND ;
         PORT
         LAYER m2 ;
-        RECT 31.200000 18.000000 32.400000 19.200000 ;
+        RECT 31.200000 20.400000 32.400000 21.600000 ;
         END
         ANTENNADIFFAREA 5.400000 ;
     END GND
     OBS
       LAYER m1 ;
-         RECT 2.400000 7.200000 30.900000 14.100000 ;
+         RECT 2.400000 7.200000 30.900000 16.500000 ;
     END
 END mycell
 

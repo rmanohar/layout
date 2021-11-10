@@ -1532,8 +1532,8 @@ void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
       xlly = tlly;
       xurx = turx;
       xury = tury;
-      bxllx = tllx - bloat + 1;
-      bxlly = tlly - bloat + 1;
+      bxllx = tllx - bloat;
+      bxlly = tlly - bloat;
       bxurx = turx + bloat;
       bxury = tury + bloat;
       first = 0;
@@ -1544,8 +1544,8 @@ void Layer::getBBox (long *llx, long *lly, long *urx, long *ury)
       xurx = MAX(xurx, turx);
       xury = MAX(xury, tury);
 
-      bxllx = MIN(bxllx, tllx - bloat + 1);
-      bxlly = MIN(bxlly, tlly - bloat + 1);
+      bxllx = MIN(bxllx, tllx - bloat);
+      bxlly = MIN(bxlly, tlly - bloat);
       bxurx = MAX(bxurx, turx + bloat);
       bxury = MAX(bxury, tury + bloat);
     }

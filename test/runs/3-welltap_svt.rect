@@ -1,5 +1,5 @@
 bbox 0 0 16 40
 inrect GND m2 8 8 12 12
 inrect Vdd m2 8 28 12 32
-rect GND ppdiff 8 7 11 10
+rect GND ppdiff 8 8 11 11
 rect Vdd nndiff 8 22 11 25
