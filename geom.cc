@@ -708,6 +708,12 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
 #endif
 
+    if (rllx >= rurx || rlly >= rury) {
+      warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
+	       material, rllx, rlly, rurx, rury);
+      continue;
+    }
+
     /* now find the material/layer, and draw it */
     if (material[0] == 'm' && isdigit(material[1])) {
       /* m# is a metal layer */
