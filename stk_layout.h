@@ -26,6 +26,7 @@
 #include <map>
 #include <unordered_set>
 #include "geom.h"
+#include <common/path.h>
 
 /*-- data structures --*/
 
@@ -128,8 +129,13 @@ public:
   int _horiz_metal;
   int _pin_layer;
   RoutingMat *_pin_metal;
-  int _rect_import;
   int _rect_wells;
+
+  /* -- .rect file management -- */
+  int _rect_import;  /* set to 1 if .rects can be read in from files,
+			0 otherwise */
+  path_info_t *_rect_inpath;	// input path for rectangles, if any
+  const char *_rect_outdir;	// rect output directory, if any
 
   int _extra_tracks_top;
   int _extra_tracks_bot;

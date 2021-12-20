@@ -262,6 +262,21 @@ ActStackLayout::ActStackLayout (ActPass *ap)
     _rect_import = 0;
   }
 
+  _rect_inpath = NULL;
+  if (_rect_import) {
+    if (config_exists ("lefdef.rect_inpath")) {
+      _rect_inpath = path_init ();
+      path_add (_rect_inpath, config_get_string ("lefdef.rect_inpath"));
+    }
+  }
+
+  if (config_exists ("lefdef.rect_outdir")) {
+    _rect_outdir = config_get_string ("lefdef.rect_outdir");
+  }
+  else {
+    _rect_outdir = NULL;
+  }
+
   if (config_exists ("lefdef.rect_wells")) {
     _rect_wells = config_get_int ("lefdef.rect_wells");
     if (_rect_wells != 0 && _rect_wells != 1) {
@@ -1114,7 +1129,18 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   }
   len = strlen (cname);
   snprintf (cname + len, 10240 - len, ".rect");
-  FILE *fp = fopen (cname, "r");
+
+  FILE *fp;
+  char *tmpname;
+
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, cname, NULL);
+    fp = fopen (tmpname, "r");
+  }
+  else {
+    tmpname = NULL;
+    fp = fopen (cname, "r");
+  }
 
   if (!fp) {
     return NULL;
@@ -1126,7 +1152,13 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
 #endif  
   /* found a .rect file! Override layout generation */
   Layout *tmp = new Layout (nl->getNL (p));
-  tmp->ReadRect (cname);
+  if (tmpname) {
+    tmp->ReadRect (tmpname);
+    FREE (tmpname);
+  }
+  else {
+    tmp->ReadRect (cname);
+  }
   tmp->propagateAllNets ();
   tmp->markPins ();
 #if 0 
@@ -1589,13 +1621,24 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 LayoutBlob *ActStackLayout::_readwelltap (int flavor)
 {
   char cname[128];
+  char *tmpname;
   
   if (!_rect_import) {
     return NULL;
   }
 
   snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
-  FILE *fp = fopen (cname, "r");
+
+  FILE *fp;
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, cname, NULL);
+    fp = fopen (tmpname, "r");
+  }
+  else {
+    tmpname = NULL;
+    fp = fopen (cname, "r");
+  }
+
   if (!fp) {
     return NULL;
   }
@@ -1603,7 +1646,13 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
 
   /* found a .rect file! Override layout generation */
   Layout *tmp = new Layout (dummy_netlist);
-  tmp->ReadRect (cname);
+  if (tmpname) {
+    tmp->ReadRect (tmpname);
+    FREE (tmpname);
+  }
+  else {
+    tmp->ReadRect (cname);
+  }
   tmp->propagateAllNets ();
   LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
 
@@ -1811,7 +1860,19 @@ void ActStackLayout::_emitwelltaprect (int flavor)
       
   /* emit rectangles */
   strcat (name, ".rect");
-  FILE *tfp = fopen (name, "w");
+
+  FILE *tfp;
+  if (_rect_outdir) {
+    char *outname;
+    int sz = strlen (name) + strlen (_rect_outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", _rect_outdir, name);
+    tfp = fopen (outname, "w");
+    FREE (outname);
+  }
+  else {
+    tfp = fopen (name, "w");
+  }
   b->PrintRect (tfp, &mat);
 
   if (_rect_wells) {
@@ -1882,7 +1943,18 @@ void ActStackLayout::_emitlocalRect (Process *p)
   }
   int len = strlen (cname);
   snprintf (cname + len, 10240-len, ".rect");
-  fp = fopen (cname, "w");
+
+  if (_rect_outdir) {
+    char *outname;
+    int sz = strlen (cname) + strlen (_rect_outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", _rect_outdir, cname);
+    fp = fopen (outname, "w");
+    FREE (outname);
+  }
+  else {
+    fp = fopen (cname, "w");
+  }
   blob->PrintRect (fp, &mat);
 
   
