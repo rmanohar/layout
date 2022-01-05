@@ -3207,12 +3207,10 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
     }
   }
 
-  ActInstiter i(p->CurScope());
+  ActUniqProcInstiter i(p->CurScope());
 
   for (i = i.begin(); i != i.end(); i++) {
     ValueIdx *vx = (*i);
-    if (!TypeFactory::isProcessType (vx->t)) continue;
-
     ActId *newid;
     ActId *cpy;
     
@@ -3234,11 +3232,13 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
     if (vx->t->arrayInfo()) {
       Arraystep *as = vx->t->arrayInfo()->stepper();
       while (!as->isend()) {
-	Array *x = as->toArray();
-	newid->setArray (x);
-	_collect_emit_nets (a, cpy, instproc, fp, do_pins);
-	delete x;
-	newid->setArray (NULL);
+	if (vx->isPrimary (as->index())) {
+	  Array *x = as->toArray();
+	  newid->setArray (x);
+	  _collect_emit_nets (a, cpy, instproc, fp, do_pins);
+	  delete x;
+	  newid->setArray (NULL);
+	}
 	as->step();
       }
       delete as;
