@@ -1,0 +1,8 @@
+export defcell mycell (bool? in[5]; bool! out) { }
+
+defproc test()
+{
+  mycell x;
+}
+
+test t;

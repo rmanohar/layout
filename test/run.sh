@@ -58,7 +58,7 @@ do
         else
 	   myecho ".[$bname]"
         fi
-	$ACTTOOL -p 'test<>' -c cells.act $i > runs/$i.t.stdout 2> runs/$i.t.stderr
+	$ACTTOOL -cnf=m.conf -p 'test<>' -c cells.act $i > runs/$i.t.stdout 2> runs/$i.t.stderr
 	if [ ! -d "runs/gen" ]
 	then
 	    mkdir runs/gen

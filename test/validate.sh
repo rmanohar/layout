@@ -17,7 +17,7 @@ do
 	i=${count}.act
 	file=${count}
 	count=`expr $count + 1`
-	$ACTTOOL -p 'test<>' -c cells.act $i > runs/$i.stdout 2> runs/$i.stderr
+	$ACTTOOL -cnf=m.conf -p 'test<>' -c cells.act $i > runs/$i.stdout 2> runs/$i.stderr
 	for i in out.lef out.def out.cell *.rect
 	do
 	    mv $i runs/${file}-${i}
