@@ -198,7 +198,13 @@ private:
 
 class LayoutBlob;
 
-enum blob_type { BLOB_BASE, BLOB_HORIZ, BLOB_VERT, BLOB_MERGE };
+enum blob_type { BLOB_BASE,  /* some layout */
+		 BLOB_MACRO, /* macro */
+		 BLOB_HORIZ, /* horizontal composition */
+		 BLOB_VERT,  /* vertical composition */
+		 BLOB_MERGE  /* overlay */
+};
+
 enum mirror_type { MIRROR_NONE, MIRROR_LR, MIRROR_TB, MIRROR_BOTH };
    // do we want to support 90 degree rotation?
 
@@ -248,6 +254,7 @@ private:
     struct {
       Layout *l;		// ... layout block
     } base;
+    ExternMacro *macro;
   };
   blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert
@@ -270,7 +277,12 @@ private:
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
+  LayoutBlob (ExternMacro *m);
   ~LayoutBlob ();
+
+  int isMacro() { return t == BLOB_MACRO ? true : false; }
+  const char *getMacroName() { return macro->getName(); }
+  const char *getLEFFile() { return macro->getLEFFile(); }
 
   void applyTransform (TransformMat *t);
 

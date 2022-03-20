@@ -1261,6 +1261,20 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
   LayoutBlob *BLOB;
 
   Assert (stk, "What?");
+
+  act_languages *lang = p->getlang();
+
+  if (p->isBlackBox() || p->isLowLevelBlackBox()) {
+    netlist_t *n = nl->getNL (p);
+
+    if (n->bN->macro && n->bN->macro->isValid()) {
+      BLOB = new LayoutBlob (n->bN->macro);
+    }
+    else {
+      BLOB = NULL;
+    }
+    return BLOB;
+  }
  
   stks = (list_t *) stk->getMap (p);
   if (!stks || list_length (stks) == 0) {
@@ -2303,6 +2317,7 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
  */
 int ActStackLayout::_emitlocalLEF (Process *p)
 {
+  char macroname[10240];
   FILE *fp = _fp;
   FILE *fpcell = _fpcell;
   A_DECL (node_t *, iopins);
@@ -2315,48 +2330,39 @@ int ActStackLayout::_emitlocalLEF (Process *p)
     return 0;
   }
 
-  n = nl->getNL (p);
-  if (!n) {
-    return 0;
-  }
-
-  if (p->isBlackBox()) {
-    /* blackbox */
+  if (blob->isMacro()) {
+    /* insert LEF */
     FILE *bfp;
-    int l;
-    char name[10240];
 
-    a->msnprintfproc (name, 10240, p);
-    l = strlen (name);
-    snprintf (name + l, 10240-l, ".lef");
-    bfp = fopen (name, "r");
-    if (!bfp) {
-      const char *s;
-      
-      sprintf (name, "macros.lef.");
-      a->msnprintfproc (name + 11, 10240 - 11, p);
-      if (!config_exists (name)) {
-	fatal_error ("Could not find macro configuration string `%s'", name);
-      }
-      s = config_get_string (name);
-      bfp = fopen (s, "r");
-      if (!bfp) {
-	fatal_error ("Could not find LEF file `%s'", s);
-      }
+    if (!blob->getLEFFile()) {
+      warning ("Macro %s is missing LEF\n", blob->getMacroName());
+      return 0;
     }
+
+    bfp = fopen (blob->getLEFFile(), "r");
     if (!bfp) {
-      fatal_error ("Could not find macro LEF for black box `%s'", name);
+      fprintf (stderr, "Macro %s: LEF %s could not be opened\n",
+	       blob->getMacroName(), blob->getLEFFile());
+      return 0;
     }
+
+    char buf[10240];
+    
     while (!feof (bfp)) {
       long sz;
-      sz = fread (name, 1, 10240, bfp);
+      sz = fread (buf, 1, 10240, bfp);
       if (sz > 0) {
-	fwrite (name, 1, sz, fp);
+	fwrite (buf, 1, sz, fp);
       }
     }
     fprintf (fp, "\n");
     fclose (bfp);
     return 1;
+  }
+
+  n = nl->getNL (p);
+  if (!n) {
+    return 0;
   }
 
   long bllx, blly, burx, bury;
@@ -2391,7 +2397,6 @@ int ActStackLayout::_emitlocalLEF (Process *p)
 
   A_INIT (iopins);
 
-  char macroname[10240];
   double scale = Technology::T->scale/1000.0;
   
   a->msnprintfproc (macroname, 10240, p);

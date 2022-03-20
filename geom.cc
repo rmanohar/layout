@@ -999,6 +999,9 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
 
 void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
 {
+  if (t == BLOB_MACRO) {
+    return;
+  }
   if (t != BLOB_BASE || base.l) {
     warning ("LayoutBlob::setBBox(): called on non-empty layout; ignored");
     return;
@@ -1025,6 +1028,28 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
   bloatury = _ury;
 }
 
+LayoutBlob::LayoutBlob (ExternMacro *m)
+{
+  t = BLOB_MACRO;
+  macro = m;
+  if (macro && macro->isValid()) {
+    macro->getBBox (&llx, &lly, &urx, &ury);
+    bloatllx = llx;
+    bloatlly = lly;
+    bloaturx = urx;
+    bloatury = ury;
+  }
+  else {
+    llx = 0;
+    lly = 0;
+    urx = -1;
+    ury = -1;
+    bloatllx = 0;
+    bloatlly = 0;
+    bloaturx = -1;
+    bloatury = -1;
+  }    
+}
 
 LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
 {
@@ -1038,6 +1063,11 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   count = 0;
 
   switch (t) {
+  case BLOB_MACRO:
+    macro = NULL;
+    warning ("LayoutBlob: create macro using a different constructor!");
+    break;
+    
   case BLOB_BASE:
     base.l = lptr;
     if (lptr) {
@@ -1103,6 +1133,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 {
   if (t == BLOB_BASE) {
     warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
+    return;
+  }
+  if (t == BLOB_MACRO) {
+    warning ("LayoutBlob::appendBlob() called on MACRO; error ignored!");
     return;
   }
   
@@ -1272,6 +1306,10 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       bl->b->_printRect (fp, &m);
     }
+  }
+  else if (t == BLOB_MACRO) {
+    /* nothing to do, it is a macro */
+    return;
   }
   else {
     fatal_error ("Unknown blob\n");
@@ -1892,6 +1930,10 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
       list_free (tmp);
     }
   }
+  else if (t == BLOB_MACRO) {
+    /* nothing, macro */
+    tiles = list_new ();
+  }
   else {
     tiles = NULL;
     fatal_error ("New blob?");
@@ -1949,6 +1991,9 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
       list_concat (tiles, tmp);
       list_free (tmp);
     }
+  }
+  else if (t == BLOB_MACRO) {
+    tiles = list_new ();
   }
   else {
     tiles = NULL;
@@ -2078,6 +2123,9 @@ void LayoutBlob::searchFree (list_t *slist)
 LayoutBlob *LayoutBlob::delBBox (LayoutBlob *b)
 {
   if (!b) return NULL;
+  if (b->t == BLOB_MACRO) {
+    return b;
+  }
   if (b->t == BLOB_BASE) {
     if (b->base.l) {
       return b;
