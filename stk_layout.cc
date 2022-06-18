@@ -1882,10 +1882,16 @@ void ActStackLayout::_emitwelltaprect (int flavor)
     MALLOC (outname, char, sz);
     snprintf (outname, sz, "%s/%s", _rect_outdir, name);
     tfp = fopen (outname, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
+    }
     FREE (outname);
   }
   else {
     tfp = fopen (name, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", name);
+    }
   }
   b->PrintRect (tfp, &mat);
 
@@ -1964,10 +1970,16 @@ void ActStackLayout::_emitlocalRect (Process *p)
     MALLOC (outname, char, sz);
     snprintf (outname, sz, "%s/%s", _rect_outdir, cname);
     fp = fopen (outname, "w");
+    if (!fp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
+    }
     FREE (outname);
   }
   else {
     fp = fopen (cname, "w");
+    if (!fp) {
+      fatal_error ("Could not open file `%s' for writing", cname);
+    }
   }
   blob->PrintRect (fp, &mat);
 
