@@ -22,7 +22,7 @@ EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
 TARGETS=$(EXE) $(EXE2)
-TARGETSCRIPTS=mag.pl rect2lef.pl
+TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
 TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o
