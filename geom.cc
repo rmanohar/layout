@@ -99,7 +99,7 @@ void Layout::Init()
   _initdone = true;
 
   if (!Technology::T) {
-    Technology::Init ("layout.conf");
+    Technology::Init ();
   }
   
   if (config_exists ("net.leakage_adjust")) {

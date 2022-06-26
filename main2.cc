@@ -24,7 +24,7 @@
 
 int main (int argc, char **argv)
 {
-  Act::Init (&argc, &argv);
+  Act::Init (&argc, &argv, "layout:layout.conf");
   {
     char *tmpfile = config_file_name ("macros.conf");
     if (tmpfile) {

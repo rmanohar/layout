@@ -70,7 +70,7 @@ int main (int argc, char **argv)
   area_multiplier = 1.4;
   aspect_ratio = 1.0;
   
-  Act::Init (&argc, &argv);
+  Act::Init (&argc, &argv, "layout:layout.conf");
   {
     char *tmpfile = config_file_name ("macros.conf");
     if (tmpfile) {
