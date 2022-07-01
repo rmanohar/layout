@@ -2734,134 +2734,161 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	   _m_align_x->getPitch()*scale,
 	   _m_align_y->getPitch()*scale);
   fprintf (fp, "END CoreSite\n\n");
+
+  int metal_start, metal_end;
+
+  metal_start = 0;
+  metal_end = Technology::T->nmetals-1;
+
+  if (config_exists ("lefdef.routing_metal")) {
+    if (config_get_table_size ("lefdef.routing_metal") != 2) {
+      warning ("lefdef.routing_metal: invalid config, needs two values only");
+    }
+    else {
+      int *tmp = config_get_table_int ("lefdef.routing_metal");
+      if (tmp[0] <= tmp[1] && tmp[0] >= 1) {
+	metal_start = tmp[0]-1;
+	metal_end = tmp[1]-1;
+      }
+      else {
+	warning ("lefdef.routing_metal: invalid routing metal range; ignored");
+      }
+    }
+  }
   
   int i;
   for (i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mat = Technology::T->metal[i];
     fprintf (fp, "LAYER %s\n", mat->getName());
-    fprintf (fp, "   TYPE ROUTING ;\n");
 
-    fprintf (fp, "   DIRECTION %s ;\n",
-	     IS_METAL_HORIZ(i+1) ? "HORIZONTAL" : "VERTICAL");
-    fprintf (fp, "   MINWIDTH %.6f ;\n", mat->getLEFWidth()*scale);
-    if (mat->minArea() > 0) {
-      fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
+    if (i < metal_start || i > metal_end) {
+      fprintf (fp, "   TYPE MASTERSICE ;\n");
     }
-    fprintf (fp, "   WIDTH %.6f ;\n", mat->getLEFWidth()*scale);
+    else {
+      fprintf (fp, "   TYPE ROUTING ;\n");
 
-    RangeTable *maxwidths = NULL;
-
-    switch (mat->complexSpacingMode()) {
-    case -1:
-      /* even in this case, emit a spacing table since the open
-	 source tools don't seem to work otherwise (?)
-      */
-#if 0
-      fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
-#endif    
-      fprintf (fp, "   SPACINGTABLE\n");
-      fprintf (fp, "      PARALLELRUNLENGTH 0.0\n");
-      fprintf (fp, "      WIDTH 0.0 %.6f ;\n", mat->minSpacing()*scale);
-      break;
-
-    case 0:
-      maxwidths = mat->getRunTable (mat->numRunLength());
-      /* parallel run length */
-      fprintf (fp, "   SPACINGTABLE\n");
-      fprintf (fp, "      PARALLELRUNLENGTH 0.0");
-      for (int k=0; k < mat->numRunLength(); k++) {
-	fprintf (fp, " %.6f", mat->getRunLength(k)*scale);
+      fprintf (fp, "   DIRECTION %s ;\n",
+	       IS_METAL_HORIZ(i+1) ? "HORIZONTAL" : "VERTICAL");
+      fprintf (fp, "   MINWIDTH %.6f ;\n", mat->getLEFWidth()*scale);
+      if (mat->minArea() > 0) {
+	fprintf (fp, "   AREA %.6f ;\n", mat->minArea()*scale*scale);
       }
-      fprintf (fp, "\n");
-      /* XXX: assumption: widths are always in the range table for
-	 the maximum width parallel run length rules */
-      for (int k=0; k < maxwidths->size(); k++) {
-	int width;
+      fprintf (fp, "   WIDTH %.6f ;\n", mat->getLEFWidth()*scale);
 
-	if (k == 0) {
-	  width = 0;
-	}
-	else {
-	  /* the start of the next range */
-	  width = maxwidths->range_threshold (k-1)+1;
-	}
-	fprintf (fp, "      WIDTH %.6f ", width*scale);
-	for (int l=0; l <= mat->numRunLength(); l++) {
-	  RangeTable *sp = mat->getRunTable (l);
-	  fprintf (fp, " %.6f", (*sp)[width+1]*scale);
-	}
-	if (k == maxwidths->size()-1) {
-	  fprintf (fp, " ;");
+      RangeTable *maxwidths = NULL;
+
+      switch (mat->complexSpacingMode()) {
+      case -1:
+	/* even in this case, emit a spacing table since the open
+	   source tools don't seem to work otherwise (?)
+	*/
+#if 0
+	fprintf (fp, "   SPACING %.6f ;\n", mat->minSpacing()*scale);
+#endif    
+	fprintf (fp, "   SPACINGTABLE\n");
+	fprintf (fp, "      PARALLELRUNLENGTH 0.0\n");
+	fprintf (fp, "      WIDTH 0.0 %.6f ;\n", mat->minSpacing()*scale);
+	break;
+
+      case 0:
+	maxwidths = mat->getRunTable (mat->numRunLength());
+	/* parallel run length */
+	fprintf (fp, "   SPACINGTABLE\n");
+	fprintf (fp, "      PARALLELRUNLENGTH 0.0");
+	for (int k=0; k < mat->numRunLength(); k++) {
+	  fprintf (fp, " %.6f", mat->getRunLength(k)*scale);
 	}
 	fprintf (fp, "\n");
-      }
-      break;
-    case 1:
-      maxwidths = mat->getRunTable (mat->numRunLength()-1);
-      fprintf (fp, "   SPACINGTABLE TWOWIDTHS\n");
-      for (int k=0; k < maxwidths->size(); k++) {
-	int width;
+	/* XXX: assumption: widths are always in the range table for
+	   the maximum width parallel run length rules */
+	for (int k=0; k < maxwidths->size(); k++) {
+	  int width;
 
-	if (k == 0) {
-	  width = 0;
-	}
-	else {
-	  width = maxwidths->range_threshold (k-1);
-	}
-	
-	RangeTable *sp = mat->getRunTable (k);
-
-	fprintf (fp, "      WIDTH %.6f ", width*scale);
-	if (mat->getRunLength (k) != -1) {
-	  fprintf (fp, "   PRL %.6f ", mat->getRunLength (k)*scale);
-	}
-	else {
-	  fprintf (fp, "              ");
-	}
-	for (int l=0; l < maxwidths->size(); l++) {
-	  if (l == 0) {
+	  if (k == 0) {
 	    width = 0;
 	  }
 	  else {
-	    width = maxwidths->range_threshold (l-1);
+	    /* the start of the next range */
+	    width = maxwidths->range_threshold (k-1)+1;
 	  }
-	  fprintf (fp, " %.6f", (*sp)[width+1]*scale);
+	  fprintf (fp, "      WIDTH %.6f ", width*scale);
+	  for (int l=0; l <= mat->numRunLength(); l++) {
+	    RangeTable *sp = mat->getRunTable (l);
+	    fprintf (fp, " %.6f", (*sp)[width+1]*scale);
+	  }
+	  if (k == maxwidths->size()-1) {
+	    fprintf (fp, " ;");
+	  }
+	  fprintf (fp, "\n");
 	}
-	if (k == maxwidths->size()-1) {
-	  fprintf (fp, " ;");
-	}
-	fprintf (fp, "\n");
-      }
-      break;
-    default:
-      fatal_error ("Unknown runlength_mode %d\n", mat->complexSpacingMode());
-      break;
-    }
+	break;
+      case 1:
+	maxwidths = mat->getRunTable (mat->numRunLength()-1);
+	fprintf (fp, "   SPACINGTABLE TWOWIDTHS\n");
+	for (int k=0; k < maxwidths->size(); k++) {
+	  int width;
 
-    if (mat->numInfluence() > 0) {
-      int *table = mat->getInfluence();
-      fprintf (fp, "   SPACINGTABLE INFLUENCE\n");
-      for (int j=0; j < mat->numInfluence(); j++) {
-	fprintf (fp, "      WIDTH %.6f WITHIN %.6f SPACING %.6f ",
-		 table[3*j]*scale, table[3*j+1]*scale, table[3*j+2]*scale);
-	if (j == mat->numInfluence()-1) {
-	  fprintf (fp, " ;");
+	  if (k == 0) {
+	    width = 0;
+	  }
+	  else {
+	    width = maxwidths->range_threshold (k-1);
+	  }
+	
+	  RangeTable *sp = mat->getRunTable (k);
+
+	  fprintf (fp, "      WIDTH %.6f ", width*scale);
+	  if (mat->getRunLength (k) != -1) {
+	    fprintf (fp, "   PRL %.6f ", mat->getRunLength (k)*scale);
+	  }
+	  else {
+	    fprintf (fp, "              ");
+	  }
+	  for (int l=0; l < maxwidths->size(); l++) {
+	    if (l == 0) {
+	      width = 0;
+	    }
+	    else {
+	      width = maxwidths->range_threshold (l-1);
+	    }
+	    fprintf (fp, " %.6f", (*sp)[width+1]*scale);
+	  }
+	  if (k == maxwidths->size()-1) {
+	    fprintf (fp, " ;");
+	  }
+	  fprintf (fp, "\n");
 	}
-	fprintf (fp, "\n");
+	break;
+      default:
+	fatal_error ("Unknown runlength_mode %d\n", mat->complexSpacingMode());
+	break;
       }
-    }
+
+      if (mat->numInfluence() > 0) {
+	int *table = mat->getInfluence();
+	fprintf (fp, "   SPACINGTABLE INFLUENCE\n");
+	for (int j=0; j < mat->numInfluence(); j++) {
+	  fprintf (fp, "      WIDTH %.6f WITHIN %.6f SPACING %.6f ",
+		   table[3*j]*scale, table[3*j+1]*scale, table[3*j+2]*scale);
+	  if (j == mat->numInfluence()-1) {
+	    fprintf (fp, " ;");
+	  }
+	  fprintf (fp, "\n");
+	}
+      }
     
-    fprintf (fp, "   PITCH %.6f %.6f ;\n",
-	     mat->getPitch()*scale, mat->getPitch()*scale);
+      fprintf (fp, "   PITCH %.6f %.6f ;\n",
+	       mat->getPitch()*scale, mat->getPitch()*scale);
 
-    /* antenna rules */
-    if (mat->getAntenna() > 0 || mat->getAntennaDiff() > 0) {
-      fprintf (fp, "   ANTENNAMODEL OXIDE1 ;\n");
-      if (mat->getAntenna() > 0) {
-	fprintf (fp, "   ANTENNAAREARATIO %.6f ;\n", mat->getAntenna());
-      }
-      if (mat->getAntennaDiff() > 0) {
-	fprintf (fp, "   ANTENNADIFFAREARATIO %.6f ;\n", mat->getAntennaDiff());
+      /* antenna rules */
+      if (mat->getAntenna() > 0 || mat->getAntennaDiff() > 0) {
+	fprintf (fp, "   ANTENNAMODEL OXIDE1 ;\n");
+	if (mat->getAntenna() > 0) {
+	  fprintf (fp, "   ANTENNAAREARATIO %.6f ;\n", mat->getAntenna());
+	}
+	if (mat->getAntennaDiff() > 0) {
+	  fprintf (fp, "   ANTENNADIFFAREARATIO %.6f ;\n", mat->getAntennaDiff());
+	}
       }
     }
     
