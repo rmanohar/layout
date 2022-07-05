@@ -102,7 +102,15 @@ protected:
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
 
-  const char *getRouteName() { return mat->getName(); }
+  const char *getRouteName() {
+    RoutingMat *rmat = dynamic_cast<RoutingMat *> (mat);
+    if (rmat) {
+      return rmat->getLEFName();
+    }
+    else {
+      return mat->getName();
+    }
+  }
   const char *getViaName() { return ((RoutingMat *)mat)->getUpC()->getName(); } 
 
   Tile *find (long x, long y);

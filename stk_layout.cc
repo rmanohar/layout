@@ -2533,7 +2533,7 @@ int ActStackLayout::_emitlocalLEF (Process *p)
     if (((rury - rlly+1) > 6*pinspc) &&
 	((rurx - rllx+1) > 2*_pin_metal->getPitch())) {
       fprintf (fp, "    OBS\n");
-      fprintf (fp, "      LAYER %s ;\n", m1->getName());
+      fprintf (fp, "      LAYER %s ;\n", m1->getLEFName());
       fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
 	       scale*((rllx - bllx) + _pin_metal->getPitch()),
 	       scale*((rlly - blly) + 3*pinspc),
@@ -2759,7 +2759,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
   int i;
   for (i=0; i < Technology::T->nmetals; i++) {
     RoutingMat *mat = Technology::T->metal[i];
-    fprintf (fp, "LAYER %s\n", mat->getName());
+    fprintf (fp, "LAYER %s\n", mat->getLEFName());
 
     if (i < metal_start || i > metal_end) {
       fprintf (fp, "   TYPE MASTERSICE ;\n");
@@ -2892,7 +2892,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
       }
     }
     
-    fprintf (fp, "END %s\n\n", mat->getName());
+    fprintf (fp, "END %s\n\n", mat->getLEFName());
 
 
     if (i != Technology::T->nmetals - 1) {
@@ -2963,7 +2963,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
       }
       
-      fprintf (fp, "   LAYER %s ;\n", mat->getName());
+      fprintf (fp, "   LAYER %s ;\n", mat->getLEFName());
       if (IS_METAL_HORIZ (i+1) || (j == 1)) {
 	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
       }
@@ -2986,7 +2986,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	fatal_error ("Asymmetric via overhang for %s is smaller than the minimum overhang", vup->getName());
       }
     
-      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
+      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getLEFName());
       if (IS_METAL_HORIZ (i+2) || (j == 1)) {
 	fprintf (fp, "     RECT %.6f %.6f %.6f %.6f ;\n", -w2, -w, w2, w);
       }
@@ -3000,7 +3000,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
     
     if (vup->viaGenerate()) {
       fprintf (fp, "VIARULE %s_gen GENERATE\n", vup->getName());
-      fprintf (fp, "   LAYER %s ;\n", mat->getName());
+      fprintf (fp, "   LAYER %s ;\n", mat->getLEFName());
       if (vup->isAsym()) {
 	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
 		 vup->getAsym()*scale, vup->getSym()*scale);
@@ -3009,7 +3009,7 @@ void ActStackLayout::emitLEFHeader (FILE *fp)
 	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
 		 vup->getSym()*scale, vup->getSym()*scale);
       }
-      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getName());
+      fprintf (fp, "   LAYER %s ;\n", Technology::T->metal[i+1]->getLEFName());
       if (vup->isAsym()) {
 	fprintf (fp, "   ENCLOSURE %.6f %.6f ;\n",
 		 vup->getAsymUp()*scale, vup->getSymUp()*scale);
@@ -3384,10 +3384,10 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
     /* vertical tracks */
     fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
-	     10*pitchx + startxy, ntracksx, pitchxy, mx->getName());
+	     10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
     /* horizontal tracks */
     fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
-	     track_gap + startxy, ntracksy, pitchxy, mx->getName());
+	     track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
 
     fprintf (fp, "\n");
   }

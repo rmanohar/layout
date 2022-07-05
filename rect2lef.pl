@@ -1,13 +1,13 @@
 #!/usr/bin/perl
 
-if ($#ARGV != 1) {
-	die "Usage: $0 <file> <name>";
+if ($#ARGV != 2) {
+	die "Usage: $0 <file> <name> <micron_conversion>";
 	exit 1;
 }
 
 $name = $ARGV[0];
 $outname = $ARGV[1];
-$scale = 0.001;
+$scale = 1.0/$ARGV[2];
 
 die "Could not open .rect file for $name" unless open (FILE,$name . ".rect");
 
