@@ -3925,7 +3925,7 @@ int layout_runcmd (ActPass *_ap, const char *name)
   /* now find this process! */
   char buf[10240];
 
-  ap->getAct()->unmangle_string (x, buf, 10240);
+  ap->getAct()->unmangle_stringproc (x, buf, 10240);
 
   int w = ap->getIntParam ("cell_width");
   int h = ap->getIntParam ("cell_height");
