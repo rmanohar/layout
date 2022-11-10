@@ -966,7 +966,23 @@ void Layer::PrintRect (FILE *fp, TransformMat *t)
       else {
 	fprintf (fp, "#");
       }
-      fprintf (fp, " %s", ((RoutingMat *)mat)->getUpC()->getName());
+
+      if (nother == 0) {
+	fprintf (fp, " %s", ((RoutingMat *)mat)->getUpC()->getName());
+      }
+      else {
+	// we need to look at what is below
+	Tile *dn;
+	dn = find (tmp->getllx(), tmp->getlly());
+	if (dn->isSpace() || TILE_ATTR_ISROUTE(dn->getAttr())) {
+	  fprintf (fp, " %s", ((RoutingMat *)mat)->getUpC()->getName());
+	}
+	else {
+	  Assert (TILE_ATTR_NONPOLY(dn->getAttr()) < nother, "What?");
+	  Material *tm = other[TILE_ATTR_NONPOLY(dn->getAttr())];
+	  fprintf (fp, " %s", ((DiffMat *)tm)->getUpC()->getName());
+	}
+      }
 
       long llx, lly, urx, ury;
 
