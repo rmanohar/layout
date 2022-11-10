@@ -10,7 +10,13 @@ echo
 ARCH=`$ACT_HOME/scripts/getarch`
 OS=`$ACT_HOME/scripts/getos`
 EXT=${ARCH}_${OS}
-ACTTOOL=../act2lef.$EXT 
+if [ ! x$ACT_TEST_INSTALL = x ] || [ ! -f ../act2lef.$EXT ]; then
+  ACTTOOL=$ACT_HOME/bin/act2lef
+  echo "testing installation"
+  echo
+else
+  ACTTOOL=../act2lef.$EXT
+fi
 
 check_echo=0
 
@@ -70,6 +76,9 @@ do
 		myecho "** FAILED TEST $i: stdout"
 		fail=`expr $fail + 1`
 		ok=0
+		if [ ! x$ACT_TEST_VERBOSE = x ]; then
+		    diff runs/$i.t.stdout runs/$i.stdout
+		fi
 	fi
 	if ! cmp runs/$i.t.stderr runs/$i.stderr >/dev/null 2>/dev/null
 	then
@@ -81,6 +90,9 @@ do
 		myecho " stderr"
 		fail=`expr $fail + 1`
 		ok=0
+		if [ ! x$ACT_TEST_VERBOSE = x ]; then
+		    diff runs/$i.t.stderr runs/$i.stderr
+		fi
 	fi
 	for i in out.lef out.def out.cell *.rect
 	do
@@ -94,6 +106,9 @@ do
 		myecho " ${i}"
 		fail=`expr $fail + 1`
 		ok=0
+		if [ ! x$ACT_TEST_VERBOSE = x ]; then
+		    diff $i runs/${file}-${i}
+		fi
 	    fi
 	    mv $i runs/gen/${file}-${i}
 	done

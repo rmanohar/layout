@@ -3,7 +3,13 @@
 ARCH=`$ACT_HOME/scripts/getarch`
 OS=`$ACT_HOME/scripts/getos`
 EXT=${ARCH}_${OS}
-ACTTOOL=../act2lef.$EXT 
+if [ ! x$ACT_TEST_INSTALL = x ] || [ ! -f ../act2lef.$EXT ]; then
+  ACTTOOL=$ACT_HOME/bin/act2lef
+  echo "testing installation"
+  echo
+else
+  ACTTOOL=../act2lef.$EXT
+fi
 
 if [ ! -d runs ]
 then
