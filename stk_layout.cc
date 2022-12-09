@@ -1478,7 +1478,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
       ihash_bucket_t *b;
       
-      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i].c);
       p_in++;
 
       act_booleanized_var_t *bv = (act_booleanized_var_t *)b->v;
@@ -1580,7 +1580,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     /* globals */
     for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
       ihash_bucket_t *b;
-      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+      b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i].c);
       
       Assert (b, "Hmm:");
 
@@ -2455,7 +2455,7 @@ int ActStackLayout::_emitlocalLEF (Process *p)
   for (int i=0; i < A_LEN (n->bN->used_globals); i++) {
     /* generate name */
     char tmp[1024];
-    ActId *id = n->bN->used_globals[i]->toid();
+    ActId *id = n->bN->used_globals[i].c->toid();
     id->sPrint (tmp, 1024);
     delete id;
 
@@ -2463,7 +2463,7 @@ int ActStackLayout::_emitlocalLEF (Process *p)
     const char *sigtype;
     sigtype = "SIGNAL";
     ihash_bucket_t *b;
-    b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i]);
+    b = ihash_lookup (n->bN->cH, (long)n->bN->used_globals[i].c);
     Assert (b, "What on earth");
     act_booleanized_var_t *v;
     struct act_nl_varinfo *av;
