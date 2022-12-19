@@ -1,5 +1,6 @@
 i386_*
 arm64_*
+x86_64_*
 *.o
 Makefile.deps
 *~
