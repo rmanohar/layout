@@ -1122,7 +1122,7 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   }
   
   if (!p) {
-    sprintf (cname, "toplevel");
+    snprintf (cname, 10240, "toplevel");
   }
   else {
     a->msnprintfproc (cname, 10240, p);
@@ -1959,7 +1959,7 @@ void ActStackLayout::_emitlocalRect (Process *p)
     a->msnprintfproc (cname, 10240, p);
   }
   else {
-    sprintf (cname, "toplevel");
+    snprintf (cname, 10240, "toplevel");
   }
   int len = strlen (cname);
   snprintf (cname + len, 10240-len, ".rect");
