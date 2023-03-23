@@ -665,7 +665,7 @@ void stk_init (ActPass *a)
   if (!a->getAct()->pass_find ("prs2net")) {
     nl = new ActNetlistPass (a->getAct());
   }
-  a->AddDependency ("prs2net");
+  dp->addDependency ("prs2net");
 
   ActPass *pass = a->getAct()->pass_find ("prs2net");
   Assert (pass, "Hmm...");

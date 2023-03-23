@@ -119,7 +119,7 @@ void layout_init (ActPass *a)
   if (!a->getAct()->pass_find ("net2stk")) {
     new ActDynamicPass (a->getAct(), "net2stk", "pass_stk.so", "stk");
   }
-  a->AddDependency ("net2stk");
+  dp->addDependency ("net2stk");
   dp->setParam ("raw", (void *)new ActStackLayout(a));
 }
 
