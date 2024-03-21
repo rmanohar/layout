@@ -26,8 +26,8 @@ TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
 TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o
-OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o
-SHOBJS=main.os stk_pass.os stk_layout.os geom.os tile.os
+OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o subcell.o
+SHOBJS=main.os stk_pass.os stk_layout.os geom.os tile.os subcell.os
 
 OBJS=$(OBJS1) $(OBJS2) $(SHOBJS)
 

@@ -99,6 +99,64 @@ Order:
 
 class Layer;
 
+class Rectangle {
+private:
+  long _llx, _lly;
+  unsigned long _wx, _wy;
+
+public:
+  /* initialize with the empty rectangle */
+  Rectangle() {
+    _llx = 0;
+    _lly = 0;
+    _wx = 0;
+    _wy = 0;
+  }
+
+  long llx() { return _llx; }
+  long lly() { return _lly; }
+  unsigned long wx() { return _wx; }
+  unsigned long wy() { return _wy; }
+  long urx() { return _llx + _wx - 1; }
+  long ury() { return _lly + _wy - 1; }
+  bool inXRange(long x) {
+    return (llx() <= x) && (x <= urx());
+  }
+  bool inYRange (long y) {
+    return (lly() <= y) && (y <= ury());
+  }
+  bool inRect(long x, long y) {
+    return inXRange(x) && inYRange(y);
+  }
+
+  bool contains (Rectangle &r) {
+    if (llx() <= r.llx() && lly() <= r.lly() &&
+	r.urx() <= urx() && r.ury() <= ury()) {
+      return true;
+    }
+    return false;
+  }
+
+  void setRect (long lx, long ly, unsigned long wx, unsigned long wy) {
+    _llx = lx;
+    _lly = ly;
+    _wx = wx;
+    _wy = wy;
+  }
+  void setRectCoords (long lx, long ly, long ux, long uy) {
+    Assert (lx <= ux || (lx == 0 && ux == -1), "What?");
+    Assert (ly <= uy || (ly == 0 && uy == -1), "What?");
+    if (lx == 0 && ux == -1 || ly == 0 && uy == -1) {
+      Assert (lx == 0 && ux == -1 && ly == 0 && uy == -1, "What?");
+    }
+    _llx = lx;
+    _lly = ly;
+    _wx = (ux - lx + 1);
+    _wy = (uy - ly + 1);
+  }
+}
+;
+
 class Tile {
  private:
   //int idx;
@@ -128,7 +186,9 @@ class Tile {
   Tile *splitY (long y);
   list_t *collectRect (long _llx, long _lly,
 		       unsigned long wx, unsigned long wy);
-
+  list_t *collectRect (Rectangle &r) { return collectRect (r.llx(), r.lly(),
+							   r.wx(), r.wy()); }
+  
   int xmatch (long x) { return (llx <= x) && (!ur.x || (x < ur.x->llx)); }
   int ymatch (long y) { return (lly <= y) && (!ur.y || (y < ur.y->lly)); }
   long nextx() { return ur.x ? ur.x->llx : MAX_VALUE; }
@@ -137,6 +197,9 @@ class Tile {
 
   void applyTiles (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		   void *cookie, void (*f) (void *, Tile *));
+  void applyTiles (Rectangle &r, void *cookie, void (*f)(void *, Tile *)) {
+    applyTiles (r.llx(), r.lly(), r.wx(), r.wy(), cookie, f);
+  }
 
   int isPin() { return TILE_ATTR_ISPIN(attr); }
 
@@ -152,9 +215,16 @@ class Tile {
   Tile *addRect (long _llx, long _lly,
 		 unsigned long wx, unsigned long wy,
 		 bool force = false);
+  Tile *addRect (Rectangle &r, bool force = false) {
+    return addRect (r.llx(), r.lly(), r.wx(), r.wy(), force);
+  }
+  
   int addVirt (int flavor, int type,
 	       long _llx, long _lly,
 	       unsigned long wx, unsigned long wy);
+  int addVirt (int flavor, int type, Rectangle &r) {
+    return addVirt (flavor, type, r.llx(), r.lly(), r.wx(), r.wy());
+  }
 
   Tile *llxTile() { return ll.x; }
   Tile *urxTile() { return ur.x; }
