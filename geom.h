@@ -29,17 +29,18 @@
 
 
 class TransformMat {
-  long m[3][3];
+  long _dx, _dy;
+  unsigned int _flipx:1;
+  unsigned int _flipy:1;
+  unsigned int _swap:1;
 public:
   TransformMat ();
 
   void mkI();
 
-  void applyRot90 ();
-  void applyTranslate (long dx, long dy);
+  void translate (long dx, long dy);
   void mirrorLR ();
   void mirrorTB ();
-  void inverse (TransformMat *m);
 
   void apply (long inx, long iny, long *outx, long *outy);
 };
@@ -359,6 +360,5 @@ public:
   unsigned long getCount () { return count; }
   
 };
-
 
 #endif /* __ACT_GEOM_H__ */

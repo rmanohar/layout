@@ -1284,10 +1284,10 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 #endif    
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       if (t == BLOB_HORIZ) {
-	m.applyTranslate (bl->gap, bl->shift);
+	m.translate (bl->gap, bl->shift);
       }
       else {
-	m.applyTranslate (bl->shift, bl->gap);
+	m.translate (bl->shift, bl->gap);
       }
 #if 0      
       m.apply (0, 0, &tllx, &tlly);
@@ -1302,14 +1302,14 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 	if (bl->next) {
 	  int shiftamt = (bl->b->bloaturx - bl->b->llx + 1)
 	    + (bl->next->b->llx - bl->next->b->bloatllx + 1);
-	  m.applyTranslate (shiftamt, 0);
+	  m.translate (shiftamt, 0);
 	}
       }
       else {
 	if (bl->next) {
 	  int shiftamt = (bl->b->bloatury - bl->b->lly + 1)
 	    + (bl->next->b->lly - bl->next->b->bloatlly + 1);
-	  m.applyTranslate (0, shiftamt);
+	  m.translate (0, shiftamt);
 	}
       }
     }
@@ -1348,153 +1348,6 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
     fprintf (fp, "%ld %ld %ld %ld\n", bllx, blly, burx+1, bury+1);
   }
   _printRect (fp, mat);
-}
-
-  void TransformMat::mkI ()
-{
-  int i, j;
-  for (i=0; i < 3; i++)
-    for (j=0; j < 3; j++)
-      m[i][j] = (i == j) ? 1 : 0;
-}
-
-
-TransformMat::TransformMat()
-{
-  mkI();
-}
-
-static void print_mat (long m[3][3])
-{
-  printf ("mat: [ [%ld %ld %ld] [%ld %ld %ld] [%ld %ld %ld] ]\n",
-	  m[0][0], m[0][1], m[0][2],
-	  m[1][0], m[1][1], m[1][2],
-	  m[2][0], m[2][1], m[2][2]);
-}
-
-static void mat_mult (long res[3][3], long a[3][3], long b[3][3])
-{
-  long tmp[3][3];
-  int i, j, k;
-
-  for (i=0; i < 3; i++)
-    for (j=0; j < 3; j++) {
-      tmp[i][j] = 0;
-    }
-  
-  for (i=0; i < 3; i++)
-    for (j = 0; j < 3; j++)
-      for (k = 0; k < 3; k++) {
-	tmp[i][j] += a[i][k]*b[k][j];
-      }
-  
-  for (i=0; i < 3; i++)
-    for (j=0; j < 3; j++) {
-      res[i][j] = tmp[i][j];
-    }
-
-  Assert (res[2][0] == 0 &&
-	  res[2][1] == 0 &&
-	  res[2][2] == 1, "Hmm...");
-}
-
-void TransformMat::applyRot90()
-{
-  long rotmat[3][3] = { { 0, -1, 0 },
-			{ 1, 0, 0 },
-			{ 0, 0, 1 } };
-
-  mat_mult (m, rotmat, m);
-}
-
-void TransformMat::mirrorLR()
-{
-  long mirror[3][3] = { { -1, 0, 0 },
-			{ 0, 1, 0 },
-			{ 0, 0, 1 } };
-
-  mat_mult (m, mirror, m);
-}
-
-
-
-void TransformMat::mirrorTB()
-{
-  long mirror[3][3] = { { 1, 0, 0 },
-			{ 0, -1, 0 },
-			{ 0, 0, 1 } };
-
-  mat_mult (m, mirror, m);
-}
-
-void TransformMat::applyTranslate (long dx, long dy)
-{
-  long translate[3][3] = { { 1, 0, 0 },
-			   { 0, 1, 0 },
-			   { 0, 0, 1 } };
-
-  translate[0][2] = dx;
-  translate[1][2] = dy;
-
-  mat_mult (m, translate, m);
-}
-
-void TransformMat::inverse (TransformMat *inp)
-{
-  /* invert m */
-  long tmp[3][3];
-
-  /* 
-     Assumes: just rotations and translations.
-
-     This also means the third row is [ 0 0 1 ]
-
-     Inverse of
-     [ a b c                          [  e  -b   bf-ce
-       d e f       is    1/(ae-bd) *    -d   a   dc-af
-       0 0 1 ]                           0   0  1/(ae-bd)  ]
-
-  */
-
-  m[0][0] = inp->m[1][1];
-  m[0][1] = -inp->m[0][1];
-  m[1][0] = -inp->m[1][0];
-  m[1][1] = inp->m[0][0];
-
-  m[0][2] = inp->m[0][1]*inp->m[1][2] - inp->m[0][2]*inp->m[1][1];
-  m[1][2] = inp->m[1][0]*inp->m[0][2] - inp->m[0][0]*inp->m[1][2];
-  
-  m[2][0] = 0;
-  m[2][1] = 0;
-  m[2][2] = 1;
-
-
-  /* this assumes the discriminant (ae-bd) is 1 
-     (90 degree rotations only)
-   */
-
-  /* check */
-  mat_mult (tmp, m, inp->m);
-  for (int i=0; i < 3; i++) {
-    for (int j=0; j < 3; j++) {
-      if (j == i) {
-	Assert (tmp[i][j] == 1, "Hmm");
-      }
-      else {
-	Assert (tmp[i][j] == 0, "Hmm");
-      }
-    }
-  }
-}
-
-
-void TransformMat::apply (long inx, long iny, long *outx, long *outy)
-{
-  long z;
-  *outx = inx*m[0][0] + iny*m[0][1] + m[0][2];
-  *outy = inx*m[1][0] + iny*m[1][1] + m[1][2];
-  z = inx*m[2][0] + iny*m[2][1] + m[2][2];
-  Assert (z == 1, "What?");
 }
 
 void Layer::getBloatBBox (long *llx, long *lly, long *urx, long *ury)
@@ -1933,10 +1786,10 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
 	/* no change to tmat */
       }
       else if (t == BLOB_HORIZ) {
-	tmat.applyTranslate (bl->gap, bl->shift);
+	tmat.translate (bl->gap, bl->shift);
       }
       else if (t == BLOB_VERT) {
-	tmat.applyTranslate (bl->shift, bl->gap);
+	tmat.translate (bl->shift, bl->gap);
       }
       else {
 	fatal_error ("What is this?");
@@ -1995,10 +1848,10 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
 	/* no change to tmat */
       }
       else if (t == BLOB_HORIZ) {
-	tmat.applyTranslate (bl->gap, bl->shift);
+	tmat.translate (bl->gap, bl->shift);
       }
       else if (t == BLOB_VERT) {
-	tmat.applyTranslate (bl->shift, bl->gap);
+	tmat.translate (bl->shift, bl->gap);
       }
       else {
 	fatal_error ("What is this?");
@@ -2495,10 +2348,10 @@ list_t *LayoutBlob::searchAllMetal (TransformMat *m)
 	/* no change to tmat */
       }
       else if (t == BLOB_HORIZ) {
-	tmat.applyTranslate (bl->gap, bl->shift);
+	tmat.translate (bl->gap, bl->shift);
       }
       else if (t == BLOB_VERT) {
-	tmat.applyTranslate (bl->shift, bl->gap);
+	tmat.translate (bl->shift, bl->gap);
       }
       else {
 	fatal_error ("What is this?");
@@ -2514,3 +2367,117 @@ list_t *LayoutBlob::searchAllMetal (TransformMat *m)
   }
   return tiles;
 }
+
+
+/*
+ * Transformation Metrix for coordinate transformations
+ *
+ *   Given (x,y): 
+ *
+ *   1. If flipx, flip the sign of x
+ *   2. If flipy, flip the sign of y
+ *  Then
+ *   3. If swap, flip x and y
+ *  Then:
+ *   4. Translate by _dx, _dy
+ *
+ *  fx = +1 for no flip, -1 for flip
+ *  fy = +1 for no flip, -1 for flip[
+ *
+ *  if (swap) {
+ *     xnew = fy*y + dx
+ *     ynew = fx*x + dy
+ *  } else {
+ *     xnew = fx*x + dx
+ *     ynew = fy*y + dy
+ *  }
+ *
+ *  Any new transformations are applied *on* the (xnew, ynew)
+ *
+ *  So:
+ *
+ *   mirrorLR
+ *     dx updated to -dx
+ *     fx flipped if noswap, fy fliiped if swap
+ *
+ *  mirrorTB
+ *     dy updated to -dy
+ *     fy flipped if noswap, fx fliiped if swap
+ *
+ *  translate
+ *     dx,dy updated
+ *
+ *
+ *  LEF/DEF and OpenAccess rotations. NOTE: this requires knowledge of
+ *  the bounding box of the cell. The lower left corner of the LEF
+ *  bounding box is always at (0,0), so the shift amount in the
+ *  transformation matrix must be computed based on the LEF bounding
+ *  box of the original cell.
+ *
+ *  N  = R0   = no flips/swaps
+ *  S  = R180 = flipx + flipy
+ *  FS = MX   = flipy
+ *  FN = MY   = flipx
+ *  W  = R90  = flipy + swap
+ *  E  = R270 = flipx + swap
+ *  FW = MX90 = swap
+ *  FE = MY90 = flipx + flipy + swap
+ *
+ */
+void TransformMat::mkI ()
+{
+  _dx = 0;
+  _dy = 0;
+  _flipx = 0;
+  _flipy = 0;
+  _swap = 0;
+}
+
+
+TransformMat::TransformMat()
+{
+  mkI();
+}
+
+void TransformMat::mirrorLR()
+{
+  _dx = -_dx;
+  if (_swap) {
+    _flipy = 1-_flipy;
+  }
+  else {
+    _flipx = 1-_flipx;
+  }
+}
+
+
+void TransformMat::mirrorTB()
+{
+  _dy = -_dy;
+  if (_swap) {
+    _flipx = 1-_flipx;
+  }
+  else {
+    _flipy = 1-_flipy;
+  }
+}
+
+void TransformMat::translate (long dx, long dy)
+{
+  _dx += dx;
+  _dy += dy;
+}
+
+void TransformMat::apply (long inx, long iny, long *outx, long *outy)
+{
+  long z;
+  if (_swap) {
+    *outx = (_flipy ? -iny : iny) + _dx;
+    *outy = (_flipx ? -inx : inx) + _dy;
+  }
+  else {
+    *outx = (_flipx ? -inx : inx) + _dx;
+    *outy = (_flipy ? -iny : iny) + _dy;
+  }
+}
+

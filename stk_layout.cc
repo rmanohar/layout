@@ -1870,7 +1870,7 @@ void ActStackLayout::_emitwelltaprect (int flavor)
   long bllx, blly, burx, bury;
   TransformMat mat;
   b->getBloatBBox (&bllx, &blly, &burx, &bury);
-  mat.applyTranslate (-bllx, -blly);
+  mat.translate (-bllx, -blly);
       
   /* emit rectangles */
   strcat (name, ".rect");
@@ -1950,7 +1950,7 @@ void ActStackLayout::_emitlocalRect (Process *p)
   }
 
   TransformMat mat;
-  mat.applyTranslate (-bllx, -blly);
+  mat.translate (-bllx, -blly);
 
   FILE *fp;
   char cname[10240];
@@ -2192,7 +2192,7 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 
   /* -- find all pins of this name! -- */
   TransformMat mat;
-  mat.applyTranslate (-bllx, -blly);
+  mat.translate (-bllx, -blly);
   list_t *tiles = blob->search (signode, &mat);
   emit_layer_rects (fp, tiles);
 
@@ -2237,7 +2237,7 @@ void ActStackLayout::runrec (int mode, UserDef *u)
 	long bllx, blly, burx, bury;
 	TransformMat mat;
 	b->getBloatBBox (&bllx, &blly, &burx, &bury);
-	mat.applyTranslate (-bllx, -blly);
+	mat.translate (-bllx, -blly);
 
 	if (_fpcell) {
 	  /* emit local well lef */
@@ -2516,7 +2516,7 @@ int ActStackLayout::_emitlocalLEF (Process *p)
     long rllx, rlly, rurx, rury;
     blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
     TransformMat mat;
-    mat.applyTranslate (-rllx, -rlly);
+    mat.translate (-rllx, -rlly);
     l = blob->searchAllMetal (&mat);
     if (emit_layer_rects (fp, l, iopins, A_LEN (iopins))) {
       fprintf (fp, "    END\n");
@@ -2573,7 +2573,7 @@ void ActStackLayout::_computeWell (LayoutBlob *blob, int flavor, int type,
   long bllx, blly, burx, bury;
 
   blob->getBloatBBox (&bllx, &blly, &burx, &bury);
-  mat.applyTranslate (-bllx, -blly);
+  mat.translate (-bllx, -blly);
 
   list_t *tiles;
   if (is_welltap) {

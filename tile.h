@@ -113,23 +113,23 @@ public:
     _wy = 0;
   }
 
-  long llx() { return _llx; }
-  long lly() { return _lly; }
-  unsigned long wx() { return _wx; }
-  unsigned long wy() { return _wy; }
-  long urx() { return _llx + _wx - 1; }
-  long ury() { return _lly + _wy - 1; }
-  bool inXRange(long x) {
+  long llx() const { return _llx; }
+  long lly() const { return _lly; }
+  unsigned long wx() const { return _wx; }
+  unsigned long wy() const { return _wy; }
+  long urx() const { return _llx + _wx - 1; }
+  long ury() const { return _lly + _wy - 1; }
+  bool inXRange(long x) const {
     return (llx() <= x) && (x <= urx());
   }
-  bool inYRange (long y) {
+  bool inYRange (long y) const {
     return (lly() <= y) && (y <= ury());
   }
-  bool inRect(long x, long y) {
+  bool inRect(long x, long y) const {
     return inXRange(x) && inYRange(y);
   }
 
-  bool contains (Rectangle &r) {
+  bool contains (const Rectangle &r) const {
     if (llx() <= r.llx() && lly() <= r.lly() &&
 	r.urx() <= urx() && r.ury() <= ury()) {
       return true;

@@ -24,16 +24,18 @@
 
 #include "geom.h"
 
-class Subcell {
+class SubcellInst {
 private:
-  LayoutBlob *_b;		//< the actual layout
+  LayoutBlob *_b;		//< the actual layout (subcell)
   TransformMat _m;		//< geometric transformations to get
 				// the tiles into global coordinates
   const char *_uid;		//< unique identifier for the subcell
-  Rectangle _bbox;
+  Rectangle _bbox;		//< this is the layout bounding box 
+  Rectangle _abutbox;		//< this is the bounding box used for abutment
+
 
 public:
-  Subcell (LayoutBlob *b, const char *id, TransformMat *m = NULL) {
+  SubcellInst (LayoutBlob *b, const char *id, TransformMat *m = NULL) {
     _b = b;
     _uid = id;
     if (m) {
@@ -44,16 +46,16 @@ public:
     _bbox.setRectCoords (llx, lly, urx, ury);
   }
 
-  Rectangle &getBBox() { return _bbox; }
+  const Rectangle &getBBox() const { return _bbox; }
 };
 
 class LayoutSubcells {
  private:
   LayoutSubcells *_next;	/* linked-list of subcells */
-  Subcell *_cell;		/* actual subcell */
+  SubcellInst *_cell;		/* actual subcell */
  public:
   
-  LayoutSubcells (Subcell *c) {
+  LayoutSubcells (SubcellInst *c) {
     _cell = c;
     _next = NULL;
   }
@@ -64,25 +66,86 @@ class LayoutSubcells {
     }
   }
 
-  void append (Subcell *c) {
+  void append (SubcellInst *c, bool sort_x) {
     LayoutSubcells *tmp = new LayoutSubcells (c);
-    tmp->_next = _next;
-    _next = tmp;
-  }
-
-  void del (Subcell *c) {
-    if (c == _cell) {
-      LayoutSubcells *tmp = _next;
-      if (tmp) {
-	_cell = tmp->_cell;
-	_next = tmp->_next;
-	delete tmp;
+    LayoutSubcells *prev,  *cur;
+    
+    prev = NULL;
+    cur = this;
+    while (cur) {
+      bool gonext;
+      if (sort_x) {
+	if (cur->_cell->getBBox().urx() < c->getBBox().llx()) {
+	  gonext = true;
+	}
+	else {
+	  gonext = false;
+	}
       }
       else {
-	_cell = NULL;
+	if (cur->_cell->getBBox().ury() < c->getBBox().lly()) {
+	  gonext = true;
+	}
+	else {
+	  gonext = false;
+	}
+      }
+      if (gonext) {
+	prev = cur;
+	cur = cur->_next;
+      }
+      else {
+	if (!prev) {
+	  SubcellInst *x;
+	  tmp->_next = _next;
+	  _next = tmp;
+	  tmp->_cell = _cell;
+	  _cell = c;
+	  return;
+	}
+	else {
+	  prev->_next = tmp;
+	  tmp->_next = cur;
+	  return;
+	}
       }
     }
-  }    
+    prev->_next = tmp;
+  }
+
+  LayoutSubcells *del (SubcellInst *c) {
+    LayoutSubcells *prev, *cur;
+    
+    prev = NULL;
+    cur = this;
+    while (cur) {
+      if (cur->_cell == c) {
+	break;
+      }
+      else {
+	prev = cur;
+	cur = cur->_next;
+      }
+    }
+    if (cur) {
+      if (prev) {
+	prev->_next = cur->_next;
+	delete cur;
+	return this;
+      }
+      else {
+	cur = cur->_next;
+	delete this;
+	return cur;
+      }
+    }
+    return this;
+  }
+
+  LayoutSubcells *getNext() { return _next; }
+  SubcellInst *getCell() { return _cell; }
+  void clearCell() { _cell = NULL; }
+  LayoutSubcells *flushClear();
 };
 
 
@@ -92,8 +155,8 @@ class LayoutSubcells {
 class LayerSubcell {
 
  private:
-  unsigned int _splitx:1;   /* 1 if the split is in the x-direction */
-  long _splitval:63;	    /* location of split. the split
+  unsigned int _splitx:1;   /* 1 if my split was in the x-direction */
+  long _splitval:62;	    /* location of split. the split
 			       coordinate is in the "_leq" box. */
   Rectangle _bbox;	    /* actual bounding box */
   LayerSubcell *_leq, *_gt; /* split tile */
@@ -101,8 +164,17 @@ class LayerSubcell {
   int _levelcount;	    /* list length */
 
  public:
-  LayerSubcell() {
-    _splitx = 0;
+
+  static int subcell_level_threshold; // if you exceed this threshold,
+				      // then add sub-trees
+  
+  static int subcell_recompute_threshold; // if you exceed this
+					  // threshold, then
+					  // re-compute the entire subtree!
+  
+  LayerSubcell(bool sort_x = true) {
+    Assert (subcell_recompute_threshold  > subcell_level_threshold, "What?");
+    _splitx = sort_x ? 1 : 0;
     _splitval = 0;
     _leq = NULL;
     _gt = NULL;
@@ -129,87 +201,8 @@ class LayerSubcell {
     _bbox.setRect (MIN_VALUE, MIN_VALUE, MAX_VALUE, MAX_VALUE);
   }
 
-  void addSubcell (Subcell *s) {
-    Rectangle &r = s->getBBox ();
-    Assert (_bbox.contains (r), "What?");
-    if (_leq || _gt) {
-      if (_splitx) {
-	if (_splitval < r.llx()) {
-	  _gt->addSubcell (s);
-	}
-	else if (r.urx() <= _splitval) {
-	  _leq->addSubcell (s);
-	}
-	else {
-	  // add to this level
-	  _levelcount++;
-	  if (!_lst) {
-	    _lst = new LayoutSubcells (s);
-	  }
-	  else {
-	    _lst->append (s);
-	  }
-	}
-      }
-      else {
-	if (_splitval < r.lly()) {
-	  _gt->addSubcell (s);
-	}
-	else if (r.ury() <= _splitval) {
-	  _leq->addSubcell (s);
-	}
-	else {
-	  _levelcount++;
-	  if (!_lst) {
-	    _lst = new LayoutSubcells (s);
-	  }
-	  else {
-	    _lst->append (s);
-	  }
-	}
-      }
-    }
-  }
-  void delSubcell (Subcell *s) {
-    Rectangle &r = s->getBBox ();
-    Assert (_bbox.contains (r), "What?");
-    if (_leq || _gt) {
-      if (_splitx) {
-	if (_splitval < r.llx()) {
-	  _gt->delSubcell (s);
-	}
-	else if (r.urx() <= _splitval) {
-	  _leq->delSubcell (s);
-	}
-	else {
-	  _levelcount--;
-	  Assert (_lst, "What?");
-	  _lst->del (s);
-	  if (_levelcount == 0) {
-	    delete _lst;
-	    _lst = NULL;
-	  }
-	}
-      }
-      else {
-	if (_splitval < r.lly()) {
-	  _gt->addSubcell (s);
-	}
-	else if (r.ury() <= _splitval) {
-	  _leq->addSubcell (s);
-	}
-	else {
-	  _levelcount--;
-	  Assert (_lst, "What?");
-	  _lst->del (s);
-	  if (_levelcount == 0) {
-	    delete _lst;
-	    _lst = NULL;
-	  }
-	}
-      }
-    }
-  }
+  void addSubcell (SubcellInst *s);
+  void delSubcell (SubcellInst *s);
 };
 
 
