@@ -294,7 +294,7 @@ private:
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
-  LayoutBlob (LayerSubcell *cells) { t = BLOB_CELLS; subcell.l = cells; }
+  LayoutBlob (LayerSubcell *cells);
   LayoutBlob (ExternMacro *m);
   ~LayoutBlob ();
 

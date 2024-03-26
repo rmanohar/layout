@@ -99,6 +99,14 @@ Order:
 
 class Layer;
 
+#ifndef MAX
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
 class Rectangle {
 private:
   long _llx, _lly;
@@ -116,6 +124,8 @@ public:
     _wx = 0;
     _wy = 0;
   }
+
+  bool empty() { return (_wx == 0) && (_wy == 0); }
 
   long llx() const { return _llx; }
   long lly() const { return _lly; }
@@ -141,6 +151,28 @@ public:
     return false;
   }
 
+  void setXMax (long xval) {
+    Assert (xval >= _llx, "What?");
+    _wx = xval - _llx + 1;
+  }
+  
+  void setXMin (long xval) {
+    Assert (xval <= urx(), "What?");
+    _wx = _wx - (xval - _llx);
+    _llx = xval;
+  }
+
+  void setYMax (long yval) {
+    Assert (yval >= _lly, "What?");
+    _wy = yval - _lly + 1;
+  }
+  
+  void setYMin (long yval) {
+    Assert (yval <= ury(), "What?");
+    _wy = _wy - (yval - _lly);
+    _lly = yval;
+  }
+  
   void setRect (long lx, long ly, unsigned long wx, unsigned long wy) {
     _llx = lx;
     _lly = ly;
@@ -157,6 +189,16 @@ public:
     _lly = ly;
     _wx = (ux - lx + 1);
     _wy = (uy - ly + 1);
+  }
+
+  // max operator
+  Rectangle operator^(const Rectangle& r) {
+    Rectangle t = *this;
+    t._llx = MIN(t._llx, r._llx);
+    t._lly = MIN(t._lly, r._lly);
+    t._wx = MAX(t._wx, (r.urx()-t._llx+1));
+    t._wy = MAX(t._wy, (r.ury()-t._lly+1));
+    return t;
   }
 }
 ;

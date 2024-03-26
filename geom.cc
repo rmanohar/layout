@@ -30,15 +30,6 @@
 #include "geom.h"
 
 
-#ifndef MAX
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
-#ifndef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-
 bool Layout::_initdone = false;
 double Layout::_leak_adjust = 0.0;
   

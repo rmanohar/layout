@@ -30,7 +30,6 @@ private:
   TransformMat _m;		//< geometric transformations to get
 				// the tiles into global coordinates
   const char *_uid;		//< unique identifier for the subcell
-  Rectangle _bbox;		//< this is the layout bounding box 
   Rectangle _abutbox;		//< this is the bounding box used for abutment
 
 
@@ -41,12 +40,29 @@ public:
     if (m) {
       _m = *m;
     }
-    long llx, lly, urx, ury;
-    b->getBBox (&llx, &lly, &urx, &ury);
-    _bbox.setRectCoords (llx, lly, urx, ury);
   }
 
-  const Rectangle &getBBox() const { return _bbox; }
+  Rectangle getBBox() {
+    long llx, lly, urx, ury;
+    Rectangle r;
+    if (!_b) {
+      return r;
+    }
+    _b->getBBox (&llx, &lly, &urx, &ury);
+    r.setRectCoords (llx, lly, urx, ury);
+    return r;
+  }
+
+  Rectangle getBloatBBox() {
+    long llx, lly, urx, ury;
+    Rectangle r;
+    if (!_b) {
+      return r;
+    }
+    _b->getBloatBBox (&llx, &lly, &urx, &ury);
+    r.setRectCoords (llx, lly, urx, ury);
+    return r;
+  }
 };
 
 class SubcellList {
@@ -158,10 +174,15 @@ class LayerSubcell {
   unsigned int _splitx:1;   /* 1 if my split was in the x-direction */
   long _splitval:62;	    /* location of split. the split
 			       coordinate is in the "_leq" box. */
+  Rectangle _region;	    /* owned region */
   Rectangle _bbox;	    /* actual bounding box */
+  Rectangle _bloatbbox;	    /* bloated bbox */
   LayerSubcell *_leq, *_gt; /* split tile */
   SubcellList *_lst;	    /* list of subcells here */
   int _levelcount;	    /* list length */
+
+
+  void _computeBBox();
 
  public:
 
@@ -198,11 +219,18 @@ class LayerSubcell {
     if (_leq || _gt || _lst) {
       fatal_error ("LayerSubcell:: initGlobal() called after subcells were added!");
     }
-    _bbox.setRect (MIN_VALUE, MIN_VALUE, MAX_VALUE, MAX_VALUE);
+    _region.setRect (MIN_VALUE, MIN_VALUE, MAX_VALUE, MAX_VALUE);
+  }
+
+  void setRegion (Rectangle &r) {
+    _region = r;
   }
 
   void addSubcell (SubcellInst *s);
   void delSubcell (SubcellInst *s);
+
+  Rectangle getBBox ();
+  Rectangle getBloatBBox ();
 };
 
 

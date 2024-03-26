@@ -29,7 +29,11 @@ int LayerSubcell::subcell_recompute_threshold = 200;
 void LayerSubcell::addSubcell (SubcellInst *s)
 {
   const Rectangle &r = s->getBBox ();
-  Assert (_bbox.contains (r), "What?");
+  Assert (_region.contains (r), "What?");
+  if (_bbox.empty()) {
+    _computeBBox();
+  }
+  _bbox = _bbox ^ r;
   if (_leq || _gt) {
     if (_leq->_splitx) {
       if (_splitval < r.llx()) {
@@ -107,11 +111,27 @@ void LayerSubcell::addSubcell (SubcellInst *s)
 	  _leq = new LayerSubcell (true);
 	  _gt = new LayerSubcell (true);
 	  _splitval = x_mean;
+
+	  // split in the x direction. 
+	  Rectangle r = _region;
+	  r.setXMax (_splitval);
+	  _leq->setRegion (r);
+	  r = _region;
+	  r.setXMin (_splitval+1);
+	  _gt->setRegion (r);
 	}
 	else {
 	  _splitval = y_mean;
 	  _leq = new LayerSubcell (false);
 	  _gt = new LayerSubcell (false);
+
+	  // split in the y direction
+	  Rectangle r = _region;
+	  r.setYMax (_splitval);
+	  _leq->setRegion (r);
+	  r = _region;
+	  r.setYMin (_splitval+1);
+	  _gt->setRegion (r);
 	}
 	SubcellList *newlst = NULL;
 	for (tmp = _lst; tmp; tmp = tmp->getNext()) {
@@ -155,7 +175,9 @@ void LayerSubcell::addSubcell (SubcellInst *s)
 void LayerSubcell::delSubcell (SubcellInst *s)
 {
   const Rectangle &r = s->getBBox ();
-  Assert (_bbox.contains (r), "What?");
+  Assert (_region.contains (r), "What?");
+  _bbox.clear ();
+  _bloatbbox.clear();
   if (_leq || _gt) {
     if (_splitx) {
       if (_splitval < r.llx()) {
@@ -231,4 +253,40 @@ SubcellList *SubcellList::flushClear ()
     return NULL;
   }
   return this;
+}
+
+
+void LayerSubcell::_computeBBox ()
+{
+  SubcellList *l;
+  _bbox.clear ();
+  _bloatbbox.clear ();
+  for (l = _lst; l; l = _lst->getNext()) {
+    _bbox = _bbox ^ l->getCell()->getBBox ();
+    _bloatbbox = _bloatbbox ^ l->getCell()->getBloatBBox();
+  }
+  if (_leq) {
+    _bbox = _bbox ^ _leq->getBBox();
+    _bloatbbox = _bloatbbox ^ _leq->getBloatBBox();
+  }
+  if (_gt) {
+    _bbox = _bbox ^ _gt->getBBox();
+    _bloatbbox = _bloatbbox ^ _gt->getBloatBBox();
+  }
+}
+
+Rectangle LayerSubcell::getBBox ()
+{
+  if (_bbox.empty()) {
+    _computeBBox();
+  }
+  return _bbox;
+}
+
+Rectangle LayerSubcell::getBloatBBox ()
+{
+  if (_bloatbbox.empty()) {
+    _computeBBox();
+  }
+  return _bloatbbox;
 }

@@ -37,36 +37,6 @@
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
-void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
-{
-  if (t == BLOB_MACRO) {
-    return;
-  }
-  if (t != BLOB_BASE || base.l) {
-    warning ("LayoutBlob::setBBox(): called on non-empty layout; ignored");
-    return;
-  }
-  if (llx == 0 && lly == 0 && urx == -1 && ury == -1) {
-    llx = _llx;
-    lly = _lly;
-    urx = _urx;
-    ury = _ury;
-  }
-  else {
-    if (_llx > llx || _lly > lly ||
-	_urx < urx || _ury < ury) {
-      fatal_error ("LayoutBlob::setBBox(): shrinking the bounding box is not permitted");
-    }
-  }
-  llx = _llx;
-  lly = _lly;
-  urx = _urx;
-  ury = _ury;
-  bloatllx = _llx;
-  bloatlly = _lly;
-  bloaturx = _urx;
-  bloatury = _ury;
-}
 
 LayoutBlob::LayoutBlob (ExternMacro *m)
 {
@@ -168,6 +138,62 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   }
 }
 
+
+LayoutBlob::LayoutBlob (LayerSubcell *cells)
+{
+  t = BLOB_CELLS;
+  
+  readRect = false;
+  edges[0] = NULL;
+  edges[1] = NULL;
+  edges[2] = NULL;
+  edges[3] = NULL;
+  count = 0;
+
+  subcell.l = cells;
+
+  llx = 0;
+  lly = 0;
+  urx = -1;
+  ury = -1;
+  bloatllx = 0;
+  bloatlly = 0;
+  bloaturx = -1;
+  bloatury = -1;
+  // XXX: initialize bounding box + bloat bounding box
+}
+
+
+void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
+{
+  if (t == BLOB_MACRO) {
+    return;
+  }
+  if (t != BLOB_BASE || base.l) {
+    warning ("LayoutBlob::setBBox(): called on non-empty layout; ignored");
+    return;
+  }
+  if (llx == 0 && lly == 0 && urx == -1 && ury == -1) {
+    llx = _llx;
+    lly = _lly;
+    urx = _urx;
+    ury = _ury;
+  }
+  else {
+    if (_llx > llx || _lly > lly ||
+	_urx < urx || _ury < ury) {
+      fatal_error ("LayoutBlob::setBBox(): shrinking the bounding box is not permitted");
+    }
+  }
+  llx = _llx;
+  lly = _lly;
+  urx = _urx;
+  ury = _ury;
+  bloatllx = _llx;
+  bloatlly = _lly;
+  bloaturx = _urx;
+  bloatury = _ury;
+}
 
 void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 {
