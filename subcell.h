@@ -49,26 +49,26 @@ public:
   const Rectangle &getBBox() const { return _bbox; }
 };
 
-class LayoutSubcells {
+class SubcellList {
  private:
-  LayoutSubcells *_next;	/* linked-list of subcells */
+  SubcellList *_next;		/* linked-list of subcells */
   SubcellInst *_cell;		/* actual subcell */
  public:
   
-  LayoutSubcells (SubcellInst *c) {
+  SubcellList (SubcellInst *c) {
     _cell = c;
     _next = NULL;
   }
   
-  ~LayoutSubcells () {
+  ~SubcellList () {
     if (_next) {
       delete _next;
     }
   }
 
   void append (SubcellInst *c, bool sort_x) {
-    LayoutSubcells *tmp = new LayoutSubcells (c);
-    LayoutSubcells *prev,  *cur;
+    SubcellList *tmp = new SubcellList (c);
+    SubcellList *prev,  *cur;
     
     prev = NULL;
     cur = this;
@@ -113,8 +113,8 @@ class LayoutSubcells {
     prev->_next = tmp;
   }
 
-  LayoutSubcells *del (SubcellInst *c) {
-    LayoutSubcells *prev, *cur;
+  SubcellList *del (SubcellInst *c) {
+    SubcellList *prev, *cur;
     
     prev = NULL;
     cur = this;
@@ -142,10 +142,10 @@ class LayoutSubcells {
     return this;
   }
 
-  LayoutSubcells *getNext() { return _next; }
+  SubcellList *getNext() { return _next; }
   SubcellInst *getCell() { return _cell; }
   void clearCell() { _cell = NULL; }
-  LayoutSubcells *flushClear();
+  SubcellList *flushClear();
 };
 
 
@@ -160,7 +160,7 @@ class LayerSubcell {
 			       coordinate is in the "_leq" box. */
   Rectangle _bbox;	    /* actual bounding box */
   LayerSubcell *_leq, *_gt; /* split tile */
-  LayoutSubcells *_lst;	    /* list of subcells here */
+  SubcellList *_lst;	    /* list of subcells here */
   int _levelcount;	    /* list length */
 
  public:

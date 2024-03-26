@@ -26,11 +26,15 @@ TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
 TARGETLIBS=pass_stk.so pass_layout.so
 
 OBJS1=main.o
-OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o subcell.o
-SHOBJS=main.os stk_pass.os stk_layout.os geom.os tile.os subcell.os
+OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o subcell.o \
+	geom_layer.o \
+	geom_blob.o
 
-OBJS=$(OBJS1) $(OBJS2) $(SHOBJS)
+OBJS3=stk_pass.os stk_layout.os geom.os tile.os subcell.os \
+	geom_layer.os \
+	geom_blob.os
 
+OBJS=$(OBJS1) $(OBJS2) $(OBJS3)
 
 SRCS=$(OBJS1:.o=.cc) $(OBJS2:.o=.cc)
 
@@ -42,8 +46,8 @@ $(EXE): main.os
 pass_stk.so: stk_pass.os $(ACTPASSDEPEND)
 	$(ACT_HOME)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
 
-pass_layout.so: stk_layout.os geom.os tile.os $(ACTPASSDEPEND)
-	$(ACT_HOME)/scripts/linkso pass_layout.so stk_layout.os geom.os tile.os $(SHLIBACTPASS)
+pass_layout.so: $(OBJS3) $(ACTPASSDEPEND)
+	$(ACT_HOME)/scripts/linkso pass_layout.so $(OBJS3) $(SHLIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl

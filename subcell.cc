@@ -42,7 +42,7 @@ void LayerSubcell::addSubcell (SubcellInst *s)
 	// add to this level
 	_levelcount++;
 	if (!_lst) {
-	  _lst = new LayoutSubcells (s);
+	  _lst = new SubcellList (s);
 	}
 	else {
 	  _lst->append (s, _splitx == 1 ? true : false);
@@ -59,7 +59,7 @@ void LayerSubcell::addSubcell (SubcellInst *s)
       else {
 	_levelcount++;
 	if (!_lst) {
-	  _lst = new LayoutSubcells (s);
+	  _lst = new SubcellList (s);
 	}
 	else {
 	  _lst->append (s, _splitx == 1 ? true : false);
@@ -69,7 +69,7 @@ void LayerSubcell::addSubcell (SubcellInst *s)
     if (_levelcount > subcell_level_threshold) {
       if (!_leq && !_gt) {
 	// find an x-split, and find a y-split
-	LayoutSubcells *tmp;
+	SubcellList *tmp;
 	double x_mean, y_mean;
 	x_mean = 0;
 	y_mean = 0;
@@ -113,7 +113,7 @@ void LayerSubcell::addSubcell (SubcellInst *s)
 	  _leq = new LayerSubcell (false);
 	  _gt = new LayerSubcell (false);
 	}
-	LayoutSubcells *newlst = NULL;
+	SubcellList *newlst = NULL;
 	for (tmp = _lst; tmp; tmp = tmp->getNext()) {
 	  SubcellInst *c = tmp->getCell();
 	  if (_leq->_splitx) {
@@ -195,9 +195,9 @@ void LayerSubcell::delSubcell (SubcellInst *s)
 }
 
 
-LayoutSubcells *LayoutSubcells::flushClear ()
+SubcellList *SubcellList::flushClear ()
 {
-  LayoutSubcells *tmp, *prev, *cur;
+  SubcellList *tmp, *prev, *cur;
   prev = NULL;
   cur = this;
   while (cur) {

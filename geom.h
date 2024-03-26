@@ -25,6 +25,7 @@
 #include <act/act.h>
 #include <act/tech.h>
 #include <act/passes/netlist.h>
+#include <common/path.h>
 #include "tile.h"
 
 
@@ -171,6 +172,7 @@ public:
 
   void PrintRect (FILE *fp, TransformMat *t = NULL);
   void ReadRect (const char *file, int raw_mode = 0);
+  void ReadRect (Process *p, int raw_mode = 0);
 
   list_t *search (void *net);
   list_t *search (int attr);
@@ -200,14 +202,17 @@ private:
   netlist_t *N;
   struct Hashtable *lmap;	// map from layer string to base layer
 				// name
+  
+  path_info_t *_rect_inpath;	// input path for rectangles, if any
 
   static double _leak_adjust;
 };
 
-
+class LayerSubcell;
 class LayoutBlob;
 
 enum blob_type { BLOB_BASE,  /* some layout */
+		 BLOB_CELLS, /* collection of subcells */
 		 BLOB_MACRO, /* macro */
 		 BLOB_HORIZ, /* horizontal composition */
 		 BLOB_VERT,  /* vertical composition */
@@ -263,6 +268,9 @@ private:
     struct {
       Layout *l;		// ... layout block
     } base;
+    struct {
+      LayerSubcell *l;
+    } subcell;			// subcells
     ExternMacro *macro;
   };
   blob_type t;			// type field: 0 = base, 1 = horiz,
@@ -286,14 +294,16 @@ private:
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
+  LayoutBlob (LayerSubcell *cells) { t = BLOB_CELLS; subcell.l = cells; }
   LayoutBlob (ExternMacro *m);
   ~LayoutBlob ();
 
-  int isMacro() { return t == BLOB_MACRO ? true : false; }
+  bool isSubcells() { return t == BLOB_CELLS ? true : false; }
+
+  /* macros */
+  bool isMacro() { return t == BLOB_MACRO ? true : false; }
   const char *getMacroName() { return macro->getName(); }
   const char *getLEFFile() { return macro->getLEFFile(); }
-
-  void applyTransform (TransformMat *t);
 
   void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
 

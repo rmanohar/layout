@@ -107,6 +107,10 @@ private:
 public:
   /* initialize with the empty rectangle */
   Rectangle() {
+    clear();
+  }
+
+  void clear() {
     _llx = 0;
     _lly = 0;
     _wx = 0;
