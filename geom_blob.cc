@@ -28,6 +28,7 @@
 #include <act/tech.h>
 #include <common/qops.h>
 #include "geom.h"
+#include "subcell.h"
 
 #ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -766,3 +767,16 @@ list_t *LayoutBlob::searchAllMetal (TransformMat *m)
   return tiles;
 }
 
+
+
+Rectangle LayoutBlob::getAbutBox()
+{
+  switch (t) {
+  case BLOB_BASE:
+    return base.l->getAbutBox();
+  case BLOB_CELLS:
+    return subcell.l->getAbutBox();
+  default:
+    return Rectangle();
+  }
+}

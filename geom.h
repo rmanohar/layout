@@ -184,6 +184,8 @@ public:
 
   void flushBBox() { _rllx = 0; _rlly = 0; _rurx = -1; _rury = -1; }
 
+  Rectangle getAbutBox() { return _abutbox; }
+
   double leak_adjust() {
     if (!N->leak_correct) { return 0.0; }
     else { return _leak_adjust; }
@@ -195,6 +197,7 @@ public:
 private:
   bool _readrect;
   long _rllx, _rlly, _rurx, _rury;
+  Rectangle _abutbox;
   Layer *base;
   Layer **metals;
   int nflavors;
@@ -297,7 +300,7 @@ public:
   LayoutBlob (LayerSubcell *cells);
   LayoutBlob (ExternMacro *m);
   ~LayoutBlob ();
-
+  
   bool isSubcells() { return t == BLOB_CELLS ? true : false; }
 
   /* macros */
@@ -362,6 +365,11 @@ public:
   int GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
 		    int *d1, int *d2);
 
+
+  /**
+   * Get abutment box
+   */
+  Rectangle getAbutBox ();
 
   /**
    * Stats 

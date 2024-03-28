@@ -261,17 +261,21 @@ void LayerSubcell::_computeBBox ()
   SubcellList *l;
   _bbox.clear ();
   _bloatbbox.clear ();
+  _abutbox.clear ();
   for (l = _lst; l; l = _lst->getNext()) {
     _bbox = _bbox ^ l->getCell()->getBBox ();
     _bloatbbox = _bloatbbox ^ l->getCell()->getBloatBBox();
+    _abutbox = _abutbox ^ l->getCell()->getAbutBox ();
   }
   if (_leq) {
     _bbox = _bbox ^ _leq->getBBox();
     _bloatbbox = _bloatbbox ^ _leq->getBloatBBox();
+    _abutbox = _abutbox ^ _leq->getAbutBox();
   }
   if (_gt) {
     _bbox = _bbox ^ _gt->getBBox();
     _bloatbbox = _bloatbbox ^ _gt->getBloatBBox();
+    _abutbox = _abutbox ^ _gt->getAbutBox();
   }
 }
 
@@ -289,4 +293,12 @@ Rectangle LayerSubcell::getBloatBBox ()
     _computeBBox();
   }
   return _bloatbbox;
+}
+
+Rectangle LayerSubcell::getAbutBox ()
+{
+  if (_bbox.empty()) {
+    _computeBBox();
+  }
+  return _abutbox;
 }

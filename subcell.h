@@ -30,16 +30,22 @@ private:
   TransformMat _m;		//< geometric transformations to get
 				// the tiles into global coordinates
   const char *_uid;		//< unique identifier for the subcell
-  Rectangle _abutbox;		//< this is the bounding box used for abutment
-
+  int _nx, _ny;			//< array size
 
 public:
   SubcellInst (LayoutBlob *b, const char *id, TransformMat *m = NULL) {
+    _nx = 1;
+    _ny = 1;
     _b = b;
     _uid = id;
     if (m) {
       _m = *m;
     }
+  }
+
+  void mkArray (int nx, int ny) {
+    _nx = nx;
+    _ny = ny;
   }
 
   Rectangle getBBox() {
@@ -49,6 +55,17 @@ public:
       return r;
     }
     _b->getBBox (&llx, &lly, &urx, &ury);
+    Rectangle a = _b->getAbutBox ();
+    if (a.empty()) {
+      a.setRectCoords (llx, lly, urx, ury);
+    }
+
+    long fringex = (a.llx() - llx) + (urx - a.urx());
+    long fringey = (a.lly() - lly) + (ury - a.ury());
+    
+    r.setRectCoords (llx, lly, llx + a.wx()*_nx + fringex,
+		     lly + a.wy()*_ny + fringey);
+    
     r.setRectCoords (llx, lly, urx, ury);
     return r;
   }
@@ -59,8 +76,32 @@ public:
     if (!_b) {
       return r;
     }
+    _b->getBBox (&llx, &lly, &urx, &ury);
+    Rectangle a = _b->getAbutBox ();
+    if (a.empty()) {
+      a.setRectCoords (llx, lly, urx, ury);
+    }
     _b->getBloatBBox (&llx, &lly, &urx, &ury);
-    r.setRectCoords (llx, lly, urx, ury);
+
+    long fringex = (a.llx() - llx) + (urx - a.urx());
+    long fringey = (a.lly() - lly) + (ury - a.ury());
+    
+    r.setRectCoords (llx, lly, llx + a.wx()*_nx + fringex,
+		     lly + a.wy()*_ny + fringey);
+
+    return r;
+  }
+
+  Rectangle getAbutBox () {
+    Rectangle r;
+    if (!_b) {
+      return r;
+    }
+    r = _b->getAbutBox ();
+    if (r.empty()) {
+      return getBBox();
+    }
+    r.setRect (r.llx(), r.lly(), r.wx()*_nx, r.wy()*_ny);
     return r;
   }
 };
@@ -177,6 +218,7 @@ class LayerSubcell {
   Rectangle _region;	    /* owned region */
   Rectangle _bbox;	    /* actual bounding box */
   Rectangle _bloatbbox;	    /* bloated bbox */
+  Rectangle _abutbox;	    /* abutment box */
   LayerSubcell *_leq, *_gt; /* split tile */
   SubcellList *_lst;	    /* list of subcells here */
   int _levelcount;	    /* list length */
@@ -231,6 +273,7 @@ class LayerSubcell {
 
   Rectangle getBBox ();
   Rectangle getBloatBBox ();
+  Rectangle getAbutBox();
 };
 
 

@@ -544,13 +544,22 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       rtype = 0;
     }
     else if (strncmp (buf+offset, "bbox ", 5) == 0) {
+      // this is auto-generated, so ignore it.
       continue;
     }
     else if (strncmp (buf+offset, "sbox ", 5) == 0) {
+      // this overrides the bbox definition, so keep it
       sscanf (buf+5, "%ld %ld %ld %ld", &_rllx, &_rlly, &_rurx, &_rury);
       _rurx--;
       _rury--;
       continue;
+    }
+    else if (strncmp (buf+offset, "abox ", 5) == 0) {
+      long lx, ly, ux, uy;
+      sscanf (buf+5, "%ld %ld %ld %ld", &lx, &ly, &ux, &uy);
+      ux--;
+      uy--;
+      _abutbox.setRectCoords (lx, ly, ux, uy);
     }
     else if (strncmp (buf+offset, "cell ", 5) == 0) {
       Assert (0, "FIXME: add support for subcells!");
