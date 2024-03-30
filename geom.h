@@ -98,7 +98,6 @@ protected:
   list_t *allNonSpaceMat ();
   list_t *allNonSpaceVia ();	// looks at "up" vias only
 
-
   void getBBox (long *llx, long *lly, long *urx, long *ury);
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
@@ -239,27 +238,122 @@ struct tile_listentry {
 		      list of tiles  */
 };
 
+
+/*
+ * These are used as alignment markers. They can be used for an umber
+ * of different purposes, including multkdeck gridded cells.
+ */
 class LayoutEdgeAttrib {
-
+public:
+  struct attrib_list {
+    const char *name;
+    long offset;
+    struct attrib_list *next;
+  };
 private:
-  // well attributes
-  struct well_info {
-    int offset;
-    unsigned int plugged:1;
-    unsigned int flavor:7;
-  } *wells;
-  int wellcnt;
 
-  struct mat_info {
-    int offset;
-    int width;
-    Material *m;
-  } *mats;
-  int matcnt;
+  /* at the moment, we have the same attribute for the horizontal edge
+     as the vertical edge
+  */
+  attrib_list *_left, *_right, *_top, *_bot;
+
+  attrib_list *dup (attrib_list *l) {
+    if (!l) return NULL;
+    attrib_list *ret, *cur;
+    NEW (ret, attrib_list);
+    ret->name = l->name;
+    ret->offset = l->offset;
+    ret->next = NULL;
+    cur = ret;
+    while (l->next) {
+      NEW (cur->next, attrib_list);
+      cur = cur->next;
+      l = l->next;
+      cur->name = l->name;
+      cur->offset = l->offset;
+      cur->next = NULL;
+    }
+    return ret;
+  }
+
+  void freelist (attrib_list *l) {
+    attrib_list *tmp;
+    while (l) {
+      tmp = l;
+      l = l->next;
+      FREE (tmp);
+    }
+  }
 
 public:
-  int getWellCount () { return wellcnt; }
+  LayoutEdgeAttrib() {
+    _left = NULL;
+    _right = NULL;
+    _top = NULL;
+    _bot = NULL;
+  }
 
+  ~LayoutEdgeAttrib() {
+    clear ();
+  }
+
+  LayoutEdgeAttrib copy() {
+    LayoutEdgeAttrib tmp;
+    tmp._left = dup (_left);
+    tmp._right = dup (_right);
+    tmp._top = dup (_top);
+    tmp._bot = dup (_bot);
+    return tmp;
+  }
+
+  void clear () {
+    freelist (_left);
+    freelist (_right);
+    freelist (_top);
+    freelist (_bot);
+    _left = NULL;
+    _right = NULL;
+    _top = NULL;
+    _bot = NULL;
+  }
+
+  attrib_list *left() { return _left; }
+  attrib_list *right() { return _right; }
+  attrib_list *top() { return _top; }
+  attrib_list *bot() { return _bot; }
+
+  /* compute alignment between two sets of markers; returns amt that
+     should be added to l2 to get to l1's offset */
+  static bool align (attrib_list *l1, attrib_list *l2, long *amt) {
+    // no attributes: works with offset 0
+    if (!l1 && !l2) {
+      *amt = 0;
+      return true;
+    }
+
+    bool shift_computed = false;
+    long shiftamt;
+
+    while (l1 && l2) {
+      if (strcmp (l1->name, l2->name) != 0) {
+	return false;
+      }
+      if (shift_computed) {
+	if (l2->offset + shiftamt != l1->offset) {
+	  return false;
+	}
+      }
+      else {
+	shiftamt = l1->offset - l2->offset;
+	shift_computed = true;
+      }
+      l1 = l1->next;
+      l2 = l2->next;
+    }
+    if (l1 || l2) return false;
+    *amt = shiftamt;
+    return true;
+  }
 };
 
 class LayoutBlob {
@@ -279,15 +373,11 @@ private:
   blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert
 
-  long llx, lly, urx, ury;	// bounding box
-  long bloatllx, bloatlly, bloaturx, bloatury; // bloated bounding box
+  Rectangle _bbox;		// the bounding box of all paint
+  Rectangle _bloatbbox;		// the bloated bounding box of all paint
+  Rectangle _abutbox;		// the abut bounding box of all paint
 
-#define LAYOUT_EDGE_LEFT 0  
-#define LAYOUT_EDGE_RIGHT 2
-#define LAYOUT_EDGE_TOP 1
-#define LAYOUT_EDGE_BOTTOM 3
-
-  LayoutEdgeAttrib *edges[4];	// 0 = l, 1 = t, 2 = r, 3 = b
+  LayoutEdgeAttrib _le;
 
   unsigned long count;
 
@@ -320,8 +410,8 @@ public:
    *
    * @param llxp, llyp, urxp, uryp are used to return the boundary.
    */
-  void getBBox (long *llxp, long *llyp, long *urxp, long *uryp);
-  void getBloatBBox (long *llxp, long *llyp, long *urxp, long *uryp);
+  Rectangle getBBox () { return _bbox; }
+  Rectangle getBloatBBox () { return _bloatbbox; }
 
   /**
    * Set bounding box: only applies to BLOB_BASE with no layout 
@@ -357,16 +447,6 @@ public:
   static void searchFree (list_t *tiles);
 
   /**
-   *  Calculate the edge alignment between two edge atttributes
-   *  @return 0 if there is no possible alignment,
-   *          1 if any alignment is fine,
-   *	      2 if the alignment is specified by the range d1 to d2
-  */
-  int GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
-		    int *d1, int *d2);
-
-
-  /**
    * Get abutment box
    */
   Rectangle getAbutBox ();
@@ -376,6 +456,14 @@ public:
    */
   void incCount () { count++; }
   unsigned long getCount () { return count; }
+
+  /**
+   * Alignment markers
+   */
+  LayoutEdgeAttrib::attrib_list *getLeftAlign() { return _le.left(); }
+  LayoutEdgeAttrib::attrib_list *getRightAlign() { return _le.right(); }
+  LayoutEdgeAttrib::attrib_list *getTopAlign() { return _le.top(); }
+  LayoutEdgeAttrib::attrib_list *getBotAlign() { return _le.bot(); }
   
 };
 

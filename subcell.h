@@ -49,45 +49,42 @@ public:
   }
 
   Rectangle getBBox() {
-    long llx, lly, urx, ury;
     Rectangle r;
     if (!_b) {
       return r;
     }
-    _b->getBBox (&llx, &lly, &urx, &ury);
+    r = _b->getBBox ();
     Rectangle a = _b->getAbutBox ();
     if (a.empty()) {
-      a.setRectCoords (llx, lly, urx, ury);
+      a = r;
     }
 
-    long fringex = (a.llx() - llx) + (urx - a.urx());
-    long fringey = (a.lly() - lly) + (ury - a.ury());
+    long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
+    long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
     
-    r.setRectCoords (llx, lly, llx + a.wx()*_nx + fringex,
-		     lly + a.wy()*_ny + fringey);
+    r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
+		     r.lly() + a.wy()*_ny + fringey);
     
-    r.setRectCoords (llx, lly, urx, ury);
     return r;
   }
 
   Rectangle getBloatBBox() {
-    long llx, lly, urx, ury;
     Rectangle r;
     if (!_b) {
       return r;
     }
-    _b->getBBox (&llx, &lly, &urx, &ury);
+    r = _b->getBBox ();
     Rectangle a = _b->getAbutBox ();
     if (a.empty()) {
-      a.setRectCoords (llx, lly, urx, ury);
+      a = r;
     }
-    _b->getBloatBBox (&llx, &lly, &urx, &ury);
+    r = _b->getBloatBBox ();
 
-    long fringex = (a.llx() - llx) + (urx - a.urx());
-    long fringey = (a.lly() - lly) + (ury - a.ury());
+    long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
+    long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
     
-    r.setRectCoords (llx, lly, llx + a.wx()*_nx + fringex,
-		     lly + a.wy()*_ny + fringey);
+    r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
+		     r.lly() + a.wy()*_ny + fringey);
 
     return r;
   }

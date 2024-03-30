@@ -1417,18 +1417,18 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     dummy_netlist = n;
   }
 
-  long bllx, blly, burx, bury;
-  BLOB->getBBox (&bllx, &blly, &burx, &bury);
+  Rectangle b_bbox;
+  b_bbox = BLOB->getBBox ();
 
-  if (n && (bllx <= burx && blly <= bury)) {
+  if (n && !b_bbox.empty()) {
     /* we have a netlist + layout */
     int p_in = 0;
     int p_out = 0;
     int s_in = 1;
     int s_out = 1;
 
-    int redge = (burx - bllx + 1);
-    int tedge = (bury - blly + 1);
+    int redge = (b_bbox.urx() - b_bbox.llx() + 1);
+    int tedge = (b_bbox.ury() - b_bbox.lly() + 1);
 
     redge = snap_up_x (redge);
     tedge = snap_up_y (tedge);
@@ -1560,12 +1560,18 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       if (n->bN->ports[i].input) {
 	int w = _pin_metal->getLEFWidth ();
 	pins->DrawMetalPin (_pin_layer,
-			    bllx + p_in, blly + tedge - w, w, w, av->n, 0);
+			    b_bbox.llx() + p_in,
+			    b_bbox.lly() + tedge - w, w, w, av->n, 0);
 	p_in += _m_align_x->getPitch()*s_in;
       }
       else {
 	int w = _pin_metal->getLEFWidth ();
-	pins->DrawMetalPin (_pin_layer, bllx + p_out, blly + _m_align_y->getPitch(), w, w, av->n, 1);
+
+	pins->DrawMetalPin (_pin_layer,
+			    b_bbox.llx() + p_out,
+			    b_bbox.lly() + _m_align_y->getPitch(),
+			    w, w, av->n, 1);
+	
 	p_out += _m_align_x->getPitch()*s_out;
       }
 
@@ -1590,7 +1596,8 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
       int w = _pin_metal->getLEFWidth ();
       pins->DrawMetalPin (_pin_layer,
-			  bllx + p_in, blly + tedge - w, w, w, av->n, 0);
+			  b_bbox.llx() + p_in,
+			  b_bbox.lly() + tedge - w, w, w, av->n, 0);
       p_in += _m_align_x->getPitch()*s_in;
 
       if (av->n == n->Vdd) {
@@ -1603,14 +1610,17 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     if (!found_vdd && n->Vdd && n->Vdd->e && list_length (n->Vdd->e) > 0) {
       found_vdd = 1;
       int w = _pin_metal->getLEFWidth ();
-      pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->Vdd, 0);
+      pins->DrawMetalPin (_pin_layer,
+			  b_bbox.llx() + p_in,
+			  b_bbox.lly() + tedge - w, w, w, n->Vdd, 0);
       p_in += _m_align_x->getPitch()*s_in;
       
     }
     if (!found_gnd && n->GND && n->GND->e && list_length (n->GND->e) > 0) {
       found_gnd = 1;
       int w = _pin_metal->getLEFWidth ();
-      pins->DrawMetalPin (_pin_layer, bllx + p_in, blly + tedge - w, w, w, n->GND, 0);
+      pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p_in,
+			  b_bbox.lly() + tedge - w, w, w, n->GND, 0);
       p_in += _m_align_x->getPitch()*s_in;
     }
 
@@ -1819,14 +1829,15 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
   }
 
   BLOB = new LayoutBlob (BLOB_BASE, l);
+
   BLOB = computeLEFBoundary (BLOB);
-    
+
   /* add pins */
-  long bllx, blly, burx, bury;
-  BLOB->getBBox (&bllx, &blly, &burx, &bury);
+  Rectangle b_bbox;
+  b_bbox = BLOB->getBBox ();
 
   int tedge;
-  tedge = snap_up_y (bury - blly + 1);
+  tedge = snap_up_y (b_bbox.ury() - b_bbox.lly() + 1);
 
   while (tedge - _pin_metal->getLEFWidth() <=
 	 _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
@@ -1838,11 +1849,13 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
   p = _m_align_x->getPitch();
   Layout *pins = new Layout (dummy_netlist);
   int w = _pin_metal->getLEFWidth();
-  pins->DrawMetalPin (_pin_layer, bllx + p, blly + tedge - w, w, w,
+  pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p,
+		      b_bbox.lly() + tedge - w, w, w,
 		      dummy_netlist->nsc, 0);
     
   pins->DrawMetalPin (_pin_layer,
-		      bllx + p, blly + _m_align_y->getPitch(), w, w,
+		      b_bbox.llx() + p,
+		      b_bbox.lly() + _m_align_y->getPitch(), w, w,
 		      dummy_netlist->psc, 0);
 
   LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
@@ -1850,8 +1863,9 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
   bl->appendBlob (BLOB);
 
   bl = LayoutBlob::delBBox (bl);
+
   BLOB = computeLEFBoundary (bl);
-  
+
   return BLOB;
 }
 
@@ -1867,10 +1881,10 @@ void ActStackLayout::_emitwelltaprect (int flavor)
 
   snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (flavor));
 
-  long bllx, blly, burx, bury;
   TransformMat mat;
-  b->getBloatBBox (&bllx, &blly, &burx, &bury);
-  mat.translate (-bllx, -blly);
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
       
   /* emit rectangles */
   strcat (name, ".rect");
@@ -1941,16 +1955,16 @@ void ActStackLayout::_emitlocalRect (Process *p)
     return;
   }
 
-  long bllx, blly, burx, bury;
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox;
+  bloatbox = blob->getBloatBBox ();
 
-  if (bllx > burx || blly > bury) {
+  if (bloatbox.empty()) {
     /* no layout */
     return;
   }
 
   TransformMat mat;
-  mat.translate (-bllx, -blly);
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
 
   FILE *fp;
   char cname[10240];
@@ -2012,15 +2026,15 @@ static void emit_header (FILE *fp, const char *name, const char *lefclass,
   fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
   fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
 
-  long bllx, blly, burx, bury;
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox;
+  bloatbox = blob->getBloatBBox ();
 
 #if 0  
   printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
 #endif
   
   fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
-	   (burx - bllx + 1)*scale, (bury - blly + 1)*scale);
+	   bloatbox.wx()*scale, bloatbox.wy()*scale);
   fprintf (fp, "    SYMMETRY X Y ;\n");
   fprintf (fp, "    SITE CoreSite ;\n");
 }
@@ -2175,10 +2189,9 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 			  const char *sigtype, LayoutBlob *blob,
 			  node_t *signode)
 {
-  long bllx, blly, burx, bury;
   double scale = Technology::T->scale/1000.0;
 
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox = blob->getBloatBBox ();
   
   fprintf (fp, "    PIN ");
   a->mfprintf (fp, "%s\n", name);
@@ -2192,7 +2205,7 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 
   /* -- find all pins of this name! -- */
   TransformMat mat;
-  mat.translate (-bllx, -blly);
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
   list_t *tiles = blob->search (signode, &mat);
   emit_layer_rects (fp, tiles);
 
@@ -2234,10 +2247,10 @@ void ActStackLayout::runrec (int mode, UserDef *u)
 	
 	emit_footer (_fp, name);
 
-	long bllx, blly, burx, bury;
 	TransformMat mat;
-	b->getBloatBBox (&bllx, &blly, &burx, &bury);
-	mat.translate (-bllx, -blly);
+	Rectangle bloatbox;
+	bloatbox = b->getBloatBBox ();
+	mat.translate (-bloatbox.llx(), -bloatbox.lly());
 
 	if (_fpcell) {
 	  /* emit local well lef */
@@ -2377,10 +2390,10 @@ int ActStackLayout::_emitlocalLEF (Process *p)
     return 0;
   }
 
-  long bllx, blly, burx, bury;
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox;
+  bloatbox = blob->getBloatBBox ();
 
-  if (bllx > burx || blly > bury) {
+  if (bloatbox.empty()) {
     /* no layout */
     return 1;
   }
@@ -2513,10 +2526,9 @@ int ActStackLayout::_emitlocalLEF (Process *p)
 
   if (blob->getRead ()) {
     list_t *l;
-    long rllx, rlly, rurx, rury;
-    blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
+    Rectangle bloatbox = blob->getBloatBBox ();
     TransformMat mat;
-    mat.translate (-rllx, -rlly);
+    mat.translate (-bloatbox.llx(), -bloatbox.lly());
     l = blob->searchAllMetal (&mat);
     if (emit_layer_rects (fp, l, iopins, A_LEN (iopins))) {
       fprintf (fp, "    END\n");
@@ -2526,19 +2538,18 @@ int ActStackLayout::_emitlocalLEF (Process *p)
   else {
     /* XXX: add obstructions for metal layers; in reality we need to
        add the routed metal and then grab that here */
-    long rllx, rlly, rurx, rury;
     RoutingMat *m1 = Technology::T->metal[0];
     int pinspc = MAX (m1->getPitch(), _pin_metal->getPitch());
-    blob->getBloatBBox (&rllx, &rlly, &rurx, &rury);
-    if (((rury - rlly+1) > 6*pinspc) &&
-	((rurx - rllx+1) > 2*_pin_metal->getPitch())) {
+    Rectangle rbloatbox = blob->getBloatBBox ();
+    if ((rbloatbox.wy() > 6*pinspc) &&
+	(rbloatbox.wx() > 2*_pin_metal->getPitch())) {
       fprintf (fp, "    OBS\n");
       fprintf (fp, "      LAYER %s ;\n", m1->getLEFName());
       fprintf (fp, "         RECT %.6f %.6f %.6f %.6f ;\n",
-	       scale*((rllx - bllx) + _pin_metal->getPitch()),
-	       scale*((rlly - blly) + 3*pinspc),
-	       scale*((rurx - bllx) - _pin_metal->getPitch()),
-	       scale*((rury - blly) - 3*pinspc));
+	       scale*((rbloatbox.llx() - bloatbox.llx()) + _pin_metal->getPitch()),
+	       scale*((rbloatbox.lly() - bloatbox.lly()) + 3*pinspc),
+	       scale*((rbloatbox.urx() - bloatbox.llx()) - _pin_metal->getPitch()),
+	       scale*((rbloatbox.ury() - bloatbox.lly()) - 3*pinspc));
       fprintf (fp, "    END\n");
     }
   }
@@ -2570,10 +2581,8 @@ void ActStackLayout::_computeWell (LayoutBlob *blob, int flavor, int type,
     return;
   }
 
-  long bllx, blly, burx, bury;
-
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
-  mat.translate (-bllx, -blly);
+  Rectangle bloatbox = blob->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
 
   list_t *tiles;
   if (is_welltap) {
@@ -2603,13 +2612,13 @@ void ActStackLayout::_computeWell (LayoutBlob *blob, int flavor, int type,
     }
 
     if (type == EDGE_PFET) {
-      if (wlly+blly > 0) {
-	wlly = -blly;
+      if (wlly+bloatbox.lly() > 0) {
+	wlly = -bloatbox.lly();
       }
     }
     else {
-      if (wury+blly < 0) {
-	wury = -blly;
+      if (wury+bloatbox.lly() < 0) {
+	wury = -bloatbox.lly();
       }
     }
     if (is_welltap) {
@@ -2654,10 +2663,9 @@ void ActStackLayout::_emitLocalWellLEF (FILE *fp, Process *p)
     return;
   }
 
-  long bllx, blly, burx, bury;
-  blob->getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox = blob->getBloatBBox ();
 
-  if (bllx > burx || blly > bury) {
+  if (bloatbox.empty ()) {
     /* no layout */
     return;
   }
@@ -3583,30 +3591,32 @@ void ActStackLayout::_reportLocalStats(Process *p)
 */
 LayoutBlob *ActStackLayout::computeLEFBoundary (LayoutBlob *b)
 {
-  long llx, lly, urx, ury;
   long nllx, nlly, nurx, nury;
 
   if (!b) return NULL;
 
-  b->getBloatBBox (&llx, &lly, &urx, &ury);
-  if (urx < llx || ury < lly) {
+  Rectangle bloatbox = b->getBloatBBox ();
+  if (bloatbox.empty()) {
     return b;
   }
 
 #if 0
   printf ("\n");
-  printf ("original: (%ld,%ld) -> (%ld,%ld)\n", llx, lly, urx, ury);
+  printf ("original: (%ld,%ld) -> (%ld,%ld)\n",
+	  bloatbox.llx(), bloatbox.lly(),
+	  bloatbox.urx(), bloatbox.ury());
   printf ("SNAP: %d and %d\n",  Technology::T->metal[1]->getPitch(),
 	  Technology::T->metal[0]->getPitch());
 #endif
 
+
   Assert (Technology::T->nmetals >= 3, "Hmm");
 
-  nllx = snap_dn_x (llx) - _extra_tracks_left*_m_align_x->getPitch();
-  nurx = snap_up_x (urx+1)-1 + _extra_tracks_right*_m_align_x->getPitch();
+  nllx = snap_dn_x (bloatbox.llx()) - _extra_tracks_left*_m_align_x->getPitch();
+  nurx = snap_up_x (bloatbox.urx()+1)-1 + _extra_tracks_right*_m_align_x->getPitch();
 
-  nlly = snap_dn_y (lly) - _extra_tracks_bot*_m_align_y->getPitch();
-  nury = snap_up_y (ury+1)-1 + _extra_tracks_top*_m_align_y->getPitch();
+  nlly = snap_dn_y (bloatbox.lly()) - _extra_tracks_bot*_m_align_y->getPitch();
+  nury = snap_up_y (bloatbox.ury()+1)-1 + _extra_tracks_top*_m_align_y->getPitch();
 
   LayoutBlob *box = new LayoutBlob (BLOB_BASE, NULL);
   box->setBBox (nllx, nlly, nurx, nury);
@@ -3614,7 +3624,6 @@ LayoutBlob *ActStackLayout::computeLEFBoundary (LayoutBlob *b)
 #if 0
   printf (" set: (%ld,%ld) -> (%ld,%ld)\n",
 	  nllx, nlly, nurx, nury);
-
   box->getBloatBBox (&llx, &lly, &urx, &ury);
   printf ("test: (%ld,%ld) -> (%ld,%ld)\n", llx, lly, urx, ury);
   if (llx != nllx || lly != nlly ||
@@ -3857,7 +3866,11 @@ int ActStackLayout::getBBox (Process *p, long *llx, long *lly,
   b = getLayout (p);
   if (b) {
     /* layout exists, use the bounding box from here */
-    b->getBloatBBox (llx, lly, urx, ury);
+    Rectangle r = b->getBloatBBox ();
+    *llx = r.llx();
+    *lly = r.lly();
+    *urx = r.urx();
+    *ury = r.ury();
     return 1;
   }
   if (boxH) {

@@ -41,24 +41,19 @@
 
 LayoutBlob::LayoutBlob (ExternMacro *m)
 {
+  long llx, lly, urx, ury;
   t = BLOB_MACRO;
   macro = m;
   if (macro && macro->isValid()) {
     macro->getBBox (&llx, &lly, &urx, &ury);
-    bloatllx = llx;
-    bloatlly = lly;
-    bloaturx = urx;
-    bloatury = ury;
+    _bbox.setRectCoords (llx, lly, urx, ury);
+    _bloatbbox = _bbox;
+    _abutbox = _bbox;
   }
   else {
-    llx = 0;
-    lly = 0;
-    urx = -1;
-    ury = -1;
-    bloatllx = 0;
-    bloatlly = 0;
-    bloaturx = -1;
-    bloatury = -1;
+    _bbox.clear ();
+    _bloatbbox.clear ();
+    _abutbox.clear ();
   }    
 }
 
@@ -67,33 +62,32 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
   t = type;
   readRect = false;
 
-  edges[0] = NULL;
-  edges[1] = NULL;
-  edges[2] = NULL;
-  edges[3] = NULL;
   count = 0;
-
+  
   switch (t) {
   case BLOB_MACRO:
     macro = NULL;
     warning ("LayoutBlob: create macro using a different constructor!");
     break;
-    
+
+  case BLOB_CELLS:
+    warning ("LayoutBlob:: constructor called with BLOB_CELLS; converting to BLOB_BASE!");
+    t = BLOB_BASE;
+    type = BLOB_BASE;
   case BLOB_BASE:
     base.l = lptr;
     if (lptr) {
+      long llx, lly, urx, ury;
       lptr->getBBox (&llx, &lly, &urx, &ury);
-      lptr->getBloatBBox (&bloatllx, &bloatlly, &bloaturx, &bloatury);
+      _bbox.setRectCoords (llx, lly, urx, ury);
+      lptr->getBloatBBox (&llx, &lly, &urx, &ury);
+      _bloatbbox.setRectCoords (llx, lly, urx, ury);
+      _abutbox = lptr->getAbutBox ();
     }
     else {
-      llx = 0;
-      lly = 0;
-      urx = -1;
-      ury = -1;
-      bloatllx = 0;
-      bloatlly = 0;
-      bloaturx = -1;
-      bloatury = -1;
+      _bbox.clear ();
+      _bloatbbox.clear ();
+      _abutbox.clear ();
     }
     /* XXX: set edge attributes */
     break;
@@ -112,29 +106,17 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       bl->shift = 0;
       bl->mirror = MIRROR_NONE;
       q_ins (l.hd, l.tl, bl);
-      llx = bl->b->llx;
-      lly = bl->b->lly;
-      urx = bl->b->urx;
-      ury = bl->b->ury;
-      bloatllx = bl->b->bloatllx;
-      bloatlly = bl->b->bloatlly;
-      bloaturx = bl->b->bloaturx;
-      bloatury = bl->b->bloatury;
+      _bbox = bl->b->_bbox;
+      _bloatbbox = bl->b->_bloatbbox;
+      _abutbox = bl->b->_abutbox;
+      _le = bl->b->_le;
     }
     else {
-      llx = 0;
-      lly = 0;
-      urx = -1;
-      ury = -1;
-      bloatllx = 0;
-      bloatlly = 0;
-      bloaturx = -1;
-      bloatury = -1;
+      _bbox.clear ();
+      _bloatbbox.clear ();
+      _abutbox.clear ();
+      _le.clear ();
     }
-    break;
-
-  default:
-    fatal_error ("What is this?");
     break;
   }
 }
@@ -145,23 +127,14 @@ LayoutBlob::LayoutBlob (LayerSubcell *cells)
   t = BLOB_CELLS;
   
   readRect = false;
-  edges[0] = NULL;
-  edges[1] = NULL;
-  edges[2] = NULL;
-  edges[3] = NULL;
   count = 0;
 
-  subcell.l = cells;
+  Assert (cells, "What?");
 
-  llx = 0;
-  lly = 0;
-  urx = -1;
-  ury = -1;
-  bloatllx = 0;
-  bloatlly = 0;
-  bloaturx = -1;
-  bloatury = -1;
-  // XXX: initialize bounding box + bloat bounding box
+  subcell.l = cells;
+  _bbox = cells->getBBox ();
+  _bloatbbox = cells->getBloatBBox ();
+  _abutbox = cells->getAbutBox ();
 }
 
 
@@ -174,26 +147,16 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
     warning ("LayoutBlob::setBBox(): called on non-empty layout; ignored");
     return;
   }
-  if (llx == 0 && lly == 0 && urx == -1 && ury == -1) {
-    llx = _llx;
-    lly = _lly;
-    urx = _urx;
-    ury = _ury;
+
+  Rectangle r;
+  r.setRectCoords (_llx, _lly, _urx, _ury);
+
+  if (!_bbox.empty() && !r.contains (_bbox)) {
+    fatal_error ("LayoutBlob::setBBox(): shrinking the bounding box is not permitted");
   }
-  else {
-    if (_llx > llx || _lly > lly ||
-	_urx < urx || _ury < ury) {
-      fatal_error ("LayoutBlob::setBBox(): shrinking the bounding box is not permitted");
-    }
-  }
-  llx = _llx;
-  lly = _lly;
-  urx = _urx;
-  ury = _ury;
-  bloatllx = _llx;
-  bloatlly = _lly;
-  bloaturx = _urx;
-  bloatury = _ury;
+  _bbox = r;
+  _bloatbbox = r;
+  _abutbox.clear ();
 }
 
 void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
@@ -217,93 +180,101 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
   q_ins (l.hd, l.tl, bl);
 
   if (l.hd == l.tl) {
-    llx = b->llx;
-    lly = b->lly;
-    urx = b->urx;
-    ury = b->ury;
-    bloatllx = b->bloatllx;
-    bloatlly = b->bloatlly;
-    bloaturx = b->bloaturx;
-    bloatury = b->bloatury;
+    _bbox = b->getBBox ();
+    _bloatbbox = b->getBloatBBox ();
+    _abutbox = b->getAbutBox ();
     if (t == BLOB_HORIZ) {
-      llx += bl->gap;
-      urx += bl->gap;
-      bloatllx += bl->gap;
-      bloaturx += bl->gap;
+      _bbox.shiftx (bl->gap);
+      _bloatbbox.shiftx (bl->gap);
+      _abutbox.shiftx (bl->gap);
     }
     else if (t == BLOB_VERT) {
-      lly += bl->gap;
-      ury += bl->gap;
-      bloatlly += bl->gap;
-      bloatury += bl->gap;
+      _bbox.shifty (bl->gap);
+      _bloatbbox.shifty (bl->gap);
+      _abutbox.shifty (bl->gap);
     }
   }
   else {
     if (t == BLOB_HORIZ) {
-      int d1, d2;
-      int aret;
+      long damt;
+      bool valid;
       /* align! */
-      aret = GetAlignment (l.tl->b->edges[LAYOUT_EDGE_RIGHT], b->edges[LAYOUT_EDGE_LEFT], &d1, &d2);
-      if (aret == 0) {
+      valid = LayoutEdgeAttrib::align (l.tl->b->getRightAlign(),
+				       b->getLeftAlign(), &damt);
+      if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
-	d1 = 0;
+	damt = 0;
       }
-      else if (aret == 1) {
-	d1 = 0;
+      bl->shift = damt;
+
+      // now we have shifted the blob; so
+      Rectangle r;
+
+      r = b->getBBox();
+
+      int shiftamt = gap + (_bloatbbox.urx() - _bbox.llx()) +
+	(r.llx() - b->getBloatBBox().llx() + 1);
+
+      r.shifty (bl->shift);
+      r.shiftx (shiftamt);
+
+      _bbox = _bbox ^ r;
+
+      r = b->getBloatBBox();
+      r.shifty (bl->shift);
+      r.shiftx (shiftamt);
+      _bloatbbox = _bloatbbox ^ r;
+
+      r = b->getAbutBox();
+      if (!r.empty()) {
+	r.shifty (bl->shift);
+	r.shiftx (shiftamt);
+	_abutbox = _abutbox ^ r;
       }
-      else if (aret == 2) {
-	d1 = (d1 + d2)/2;
-      }
-      bl->shift = d1;
-      
-      lly = MIN (lly, b->lly + bl->shift);
-      ury = MAX (ury, b->ury + bl->shift);
-
-      bloatlly = MIN (bloatlly, b->bloatlly + bl->shift);
-      bloatury = MAX (bloatury, b->bloatury + bl->shift);
-
-      int shiftamt = (bloaturx - llx) + (b->llx - b->bloatllx + 1);
-
-      urx = b->urx + gap + shiftamt;
-      bloaturx = b->bloaturx + gap + shiftamt;
     }
     else if (t == BLOB_VERT) {
-      int d1, d2;
-      int aret;
+      long damt;
+      bool valid;
       /* align! */
-      aret = GetAlignment (l.tl->b->edges[LAYOUT_EDGE_TOP], b->edges[LAYOUT_EDGE_BOTTOM], &d1, &d2);
-      if (aret == 0) {
+      valid = LayoutEdgeAttrib::align (l.tl->b->getTopAlign(),
+				       b->getBotAlign(), &damt);
+
+      if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
-	d1 = 0;
+	damt = 0;
       }
-      else if (aret == 1) {
-	d1 = 0;
+      bl->shift = damt;
+
+      Rectangle r;
+      r = b->getBBox();
+
+      int shiftamt = gap +
+	(_bloatbbox.ury() - r.lly()) +
+	(r.lly() - b->getBloatBBox().lly() + 1);
+
+      r.shiftx (bl->shift);
+      r.shifty (shiftamt);
+
+      _bbox = _bbox ^ r;
+
+      r = b->getBloatBBox ();
+      r.shiftx (bl->shift);
+      r.shifty (shiftamt);
+      _bloatbbox = _bloatbbox ^ r;
+
+      r = b->getAbutBox();
+      if (!r.empty()) {
+	r.shiftx (bl->shift);
+	r.shifty (shiftamt);
+	_abutbox = _abutbox ^ r;
       }
-      else if (aret == 2) {
-	d1 = (d1 + d2)/2;
-      }
-      bl->shift = d1;
-
-      llx = MIN (llx, b->llx + bl->shift);
-      urx = MAX (urx, b->urx + bl->shift);
-
-      bloatllx = MIN (bloatllx, b->bloatllx + bl->shift);
-      bloaturx = MAX (bloaturx, b->bloaturx + bl->shift);
-      
-      int shiftamt = (bloatury - lly) + (b->lly - b->bloatlly + 1);
-
-      ury = b->ury + gap + shiftamt;
-      bloatury = b->bloatury + gap + shiftamt;
     }
     else if (t == BLOB_MERGE) {
-      llx = MIN (llx, b->llx);
-      lly = MIN (lly, b->lly);
-      urx = MAX (urx, b->urx);
-      ury = MAX (ury, b->ury);
-      bloatllx = MIN (bloatllx, b->bloatllx);
-      bloatlly = MIN (bloatlly, b->bloatlly);
-      bloaturx = MAX (bloaturx, b->bloaturx);
-      bloatury = MAX (bloatury, b->bloatury);
+      _bbox = _bbox ^ b->getBBox();
+      _bloatbbox = _bloatbbox ^ b->getBloatBBox();
+      if (!b->getAbutBox().empty()) {
+	_abutbox = _abutbox ^ b->getAbutBox();
+      }
     }
     else {
       fatal_error ("What?");
@@ -351,15 +322,19 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
       bl->b->_printRect (fp, &m);
       if (t == BLOB_HORIZ) {
 	if (bl->next) {
-	  int shiftamt = (bl->b->bloaturx - bl->b->llx + 1)
-	    + (bl->next->b->llx - bl->next->b->bloatllx + 1);
+	  int shiftamt = (bl->b->getBloatBBox().urx() -
+			  bl->b->getBBox().llx() + 1)
+	    + (bl->next->b->getBBox().llx() -
+	       bl->next->b->getBloatBBox().llx() + 1);
 	  m.translate (shiftamt, 0);
 	}
       }
       else {
 	if (bl->next) {
-	  int shiftamt = (bl->b->bloatury - bl->b->lly + 1)
-	    + (bl->next->b->lly - bl->next->b->bloatlly + 1);
+	  int shiftamt = (bl->b->getBloatBBox().ury() -
+			  bl->b->getBBox().lly() + 1)
+	    + (bl->next->b->getBBox().lly() -
+	       bl->next->b->getBloatBBox().lly() + 1);
 	  m.translate (0, shiftamt);
 	}
       }
@@ -387,39 +362,21 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
 {
   long bllx, blly, burx, bury;
   long x, y;
-  getBloatBBox (&bllx, &blly, &burx, &bury);
+  Rectangle bloatbox = getBloatBBox ();
   fprintf (fp, "bbox ");
   if (mat) {
-    mat->apply (bllx, blly, &x, &y);
+    mat->apply (bloatbox.llx(), bloatbox.lly(), &x, &y);
     fprintf (fp, "%ld %ld", x, y);
-    mat->apply (burx+1, bury+1, &x, &y);
+    mat->apply (bloatbox.urx()+1, bloatbox.ury()+1, &x, &y);
     fprintf (fp, " %ld %ld\n", x, y);
   }
   else {
-    fprintf (fp, "%ld %ld %ld %ld\n", bllx, blly, burx+1, bury+1);
+    fprintf (fp, "%ld %ld %ld %ld\n",
+	     bloatbox.llx(), bloatbox.lly(),
+	     bloatbox.urx()+1, bloatbox.ury()+1);
   }
   _printRect (fp, mat);
 }
-
-
-void LayoutBlob::getBBox (long *llxp, long *llyp,
-			  long *urxp, long *uryp)
-{
-  *llxp = llx;
-  *llyp = lly;
-  *urxp = urx;
-  *uryp = ury;
-}
-
-void LayoutBlob::getBloatBBox (long *llxp, long *llyp,
-			       long *urxp, long *uryp)
-{
-  *llxp = bloatllx;
-  *llyp = bloatlly;
-  *urxp = bloaturx;
-  *uryp = bloatury;
-}
-
 
 
 list_t *LayoutBlob::search (void *net, TransformMat *m)
@@ -543,22 +500,6 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
     fatal_error ("New blob?");
   }
   return tiles;
-}
-
-
-int LayoutBlob::GetAlignment (LayoutEdgeAttrib *a1, LayoutEdgeAttrib *a2,
-		    int *d1, int *d2)
-{
-  if (!a1 && !a2) {
-    return 1;
-  }
-  if ((a1 && !a2) || (!a1 && a2)) {
-    return 0;
-  }
-  /* XXX: now check! */
-  *d1 = 0;
-  *d2 = 0;
-  return 2;
 }
 
 
@@ -773,7 +714,13 @@ Rectangle LayoutBlob::getAbutBox()
 {
   switch (t) {
   case BLOB_BASE:
-    return base.l->getAbutBox();
+    if (base.l) {
+      return base.l->getAbutBox();
+    }
+    else {
+      return Rectangle();
+    }
+    break;
   case BLOB_CELLS:
     return subcell.l->getAbutBox();
   default:

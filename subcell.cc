@@ -165,7 +165,7 @@ void LayerSubcell::addSubcell (SubcellInst *s)
 	_lst = _lst->flushClear ();
       }
       else if (_levelcount > subcell_recompute_threshold) {
-	// XXX: fixme
+	// XXX: fixme: re-partition data structure
       }
     }
   }

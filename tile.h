@@ -179,6 +179,17 @@ public:
     _wx = wx;
     _wy = wy;
   }
+
+  void shiftx (long dx) {
+    if (empty()) return;
+    _llx += dx;
+  }
+
+  void shifty (long dy) {
+    if (empty()) return;
+    _lly += dy;
+  }
+
   void setRectCoords (long lx, long ly, long ux, long uy) {
     Assert (lx <= ux || (lx == 0 && ux == -1), "What?");
     Assert (ly <= uy || (ly == 0 && uy == -1), "What?");
@@ -194,10 +205,15 @@ public:
   // max operator
   Rectangle operator^(const Rectangle& r) {
     Rectangle t = *this;
+
+    long turx, tury;
+    turx = MAX(urx(), r.urx());
+    tury = MAX(ury(), r.ury());
+
     t._llx = MIN(t._llx, r._llx);
     t._lly = MIN(t._lly, r._lly);
-    t._wx = MAX(t._wx, (r.urx()-t._llx+1));
-    t._wy = MAX(t._wy, (r.ury()-t._lly+1));
+    t._wx = turx - t._llx + 1;
+    t._wy = tury - t._lly + 1;
     return t;
   }
 }
