@@ -3391,12 +3391,15 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     int ntracksy = (track_gap*ny)/pitchxy;
 
     /* vertical tracks */
-    fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
-	     10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
+    if (ntracksx > 0) {
+      fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
+	       10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
+    }
     /* horizontal tracks */
-    fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
-	     track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
-
+    if (ntracksy > 0) {
+      fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
+	       track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
+    }
     fprintf (fp, "\n");
   }
 
