@@ -566,7 +566,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       /* celltype id swap? flipx? flipy? dx dy llx lly urx ury */
     }
     else {
-      fatal_error ("Line: %s\nNeeds inrect, outrect, or rect", buf);
+      fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, abox, or cell", buf);
     }
 
     if (strncmp (buf+offset, "# ", 2) == 0) {
@@ -1128,7 +1128,7 @@ list_t *Layout::searchAllMetal ()
 
 
 /*
- * Transformation Metrix for coordinate transformations
+ * Transformation Matrix for coordinate transformations
  *
  *   Given (x,y): 
  *
@@ -1238,4 +1238,3 @@ void TransformMat::apply (long inx, long iny, long *outx, long *outy)
     *outy = (_flipy ? -iny : iny) + _dy;
   }
 }
-

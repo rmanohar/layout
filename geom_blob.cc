@@ -104,7 +104,6 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       bl->next = NULL;
       bl->gap = 0;
       bl->shift = 0;
-      bl->mirror = MIRROR_NONE;
       q_ins (l.hd, l.tl, bl);
       _bbox = bl->b->_bbox;
       _bloatbbox = bl->b->_bloatbbox;
@@ -159,7 +158,7 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
   _abutbox.clear ();
 }
 
-void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
+void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 {
   if (t == BLOB_BASE) {
     warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
@@ -169,6 +168,12 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
     warning ("LayoutBlob::appendBlob() called on MACRO; error ignored!");
     return;
   }
+  if (t == BLOB_CELLS) {
+    warning ("LayoutBlob::appendBlob() called on CELLS; error ignored!");
+    return;
+  }
+
+  Assert (t == BLOB_HORIZ || t == BLOB_VERT || t == BLOB_MERGE, "What?");
   
   blob_list *bl;
   NEW (bl, blob_list);
@@ -176,7 +181,6 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
   bl->b = b;
   bl->gap = gap;
   bl->shift = 0;
-  bl->mirror = m;
   q_ins (l.hd, l.tl, bl);
 
   if (l.hd == l.tl) {
@@ -289,72 +293,83 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap, mirror_type m)
 
 void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 {
-  if (t == BLOB_BASE) {
+  switch (t) {
+  case BLOB_BASE:
     if (base.l) {
       base.l->PrintRect (fp, mat);
     }
-  }
-  else if (t == BLOB_HORIZ || t == BLOB_VERT) {
-    TransformMat m;
-    if (mat) {
-      m = *mat;
-    }
+    break;
+    
+  case BLOB_HORIZ:
+  case BLOB_VERT:
+    {
+      TransformMat m;
+      if (mat) {
+	m = *mat;
+      }
 #if 0    
-    long tllx, tlly;
-    m.apply (0, 0, &tllx, &tlly);
-    printf ("orig mat: (%ld,%ld)\n", tllx, tlly);
-#endif    
-    for (blob_list *bl = l.hd; bl; q_step (bl)) {
-      if (t == BLOB_HORIZ) {
-	m.translate (bl->gap, bl->shift);
-      }
-      else {
-	m.translate (bl->shift, bl->gap);
-      }
-#if 0      
+      long tllx, tlly;
       m.apply (0, 0, &tllx, &tlly);
-      printf ("gap: (%ld,%ld); tmat gets you to: (%ld,%ld)\n",
-	      bl->gap, bl->shift, tllx, tlly);
-      printf ("   (%ld,%ld) -> (%ld,%ld)  :: bloat: (%ld,%ld) -> (%ld,%ld)\n",
-	      bl->b->llx, bl->b->lly, bl->b->urx, bl->b->ury,
-	      bl->b->bloatllx, bl->b->bloatlly, bl->b->bloaturx, bl->b->bloatury);
+      printf ("orig mat: (%ld,%ld)\n", tllx, tlly);
+#endif    
+      for (blob_list *bl = l.hd; bl; q_step (bl)) {
+	if (t == BLOB_HORIZ) {
+	  m.translate (bl->gap, bl->shift);
+	}
+	else {
+	  m.translate (bl->shift, bl->gap);
+	}
+#if 0      
+	m.apply (0, 0, &tllx, &tlly);
+	printf ("gap: (%ld,%ld); tmat gets you to: (%ld,%ld)\n",
+		bl->gap, bl->shift, tllx, tlly);
+	printf ("   (%ld,%ld) -> (%ld,%ld)  :: bloat: (%ld,%ld) -> (%ld,%ld)\n",
+		bl->b->llx, bl->b->lly, bl->b->urx, bl->b->ury,
+		bl->b->bloatllx, bl->b->bloatlly, bl->b->bloaturx, bl->b->bloatury);
 #endif      
-      bl->b->_printRect (fp, &m);
-      if (t == BLOB_HORIZ) {
-	if (bl->next) {
-	  int shiftamt = (bl->b->getBloatBBox().urx() -
-			  bl->b->getBBox().llx() + 1)
-	    + (bl->next->b->getBBox().llx() -
-	       bl->next->b->getBloatBBox().llx() + 1);
-	  m.translate (shiftamt, 0);
+	bl->b->_printRect (fp, &m);
+	if (t == BLOB_HORIZ) {
+	  if (bl->next) {
+	    int shiftamt = (bl->b->getBloatBBox().urx() -
+			    bl->b->getBBox().llx() + 1)
+	      + (bl->next->b->getBBox().llx() -
+		 bl->next->b->getBloatBBox().llx() + 1);
+	    m.translate (shiftamt, 0);
+	  }
+	}
+	else {
+	  if (bl->next) {
+	    int shiftamt = (bl->b->getBloatBBox().ury() -
+			    bl->b->getBBox().lly() + 1)
+	      + (bl->next->b->getBBox().lly() -
+		 bl->next->b->getBloatBBox().lly() + 1);
+	    m.translate (0, shiftamt);
+	  }
 	}
       }
-      else {
-	if (bl->next) {
-	  int shiftamt = (bl->b->getBloatBBox().ury() -
-			  bl->b->getBBox().lly() + 1)
-	    + (bl->next->b->getBBox().lly() -
-	       bl->next->b->getBloatBBox().lly() + 1);
-	  m.translate (0, shiftamt);
-	}
+    }
+    break;
+
+  case BLOB_MERGE:
+    {
+      TransformMat m;
+      if (mat) {
+	m = *mat;
+      }
+      for (blob_list *bl = l.hd; bl; q_step (bl)) {
+	bl->b->_printRect (fp, &m);
       }
     }
-  }
-  else if (t == BLOB_MERGE) {
-    TransformMat m;
-    if (mat) {
-      m = *mat;
-    }
-    for (blob_list *bl = l.hd; bl; q_step (bl)) {
-      bl->b->_printRect (fp, &m);
-    }
-  }
-  else if (t == BLOB_MACRO) {
+    break;
+
+  case BLOB_MACRO:
     /* nothing to do, it is a macro */
-    return;
-  }
-  else {
-    fatal_error ("Unknown blob\n");
+    break;
+
+  case BLOB_CELLS:
+    fatal_error ("ARGH!\n");
+    break;
+
   }
 }
 

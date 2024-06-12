@@ -29,6 +29,9 @@
 #include "tile.h"
 
 
+/*
+ * Geometry transformation matrix
+ */
 class TransformMat {
   long _dx, _dy;
   unsigned int _flipx:1;
@@ -47,6 +50,9 @@ public:
 };
 
 
+/*
+ * One abstract layer
+ */
 class Layer {
 protected:
   Material *mat;		/* technology-specific
@@ -68,7 +74,7 @@ protected:
   long _llx, _lly, _urx, _ury;
   long _bllx, _blly, _burx, _bury; // bloated bbox
   /* BBox with spacing on all sides 
-     This bloats the bounding box by the minimum spacing on all sides.
+     This bloats the bounding box by ceil(minimum spacing/2) on all sides.
   */
 
  public:
@@ -221,14 +227,10 @@ enum blob_type { BLOB_BASE,  /* some layout */
 		 BLOB_MERGE  /* overlay */
 };
 
-enum mirror_type { MIRROR_NONE, MIRROR_LR, MIRROR_TB, MIRROR_BOTH };
-   // do we want to support 90 degree rotation?
-
 struct blob_list {
   LayoutBlob *b;
   long gap;
   long shift;			// shift in the other direction
-  mirror_type mirror;
   struct blob_list *next;
 };
 
@@ -241,7 +243,10 @@ struct tile_listentry {
 
 /*
  * These are used as alignment markers. They can be used for an umber
- * of different purposes, including multkdeck gridded cells.
+ * of different purposes, including multi-deck gridded cells.
+ *
+ * **Currently only using an attrib_list of length at most 1 until we
+ *   include multi-deck support**
  */
 class LayoutEdgeAttrib {
 public:
@@ -324,6 +329,10 @@ public:
 
   /* compute alignment between two sets of markers; returns amt that
      should be added to l2 to get to l1's offset */
+
+  /* XXX: when we support multiple independent attributes, we will
+     need multiple shift amounts for alignment
+  */
   static bool align (attrib_list *l1, attrib_list *l2, long *amt) {
     // no attributes: works with offset 0
     if (!l1 && !l2) {
@@ -356,6 +365,7 @@ public:
   }
 };
 
+
 class LayoutBlob {
 private:
   union {
@@ -364,6 +374,10 @@ private:
     } l;			// a blob list
     struct {
       Layout *l;		// ... layout block
+                                // ... if this is a NULL pointer and
+                                // it is a BLOB_BASE type, this is a
+                                // special layout blob that is a pure
+                                // bounding box.
     } base;
     struct {
       LayerSubcell *l;
@@ -371,7 +385,7 @@ private:
     ExternMacro *macro;
   };
   blob_type t;			// type field: 0 = base, 1 = horiz,
-				// 2 = vert
+				// 2 = vert, etc.
 
   Rectangle _bbox;		// the bounding box of all paint
   Rectangle _bloatbbox;		// the bloated bounding box of all paint
@@ -379,7 +393,7 @@ private:
 
   LayoutEdgeAttrib _le;
 
-  unsigned long count;
+  unsigned long count;		// for statistics tracking
 
   bool readRect;
 
@@ -398,7 +412,7 @@ public:
   const char *getMacroName() { return macro->getName(); }
   const char *getLEFFile() { return macro->getLEFFile(); }
 
-  void appendBlob (LayoutBlob *b, long gap = 0, mirror_type m = MIRROR_NONE);
+  void appendBlob (LayoutBlob *b, long gap = 0);
 
   void markRead () { readRect = true; }
   bool getRead() { return readRect; }
