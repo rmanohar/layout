@@ -252,7 +252,9 @@ class LayoutEdgeAttrib {
 public:
   struct attrib_list {
     const char *name;
-    long offset;
+    long offset;		// this offset is relative to assuming
+				// the bottom left corner of the
+				// actual layout bounding box is (0,0).
     struct attrib_list *next;
   };
 private:

@@ -216,8 +216,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 
       r = b->getBBox();
 
-      int shiftamt = gap + (_bloatbbox.urx() - _bbox.llx()) +
-	(r.llx() - b->getBloatBBox().llx() + 1);
+      int shiftamt = gap
+	+ (_bloatbbox.urx() - _bbox.llx() + 1)  /* width, including bloat */
+	+ (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
 
       r.shifty (bl->shift);
       r.shiftx (shiftamt);
@@ -252,9 +253,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
       Rectangle r;
       r = b->getBBox();
 
-      int shiftamt = gap +
-	(_bloatbbox.ury() - r.lly()) +
-	(r.lly() - b->getBloatBBox().lly() + 1);
+      int shiftamt = gap
+	+ (_bloatbbox.ury() - _bbox.lly() + 1) /* width, including bloat */
+	+ (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bottom bloat */
 
       r.shiftx (bl->shift);
       r.shifty (shiftamt);
@@ -332,8 +333,7 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 	  if (bl->next) {
 	    int shiftamt = (bl->b->getBloatBBox().urx() -
 			    bl->b->getBBox().llx() + 1)
-	      + (bl->next->b->getBBox().llx() -
-		 bl->next->b->getBloatBBox().llx() + 1);
+	      + (bl->next->b->getBBox().llx() - bl->next->b->getBloatBBox().llx());
 	    m.translate (shiftamt, 0);
 	  }
 	}
@@ -342,7 +342,7 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 	    int shiftamt = (bl->b->getBloatBBox().ury() -
 			    bl->b->getBBox().lly() + 1)
 	      + (bl->next->b->getBBox().lly() -
-		 bl->next->b->getBloatBBox().lly() + 1);
+		 bl->next->b->getBloatBBox().lly());
 	    m.translate (0, shiftamt);
 	  }
 	}
