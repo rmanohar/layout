@@ -1235,8 +1235,8 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
       xlate = p - ymin;
     }
     if (xlate != 0) {
-      LayoutBlob *tmp = new LayoutBlob (BLOB_VERT);
-      tmp->appendBlob (b, xlate);
+      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
+      tmp->appendBlob (b, BLOB_VERT, xlate);
       b = tmp;
     }
   }
@@ -1297,7 +1297,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
   li = list_first (stks);
   list_t *stklist = (list_t *) list_value (li);
 
-  BLOB = new LayoutBlob (BLOB_HORIZ);
+  BLOB = new LayoutBlob (BLOB_LIST);
 
   int diffspace = _localdiffspace (p);
 
@@ -1323,7 +1323,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       l->DrawDiffBBox (b.flavor, EDGE_NFET,
 		       b.n.llx, b.n.lly, b.n.urx-b.n.llx, b.n.ury-b.n.lly);
 
-      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l));
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l), BLOB_HORIZ);
     }
   }
 
@@ -1362,7 +1362,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 	has_both_types = 1;
       }
 
-      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l), BLOB_HORIZ); 
     }
   }
 
@@ -1391,7 +1391,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 	has_both_types = 1;
       }
 
-      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l)); 
+      BLOB->appendBlob (new LayoutBlob (BLOB_BASE, l), BLOB_HORIZ); 
     }
   }
 
@@ -1627,9 +1627,9 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     /*--- XXX: but this is not the end of the pins... ---*/
 
     
-    LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
-    bl->appendBlob (BLOB);
-    bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
+    LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
+    bl->appendBlob (BLOB, BLOB_MERGE);
+    bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
     BLOB = bl;
   }
 
@@ -1747,8 +1747,8 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
       xlate = p - ymin;
     }
     if (xlate != 0) {
-      LayoutBlob *tmp = new LayoutBlob (BLOB_VERT);
-      tmp->appendBlob (b, xlate);
+      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
+      tmp->appendBlob (b, BLOB_VERT, xlate);
       b = tmp;
     }
   }
@@ -1858,9 +1858,9 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
 		      b_bbox.lly() + _m_align_y->getPitch(), w, w,
 		      dummy_netlist->psc, 0);
 
-  LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
-  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins));
-  bl->appendBlob (BLOB);
+  LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
+  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
+  bl->appendBlob (BLOB, BLOB_MERGE);
 
   bl = LayoutBlob::delBBox (bl);
 
@@ -3636,8 +3636,8 @@ LayoutBlob *ActStackLayout::computeLEFBoundary (LayoutBlob *b)
 #endif  
   
   /* add the boundary to the blob */
-  LayoutBlob *bl = new LayoutBlob (BLOB_MERGE);
-  bl->appendBlob (b);
+  LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
+  bl->appendBlob (b, BLOB_MERGE);
 
 #if 0
   bl->getBloatBBox (&llx, &lly, &urx, &ury);
@@ -3645,7 +3645,7 @@ LayoutBlob *ActStackLayout::computeLEFBoundary (LayoutBlob *b)
 	  llx,lly,urx, ury);
 #endif
   
-  bl->appendBlob (box);
+  bl->appendBlob (box, BLOB_MERGE);
 
 #if 0
   bl->getBloatBBox (&llx, &lly, &urx, &ury);

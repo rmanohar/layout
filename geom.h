@@ -229,9 +229,13 @@ class LayoutBlob;
 enum blob_type { BLOB_BASE,  /* some layout */
 		 BLOB_CELLS, /* collection of subcells */
 		 BLOB_MACRO, /* macro */
-		 BLOB_HORIZ, /* horizontal composition */
-		 BLOB_VERT,  /* vertical composition */
-		 BLOB_MERGE  /* overlay */
+		 BLOB_LIST   /* list of blobs */
+};
+
+enum blob_compose {
+  BLOB_HORIZ,			// horizontal compositioo
+  BLOB_VERT,			// vertical composition
+  BLOB_MERGE			// merge paint
 };
 
 struct blob_list {
@@ -425,7 +429,7 @@ public:
   const char *getMacroName() { return macro->getName(); }
   const char *getLEFFile() { return macro->getLEFFile(); }
 
-  void appendBlob (LayoutBlob *b, long gap = 0);
+  void appendBlob (LayoutBlob *b, blob_compose c, long gap = 0);
 
   void markRead () { readRect = true; }
   bool getRead() { return readRect; }

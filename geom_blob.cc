@@ -92,9 +92,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
     /* XXX: set edge attributes */
     break;
 
-  case BLOB_HORIZ:
-  case BLOB_VERT:
-  case BLOB_MERGE:
+  case BLOB_LIST:
     l.hd = NULL;
     l.tl = NULL;
     if (lptr) {
@@ -157,7 +155,7 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
   _abutbox.clear ();
 }
 
-void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
+void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 {
   if (t == BLOB_BASE) {
     warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
@@ -172,7 +170,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
     return;
   }
 
-  Assert (t == BLOB_HORIZ || t == BLOB_VERT || t == BLOB_MERGE, "What?");
+  Assert (t == BLOB_LIST, "What?");
 
   blob_list *bl, *prev;
   NEW (bl, blob_list);
@@ -194,10 +192,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
     _bbox = b->getBBox ();
     _bloatbbox = b->getBloatBBox ();
     _abutbox = b->getAbutBox ();
-    if (t == BLOB_HORIZ) {
+    if (c == BLOB_HORIZ) {
       bl->T.translate (gap, 0);
     }
-    else if (t == BLOB_VERT) {
+    else if (c == BLOB_VERT) {
       bl->T.translate (0, gap);
     }
     _bbox = bl->T.applyBox (_bbox);
@@ -207,7 +205,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
   else {
     // we are actually appending to the blob
     Assert (prev, "What?");
-    if (t == BLOB_HORIZ) {
+    if (c == BLOB_HORIZ) {
       long damt;
       bool valid;
       /* align! */
@@ -243,7 +241,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 	_abutbox = _abutbox ^ r;
       }
     }
-    else if (t == BLOB_VERT) {
+    else if (c == BLOB_VERT) {
       long damt;
       bool valid;
       /* align! */
@@ -278,7 +276,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 	_abutbox = _abutbox ^ r;
       }
     }
-    else if (t == BLOB_MERGE) {
+    else if (c == BLOB_MERGE) {
       _bbox = _bbox ^ b->getBBox();
       _bloatbbox = _bloatbbox ^ b->getBloatBBox();
       if (!b->getAbutBox().empty()) {
@@ -305,8 +303,7 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
     }
     break;
     
-  case BLOB_HORIZ:
-  case BLOB_VERT:
+  case BLOB_LIST:
     for (blob_list *bl = l.hd; bl; q_step (bl)) {
       TransformMat m;
       if (mat) {
@@ -314,18 +311,6 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
       }
       m.applyMat (bl->T);
       bl->b->_printRect (fp, &m);
-    }
-    break;
-
-  case BLOB_MERGE:
-    {
-      TransformMat m;
-      if (mat) {
-	m = *mat;
-      }
-      for (blob_list *bl = l.hd; bl; q_step (bl)) {
-	bl->b->_printRect (fp, &m);
-      }
     }
     break;
 
@@ -390,7 +375,7 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
       return tiles;
     }
   }
-  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+  else if (t == BLOB_LIST) {
     blob_list *bl;
     tiles = list_new ();
     
@@ -447,7 +432,7 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
       return tiles;
     }
   }
-  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+  else if (t == BLOB_LIST) {
     blob_list *bl;
     tiles = list_new ();
     
@@ -651,7 +636,7 @@ list_t *LayoutBlob::searchAllMetal (TransformMat *m)
       return tiles;
     }
   }
-  else if (t == BLOB_MERGE || t == BLOB_HORIZ || t == BLOB_VERT) {
+  else if (t == BLOB_LIST) {
     blob_list *bl;
     tiles = list_new ();
     
