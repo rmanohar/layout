@@ -24,10 +24,10 @@ MACRO mycell
     VERSION mycell
         UNPLUG
         LAYER pwell ;
-        RECT 0.600000 1.500000 15.600000 12.000000 ;
+        RECT 0.600000 1.500000 32.400000 12.000000 ;
         END
         LAYER nwell ;
-        RECT 0.600000 12.000000 15.600000 21.900000 ;
+        RECT 2.700000 12.000000 30.600000 21.900000 ;
         END
     END VERSION
 END mycell

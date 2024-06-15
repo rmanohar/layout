@@ -1220,13 +1220,26 @@ void TransformMat::mirrorTB()
   }
 }
 
+void TransformMat::mirror45()
+{
+  long tmp;
+  _swap = 1 - _swap;
+
+  _flipx = 1 - _flipx;
+  _flipy = 1 - _flipy;
+
+  tmp = _dx;
+  _dx = _dy;
+  _dy = tmp;
+}
+
 void TransformMat::translate (long dx, long dy)
 {
   _dx += dx;
   _dy += dy;
 }
 
-void TransformMat::apply (long inx, long iny, long *outx, long *outy)
+void TransformMat::apply (long inx, long iny, long *outx, long *outy) const
 {
   long z;
   if (_swap) {
@@ -1237,4 +1250,60 @@ void TransformMat::apply (long inx, long iny, long *outx, long *outy)
     *outx = (_flipx ? -inx : inx) + _dx;
     *outy = (_flipy ? -iny : iny) + _dy;
   }
+}
+
+void TransformMat::applyMat (const TransformMat &t)
+{
+  if (t._swap) {
+    mirror45();
+  }
+  if (t._flipx) {
+    mirrorLR();
+  }
+  if (t._flipy) {
+    mirrorTB();
+  }
+  _dx += t._dx;
+  _dy += t._dy;
+}
+
+Rectangle TransformMat::applyBox (const Rectangle &r) const
+{
+  long llx, lly, urx, ury;
+  Rectangle ret;
+
+  if (r.empty()) {
+    return ret;
+  }
+
+  apply (r.llx(), r.lly(), &llx, &lly);
+  apply (r.urx(), r.ury(), &urx, &ury);
+
+  if (llx > urx) {
+    long tmp = llx;
+    llx = urx;
+    urx = tmp;
+  }
+  if (lly > ury) {
+    long tmp = lly;
+    lly = ury;
+    ury = lly;
+  }
+  ret.setRect (llx, lly, urx - llx + 1, ury - lly + 1);
+  return ret;
+}
+
+void TransformMat::Print (FILE *fp) const
+{
+  fprintf (fp, "{");
+  if (_swap) {
+    fprintf (fp, " sw");
+  }
+  if (_flipx) {
+    fprintf (fp, " fx");
+  }
+  if (_flipy) {
+    fprintf (fp, " fy");
+  }
+  fprintf (fp, " dx=%ld dy=%ld }", _dx, _dy);
 }

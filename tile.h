@@ -125,7 +125,7 @@ public:
     _wy = 0;
   }
 
-  bool empty() { return (_wx == 0) && (_wy == 0); }
+  bool empty() const { return (_wx == 0) && (_wy == 0); }
 
   long llx() const { return _llx; }
   long lly() const { return _lly; }

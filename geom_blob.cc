@@ -102,8 +102,7 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       NEW (bl, blob_list);
       bl->b = new LayoutBlob (BLOB_BASE, lptr);
       bl->next = NULL;
-      bl->gap = 0;
-      bl->shift = 0;
+      bl->T.mkI();
       q_ins (l.hd, l.tl, bl);
       _bbox = bl->b->_bbox;
       _bloatbbox = bl->b->_bloatbbox;
@@ -174,31 +173,40 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
   }
 
   Assert (t == BLOB_HORIZ || t == BLOB_VERT || t == BLOB_MERGE, "What?");
-  
-  blob_list *bl;
+
+  blob_list *bl, *prev;
   NEW (bl, blob_list);
   bl->next = NULL;
   bl->b = b;
-  bl->gap = gap;
-  bl->shift = 0;
+  bl->T.mkI();
+
+  if (l.hd) {
+    prev = l.tl;
+  }
+  else {
+    prev = NULL;
+  }
+
   q_ins (l.hd, l.tl, bl);
 
   if (l.hd == l.tl) {
+    // the first blob
     _bbox = b->getBBox ();
     _bloatbbox = b->getBloatBBox ();
     _abutbox = b->getAbutBox ();
     if (t == BLOB_HORIZ) {
-      _bbox.shiftx (bl->gap);
-      _bloatbbox.shiftx (bl->gap);
-      _abutbox.shiftx (bl->gap);
+      bl->T.translate (gap, 0);
     }
     else if (t == BLOB_VERT) {
-      _bbox.shifty (bl->gap);
-      _bloatbbox.shifty (bl->gap);
-      _abutbox.shifty (bl->gap);
+      bl->T.translate (0, gap);
     }
+    _bbox = bl->T.applyBox (_bbox);
+    _bloatbbox = bl->T.applyBox (_bloatbbox);
+    _abutbox = bl->T.applyBox (_abutbox);
   }
   else {
+    // we are actually appending to the blob
+    Assert (prev, "What?");
     if (t == BLOB_HORIZ) {
       long damt;
       bool valid;
@@ -209,31 +217,29 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
-      bl->shift = damt;
+
+      int shiftamt = gap
+	+ (_bloatbbox.urx() - _bbox.llx() + 1)  /* width, including bloat */
+	+ (b->getBBox().llx() - b->getBloatBBox().llx()); /* left
+							     bloat */
+
+      TransformMat t;
+      t.translate (shiftamt, damt);
+      bl->T = t;
 
       // now we have shifted the blob; so
       Rectangle r;
 
-      r = b->getBBox();
-
-      int shiftamt = gap
-	+ (_bloatbbox.urx() - _bbox.llx() + 1)  /* width, including bloat */
-	+ (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
-
-      r.shifty (bl->shift);
-      r.shiftx (shiftamt);
+      r = bl->T.applyBox (b->getBBox());
 
       _bbox = _bbox ^ r;
 
-      r = b->getBloatBBox();
-      r.shifty (bl->shift);
-      r.shiftx (shiftamt);
+      r = bl->T.applyBox (b->getBloatBBox());
       _bloatbbox = _bloatbbox ^ r;
 
       r = b->getAbutBox();
       if (!r.empty()) {
-	r.shifty (bl->shift);
-	r.shiftx (shiftamt);
+	r = bl->T.applyBox (b->getAbutBox());
 	_abutbox = _abutbox ^ r;
       }
     }
@@ -248,29 +254,27 @@ void LayoutBlob::appendBlob (LayoutBlob *b, long gap)
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
-      bl->shift = damt;
-
-      Rectangle r;
-      r = b->getBBox();
 
       int shiftamt = gap
 	+ (_bloatbbox.ury() - _bbox.lly() + 1) /* width, including bloat */
 	+ (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bottom bloat */
 
-      r.shiftx (bl->shift);
-      r.shifty (shiftamt);
+      TransformMat t;
+      t.translate (damt, shiftamt);
+      bl->T = t;
+      
+      Rectangle r;
+
+      r = bl->T.applyBox (b->getBBox());
 
       _bbox = _bbox ^ r;
 
-      r = b->getBloatBBox ();
-      r.shiftx (bl->shift);
-      r.shifty (shiftamt);
+      r = bl->T.applyBox (b->getBloatBBox ());
       _bloatbbox = _bloatbbox ^ r;
 
       r = b->getAbutBox();
       if (!r.empty()) {
-	r.shiftx (bl->shift);
-	r.shifty (shiftamt);
+	r = bl->T.applyBox (b->getAbutBox());
 	_abutbox = _abutbox ^ r;
       }
     }
@@ -303,50 +307,13 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
     
   case BLOB_HORIZ:
   case BLOB_VERT:
-    {
+    for (blob_list *bl = l.hd; bl; q_step (bl)) {
       TransformMat m;
       if (mat) {
 	m = *mat;
       }
-#if 0    
-      long tllx, tlly;
-      m.apply (0, 0, &tllx, &tlly);
-      printf ("orig mat: (%ld,%ld)\n", tllx, tlly);
-#endif    
-      for (blob_list *bl = l.hd; bl; q_step (bl)) {
-	if (t == BLOB_HORIZ) {
-	  m.translate (bl->gap, bl->shift);
-	}
-	else {
-	  m.translate (bl->shift, bl->gap);
-	}
-#if 0      
-	m.apply (0, 0, &tllx, &tlly);
-	printf ("gap: (%ld,%ld); tmat gets you to: (%ld,%ld)\n",
-		bl->gap, bl->shift, tllx, tlly);
-	printf ("   (%ld,%ld) -> (%ld,%ld)  :: bloat: (%ld,%ld) -> (%ld,%ld)\n",
-		bl->b->llx, bl->b->lly, bl->b->urx, bl->b->ury,
-		bl->b->bloatllx, bl->b->bloatlly, bl->b->bloaturx, bl->b->bloatury);
-#endif      
-	bl->b->_printRect (fp, &m);
-	if (t == BLOB_HORIZ) {
-	  if (bl->next) {
-	    int shiftamt = (bl->b->getBloatBBox().urx() -
-			    bl->b->getBBox().llx() + 1)
-	      + (bl->next->b->getBBox().llx() - bl->next->b->getBloatBBox().llx());
-	    m.translate (shiftamt, 0);
-	  }
-	}
-	else {
-	  if (bl->next) {
-	    int shiftamt = (bl->b->getBloatBBox().ury() -
-			    bl->b->getBBox().lly() + 1)
-	      + (bl->next->b->getBBox().lly() -
-		 bl->next->b->getBloatBBox().lly());
-	    m.translate (0, shiftamt);
-	  }
-	}
-      }
+      m.applyMat (bl->T);
+      bl->b->_printRect (fp, &m);
     }
     break;
 
@@ -428,18 +395,13 @@ list_t *LayoutBlob::search (void *net, TransformMat *m)
     tiles = list_new ();
     
     for (bl = l.hd; bl; q_step (bl)) {
-      if (t == BLOB_MERGE) {
-	/* no change to tmat */
-      }
-      else if (t == BLOB_HORIZ) {
-	tmat.translate (bl->gap, bl->shift);
-      }
-      else if (t == BLOB_VERT) {
-	tmat.translate (bl->shift, bl->gap);
+      if (m) {
+	tmat = *m;
       }
       else {
-	fatal_error ("What is this?");
+	tmat.mkI();
       }
+      tmat.applyMat (bl->T);
       list_t *tmp = bl->b->search (net, &tmat);
       list_concat (tiles, tmp);
       list_free (tmp);
@@ -490,18 +452,13 @@ list_t *LayoutBlob::search (int type, TransformMat *m)
     tiles = list_new ();
     
     for (bl = l.hd; bl; q_step (bl)) {
-      if (t == BLOB_MERGE) {
-	/* no change to tmat */
-      }
-      else if (t == BLOB_HORIZ) {
-	tmat.translate (bl->gap, bl->shift);
-      }
-      else if (t == BLOB_VERT) {
-	tmat.translate (bl->shift, bl->gap);
+      if (m) {
+	tmat = *m;
       }
       else {
-	fatal_error ("What is this?");
+	tmat.mkI();
       }
+      tmat.applyMat (bl->T);
       list_t *tmp = bl->b->search (type, &tmat);
       list_concat (tiles, tmp);
       list_free (tmp);
@@ -699,18 +656,13 @@ list_t *LayoutBlob::searchAllMetal (TransformMat *m)
     tiles = list_new ();
     
     for (bl = l.hd; bl; q_step (bl)) {
-      if (t == BLOB_MERGE) {
-	/* no change to tmat */
-      }
-      else if (t == BLOB_HORIZ) {
-	tmat.translate (bl->gap, bl->shift);
-      }
-      else if (t == BLOB_VERT) {
-	tmat.translate (bl->shift, bl->gap);
+      if (m) {
+	tmat = *m;
       }
       else {
-	fatal_error ("What is this?");
+	tmat.mkI();
       }
+      tmat.applyMat (bl->T);
       list_t *tmp = bl->b->searchAllMetal (&tmat);
       list_concat (tiles, tmp);
       list_free (tmp);

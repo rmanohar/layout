@@ -45,8 +45,15 @@ public:
   void translate (long dx, long dy);
   void mirrorLR ();
   void mirrorTB ();
+  void mirror45 ();
 
-  void apply (long inx, long iny, long *outx, long *outy);
+  void apply (long inx, long iny, long *outx, long *outy) const;
+
+  Rectangle applyBox (const Rectangle &r) const;
+
+  void applyMat (const TransformMat &t);
+
+  void Print (FILE *fp) const;
 };
 
 
@@ -229,8 +236,12 @@ enum blob_type { BLOB_BASE,  /* some layout */
 
 struct blob_list {
   LayoutBlob *b;
-  long gap;
-  long shift;			// shift in the other direction
+  
+  TransformMat T;		// transformation matrix to bring this
+				// blob into the coordinate system of
+				// the first blob and the bounding
+				// box/etc.
+  
   struct blob_list *next;
 };
 
@@ -426,8 +437,8 @@ public:
    *
    * @param llxp, llyp, urxp, uryp are used to return the boundary.
    */
-  Rectangle getBBox () { return _bbox; }
-  Rectangle getBloatBBox () { return _bloatbbox; }
+  Rectangle getBBox () const { return _bbox; }
+  Rectangle getBloatBBox () const { return _bloatbbox; }
 
   /**
    * Set bounding box: only applies to BLOB_BASE with no layout 
