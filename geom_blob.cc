@@ -203,6 +203,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
     _abutbox = bl->T.applyBox (_abutbox);
   }
   else {
+    int do_merge_attrib = 0;
+    Rectangle old_box;
+    long merge_x, merge_y;
+    
     // we are actually appending to the blob
     Assert (prev, "What?");
     if (c == BLOB_HORIZ) {
@@ -244,51 +248,14 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 
       r = b->getAbutBox();
       if (!r.empty() && !_abutbox.empty()) {
-	Rectangle old;
+	old_box = _abutbox;
+	do_merge_attrib = 1;
+
+	merge_x = shiftamt;
+	merge_y = damt;
+	
 	r = bl->T.applyBox (b->getAbutBox());
-	old = _abutbox;
 	_abutbox = _abutbox ^ r;
-	// XXX: update edge attributes!
-	if (r.llx() == _abutbox.llx()) {
-	  if (old.llx() == r.llx()) {
-	    // merge!
-	    _le.mergeleft (bl->b->getLeftAlign(), damt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setleft (bl->b->getLeftAlign(), damt);
-	  }
-	}
-	if (r.urx() == _abutbox.urx()) {
-	  if (old.urx() == r.urx()) {
-	    // merge!
-	    _le.mergeright (bl->b->getRightAlign(), damt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setright (bl->b->getRightAlign(), damt);
-	  }
-	}
-	if (r.lly() == _abutbox.lly()) {
-	  if (old.lly() == r.lly()) {
-	    // merge!
-	    _le.mergebot (bl->b->getBotAlign(), shiftamt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setbot (bl->b->getBotAlign(), shiftamt);
-	  }
-	}
-	if (r.ury() == _abutbox.ury()) {
-	  if (old.ury() == r.ury()) {
-	    // merge!
-	    _le.mergetop (bl->b->getTopAlign(), shiftamt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.settop (bl->b->getTopAlign(), shiftamt);
-	  }
-	}
       }
       else {
 	_abutbox.clear();
@@ -334,50 +301,12 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 
       r = b->getAbutBox();
       if (!r.empty() && !_abutbox.empty()) {
-	Rectangle old;
+	old_box = _abutbox;
+	do_merge_attrib = 1;
 	r = bl->T.applyBox (b->getAbutBox());
-	old = _abutbox;
 	_abutbox = _abutbox ^ r;
-	if (r.llx() == _abutbox.llx()) {
-	  if (old.llx() == r.llx()) {
-	    // merge!
-	    _le.mergeleft (bl->b->getLeftAlign(), shiftamt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setleft (bl->b->getLeftAlign(), shiftamt);
-	  }
-	}
-	if (r.urx() == _abutbox.urx()) {
-	  if (old.urx() == r.urx()) {
-	    // merge!
-	    _le.mergeright (bl->b->getRightAlign(), shiftamt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setright (bl->b->getRightAlign(), shiftamt);
-	  }
-	}
-	if (r.lly() == _abutbox.lly()) {
-	  if (old.lly() == r.lly()) {
-	    // merge!
-	    _le.mergebot (bl->b->getBotAlign(), damt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.setbot (bl->b->getBotAlign(), damt);
-	  }
-	}
-	if (r.ury() == _abutbox.ury()) {
-	  if (old.ury() == r.ury()) {
-	    // merge!
-	    _le.mergetop (bl->b->getTopAlign(), damt);
-	  }
-	  else {
-	    // shift left aligh by damt
-	    _le.settop (bl->b->getTopAlign(), damt);
-	  }
-	}
+	merge_x = damt;
+	merge_y = shiftamt;
       }
       else {
 	_abutbox.clear();
@@ -388,11 +317,60 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       _bbox = _bbox ^ b->getBBox();
       _bloatbbox = _bloatbbox ^ b->getBloatBBox();
       if (!b->getAbutBox().empty() && !_abutbox.empty()) {
+	old_box = _abutbox;
 	_abutbox = _abutbox ^ b->getAbutBox();
+	do_merge_attrib = 1;
+	merge_x = 0;
+	merge_y = 0;
       }
     }
     else {
       fatal_error ("What?");
+    }
+
+    /* now merge attributes if we used abutment */
+    if (do_merge_attrib) {
+      Rectangle r = b->getAbutBox();
+      if (r.llx() == _abutbox.llx()) {
+	if (old_box.llx() == r.llx()) {
+	  // merge!
+	  _le.mergeleft (bl->b->getLeftAlign(), merge_y);
+	}
+	else {
+	  // shift left aligh by damt
+	  _le.setleft (bl->b->getLeftAlign(), merge_y);
+	}
+      }
+      if (r.urx() == _abutbox.urx()) {
+	if (old_box.urx() == r.urx()) {
+	  // merge!
+	  _le.mergeright (bl->b->getRightAlign(), merge_y);
+	}
+	else {
+	  // shift left aligh by damt
+	  _le.setright (bl->b->getRightAlign(), merge_y);
+	}
+      }
+      if (r.lly() == _abutbox.lly()) {
+	if (old_box.lly() == r.lly()) {
+	  // merge!
+	  _le.mergebot (bl->b->getBotAlign(), merge_x);
+	}
+	else {
+	  // shift left aligh by damt
+	  _le.setbot (bl->b->getBotAlign(), merge_x);
+	}
+      }
+      if (r.ury() == _abutbox.ury()) {
+	if (old_box.ury() == r.ury()) {
+	  // merge!
+	  _le.mergetop (bl->b->getTopAlign(), merge_x);
+	}
+	else {
+	  // shift left aligh by damt
+	  _le.settop (bl->b->getTopAlign(), merge_x);
+	}
+      }
     }
   }
 #if 0
