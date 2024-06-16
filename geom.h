@@ -132,130 +132,6 @@ protected:
   friend class Layout;
 };
 
-
-class Layout {
-public:
-  static bool _initdone;
-  static void Init();
-  static double getLeakAdjust () { return _leak_adjust; }
-  
-  /* 
-     The base layer is special as this is where the transistors are
-     drawn. It includes poly, fets, diffusion, and virtual diffusion.
-  */
-  Layout (netlist_t *);
-  ~Layout();
-
-  int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy, void *net);
-  int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
-  int DrawWellDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
-  int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
-  int DrawDiffBBox (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
-
-  /* 0 = metal1, etc. */
-  int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
-  
-  int DrawMetalPin (int num, long llx, long lly,
-		    unsigned long wx, unsigned long wy,
-		    void *net, int dir); /* dir 0 = input, 1 = output */
-
-  /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
-  int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);
-
-  Layer *getLayerPoly () { return base; }
-  Layer *getLayerDiff () { return base; }
-  Layer *getLayerWell () { return base; }
-  Layer *getLayerFet ()  { return base; }
-  Layer *getLayerMetal (int n) { return metals[n]; }
-
-
-  void markPins ();
-  
-
-  PolyMat *getPoly ();
-  FetMat *getFet (int type, int flavor = 0); // type == EDGE_NFET or EDGE_PFET
-  DiffMat *getDiff (int type, int flavor = 0);
-  WellMat *getWell (int type, int flavor = 0);
-  // NOTE: WELL TYPE is NOT THE TYPE OF THE WELL MATERIAL, BUT THE TYPE OF
-  // THE FET THAT NEEDS THE WELL.
-
-  void getBBox (long *llx, long *lly, long *urx, long *ury);
-  void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
-
-  void PrintRect (FILE *fp, TransformMat *t = NULL);
-  void ReadRect (const char *file, int raw_mode = 0);
-  void ReadRect (Process *p, int raw_mode = 0);
-
-  list_t *search (void *net);
-  list_t *search (int attr);
-  list_t *searchAllMetal ();
-  
-  void propagateAllNets();
-
-  bool readRectangles() { return _readrect; }
-
-  void flushBBox() { _rllx = 0; _rlly = 0; _rurx = -1; _rury = -1; }
-
-  Rectangle getAbutBox() { return _abutbox; }
-
-  double leak_adjust() {
-    if (!N->leak_correct) { return 0.0; }
-    else { return _leak_adjust; }
-  }
-
-  node_t *getVdd() { return N->Vdd; }
-  node_t *getGND() { return N->GND; }
-
-private:
-  bool _readrect;
-  long _rllx, _rlly, _rurx, _rury;
-  Rectangle _abutbox;
-  Layer *base;
-  Layer **metals;
-  int nflavors;
-  int nmetals;
-  netlist_t *N;
-  struct Hashtable *lmap;	// map from layer string to base layer
-				// name
-  
-  path_info_t *_rect_inpath;	// input path for rectangles, if any
-
-  static double _leak_adjust;
-};
-
-class LayerSubcell;
-class LayoutBlob;
-
-enum blob_type { BLOB_BASE,  /* some layout */
-		 BLOB_CELLS, /* collection of subcells */
-		 BLOB_MACRO, /* macro */
-		 BLOB_LIST   /* list of blobs */
-};
-
-enum blob_compose {
-  BLOB_HORIZ,			// horizontal compositioo
-  BLOB_VERT,			// vertical composition
-  BLOB_MERGE			// merge paint
-};
-
-struct blob_list {
-  LayoutBlob *b;
-  
-  TransformMat T;		// transformation matrix to bring this
-				// blob into the coordinate system of
-				// the first blob and the bounding
-				// box/etc.
-  
-  struct blob_list *next;
-};
-
-struct tile_listentry {
-  TransformMat m;  /**< the coordinate transformation matrix */
-  list_t *tiles;   /**< a list alternating between Layer pointer and a
-		      list of tiles  */
-};
-
-
 /*
  * These are used as alignment markers. They can be used for an umber
  * of different purposes, including multi-deck gridded cells.
@@ -271,21 +147,6 @@ public:
 				// the bottom left corner of the
 				// actual layout bounding box is (0,0).
     struct attrib_list *next;
-
-
-    attrib_list *dup(long adj = 0) {
-      attrib_list *x = new attrib_list;
-      x->offset = offset + adj;
-      x->name = Strdup (name);
-      if (next) {
-	x->next = next->dup(adj);
-      }
-      else {
-	x->next = NULL;
-      }
-      return x;
-    }
-    
   };
 private:
 
@@ -449,6 +310,139 @@ public:
   void mergebot(attrib_list *x, long adj = 0) {
     merge (&_bot, dup (x, adj));
   }
+};
+
+
+
+class Layout {
+public:
+  static bool _initdone;
+  static void Init();
+  static double getLeakAdjust () { return _leak_adjust; }
+
+  /*
+     The base layer is special as this is where the transistors are
+     drawn. It includes poly, fets, diffusion, and virtual diffusion.
+  */
+  Layout (netlist_t *);
+  ~Layout();
+
+  int DrawPoly (long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawWellDiff (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawFet (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+  int DrawDiffBBox (int flavor, int type, long llx, long lly, unsigned long wx, unsigned long wy);
+
+  /* 0 = metal1, etc. */
+  int DrawMetal (int num, long llx, long lly, unsigned long wx, unsigned long wy, void *net);
+
+  int DrawMetalPin (int num, long llx, long lly,
+		    unsigned long wx, unsigned long wy,
+		    void *net, int dir); /* dir 0 = input, 1 = output */
+
+  /* 0 = base to metal1, 1 = metal1 to metal2, etc. */
+  int DrawVia (int num, long llx, long lly, unsigned long wx, unsigned long wy);
+
+  Layer *getLayerPoly () { return base; }
+  Layer *getLayerDiff () { return base; }
+  Layer *getLayerWell () { return base; }
+  Layer *getLayerFet ()  { return base; }
+  Layer *getLayerMetal (int n) { return metals[n]; }
+
+
+  void markPins ();
+
+  
+  PolyMat *getPoly ();
+  FetMat *getFet (int type, int flavor = 0); // type == EDGE_NFET or EDGE_PFET
+  DiffMat *getDiff (int type, int flavor = 0);
+  WellMat *getWell (int type, int flavor = 0);
+  // NOTE: WELL TYPE is NOT THE TYPE OF THE WELL MATERIAL, BUT THE TYPE OF
+  // THE FET THAT NEEDS THE WELL.
+
+  void getBBox (long *llx, long *lly, long *urx, long *ury);
+  void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
+
+  void PrintRect (FILE *fp, TransformMat *t = NULL);
+  void ReadRect (const char *file, int raw_mode = 0);
+  void ReadRect (Process *p, int raw_mode = 0);
+
+  list_t *search (void *net);
+  list_t *search (int attr);
+  list_t *searchAllMetal ();
+
+  void propagateAllNets();
+
+  bool readRectangles() { return _readrect; }
+
+  void flushBBox() { _rbox.clear(); }
+
+  Rectangle &getAbutBox() { return _abutbox; }
+  LayoutEdgeAttrib &getEdgeAttrib() { return _le; }
+
+  double leak_adjust() {
+    if (!N->leak_correct) { return 0.0; }
+    else { return _leak_adjust; }
+  }
+
+  node_t *getVdd() { return N->Vdd; }
+  node_t *getGND() { return N->GND; }
+
+private:
+  bool _readrect;
+
+  Rectangle _rbox;		// this is from the .rect file, and
+				// overrides any ocmputed box and
+				// bounding box. If set, it is used as
+				// both the box and bbox for the
+				// layout
+
+  Rectangle _abutbox;		// abutment information
+  LayoutEdgeAttrib _le;		// alignment information
+
+  Layer *base;
+  Layer **metals;
+  int nflavors;
+  int nmetals;
+  netlist_t *N;
+  struct Hashtable *lmap;	// map from layer string to base layer
+				// name
+
+  path_info_t *_rect_inpath;	// input path for rectangles, if any
+
+  static double _leak_adjust;
+};
+
+class LayerSubcell;
+class LayoutBlob;
+
+enum blob_type { BLOB_BASE,  /* some layout */
+		 BLOB_CELLS, /* collection of subcells */
+		 BLOB_MACRO, /* macro */
+		 BLOB_LIST   /* list of blobs */
+};
+
+enum blob_compose {
+  BLOB_HORIZ,			// horizontal compositioo
+  BLOB_VERT,			// vertical composition
+  BLOB_MERGE			// merge paint
+};
+
+struct blob_list {
+  LayoutBlob *b;
+
+  TransformMat T;		// transformation matrix to bring this
+				// blob into the coordinate system of
+				// the first blob and the bounding
+				// box/etc.
+
+  struct blob_list *next;
+};
+
+struct tile_listentry {
+  TransformMat m;  /**< the coordinate transformation matrix */
+  list_t *tiles;   /**< a list alternating between Layer pointer and a
+		      list of tiles  */
 };
 
 

@@ -428,6 +428,10 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
   for (int i=0; i < nmetals; i++) {
     metals[i]->PrintRect (fp, t);
   }
+  if (!_rbox.empty()) {
+    fprintf (fp, "sbox %ld %ld %ld %ld\n", _rbox.llx(),
+	     _rbox.lly(), _rbox.urx()+1, _rbox.ury()+1);
+  }
 }
 
 void Layout::markPins ()
@@ -513,10 +517,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
     p = NULL;
   }
   _readrect = true;
-  _rllx = 0;
-  _rlly = 0;
-  _rurx = -1;
-  _rury  = -1;
+  _rbox.clear();
   fp = fopen (fname, "r");
   if (!fp) {
     fatal_error ("Could not open `%s' rect file", fname);
@@ -549,24 +550,17 @@ void Layout::ReadRect (const char *fname, int raw_mode)
     }
     else if (strncmp (buf+offset, "sbox ", 5) == 0) {
       // this overrides the bbox definition, so keep it
-      sscanf (buf+5, "%ld %ld %ld %ld", &_rllx, &_rlly, &_rurx, &_rury);
-      _rurx--;
-      _rury--;
+      long rlx, rly, rux, ruy;
+      sscanf (buf+5, "%ld %ld %ld %ld", &rlx, &rly, &rux, &ruy);
+      _rbox.setRect (rlx, rly, rux - rlx, ruy - rly);
       continue;
-    }
-    else if (strncmp (buf+offset, "abox ", 5) == 0) {
-      long lx, ly, ux, uy;
-      sscanf (buf+5, "%ld %ld %ld %ld", &lx, &ly, &ux, &uy);
-      ux--;
-      uy--;
-      _abutbox.setRectCoords (lx, ly, ux, uy);
     }
     else if (strncmp (buf+offset, "cell ", 5) == 0) {
       Assert (0, "FIXME: add support for subcells!");
       /* celltype id swap? flipx? flipy? dx dy llx lly urx ury */
     }
     else {
-      fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, abox, or cell", buf);
+      fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, or cell", buf);
     }
 
     if (strncmp (buf+offset, "# ", 2) == 0) {
@@ -585,14 +579,6 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 
     node_t *n = NULL;
 
-    if (net && (raw_mode == 0)) {
-      n = ActNetlistPass::string_to_node (N, net);
-      if (!n) {
-	warning ("Could not find signal `%s' in netlist!", net);
-      }
-      //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
-    }
-
     char *material;
     material = buf+offset;
 
@@ -602,6 +588,15 @@ void Layout::ReadRect (const char *fname, int raw_mode)
     Assert (buf[offset], "Long line");
     buf[offset] = '\0';
     offset++;
+
+    if (net && (raw_mode == 0) && (strcmp (material, "$align") != 0)) {
+      n = ActNetlistPass::string_to_node (N, net);
+      if (!n) {
+	warning ("Could not find signal `%s' in netlist!", net);
+      }
+      //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
+    }
+
 
     long rllx, rlly, rurx, rury;
     sscanf (buf+offset, "%ld %ld %ld %ld", &rllx, &rlly, &rurx, &rury);
@@ -643,6 +638,40 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 #endif
       /*--- draw poly ---*/
       DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n);
+    }
+    else if (strcmp (material, "$align") == 0) {
+      LayoutEdgeAttrib::attrib_list *l;
+      NEW (l, LayoutEdgeAttrib::attrib_list);
+      l->next = NULL;
+      /* alignment information! */
+      if (!net) {
+	/* abutbox */
+	_abutbox.setRect (rllx, rlly, rurx - rllx, rury - rlly);
+      }
+      else if (strncmp (net, "$l:", 3) == 0) {
+	l->name = Strdup (net+3);
+	l->offset = rlly; // left alignment: lower left corner y coord
+	_le.mergeleft (l);
+      }
+      else if (strncmp (net, "$r:", 3) == 0) {
+	l->name = Strdup (net+3);
+	l->offset = rlly; // right alignment: lower left corner y coord
+	_le.mergeright (l);
+      }
+      else if (strncmp (net, "$t:", 3) == 0) {
+	l->name = Strdup (net+3);
+	l->offset = rllx; // top alignment: lower left corner x coord
+	_le.mergetop (l);
+      }
+      else if (strncmp (net, "$b:", 3) == 0) {
+	l->name = Strdup (net+3);
+	l->offset = rllx; // bot alignment: lower left corner x coord
+	_le.mergebot (l);
+      }
+      else {
+	warning ("Invalid alignment layer directive: `%s'; skipped", net);
+      }
+      FREE (l); // don't free name: that gets used by the merge
     }
     else {
       struct layermap *lm;
@@ -704,12 +733,12 @@ void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
   long a, b, c, d;
   int set;
 
-  if (_readrect && (_rllx <= _rurx) && (_rlly <= _rury)) {
+  if (_readrect && !_rbox.empty()) {
     /* override, use bbox from .rect file */
-    *llx = _rllx;
-    *lly = _rlly;
-    *urx = _rurx;
-    *ury = _rury;
+    *llx = _rbox.llx();
+    *lly = _rbox.lly();
+    *urx = _rbox.urx();
+    *ury = _rbox.ury();
     return;
   }
 
@@ -753,15 +782,14 @@ void Layout::getBloatBBox (long *llx, long *lly, long *urx, long *ury)
   long a, b, c, d;
   int set;
 
-  if (_readrect && (_rllx <= _rurx) && (_rlly <= _rury)) {
+  if (_readrect && !_rbox.empty()) {
     /* override, use bbox from .rect file */
-    *llx = _rllx;
-    *lly = _rlly;
-    *urx = _rurx;
-    *ury = _rury;
+    *llx = _rbox.llx();
+    *lly = _rbox.lly();
+    *urx = _rbox.urx();
+    *ury = _rbox.ury();
     return;
   }
-  
 
   set = 0;
   base->getBloatBBox (&a, &b, &c, &d);

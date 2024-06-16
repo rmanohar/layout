@@ -48,13 +48,15 @@ LayoutBlob::LayoutBlob (ExternMacro *m)
     macro->getBBox (&llx, &lly, &urx, &ury);
     _bbox.setRectCoords (llx, lly, urx, ury);
     _bloatbbox = _bbox;
-    _abutbox = _bbox;
+    /* Should we have some way to get abutment and alignment with
+       external macros? Probably not...
+    */
   }
   else {
     _bbox.clear ();
     _bloatbbox.clear ();
-    _abutbox.clear ();
   }    
+  _abutbox.clear ();
 }
 
 LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
@@ -83,6 +85,8 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
       lptr->getBloatBBox (&llx, &lly, &urx, &ury);
       _bloatbbox.setRectCoords (llx, lly, urx, ury);
       _abutbox = lptr->getAbutBox ();
+      _le.clear();
+      _le = lptr->getEdgeAttrib ().copy();
     }
     else {
       _bbox.clear ();
