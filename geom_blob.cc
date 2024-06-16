@@ -209,17 +209,24 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       long damt;
       bool valid;
       /* align! */
-      valid = LayoutEdgeAttrib::align (l.tl->b->getRightAlign(),
-				       b->getLeftAlign(), &damt);
+      valid = LayoutEdgeAttrib::align (_le.right(), b->getLeftAlign(), &damt);
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
 
-      int shiftamt = gap
-	+ (_bloatbbox.urx() - _bbox.llx() + 1)  /* width, including bloat */
-	+ (b->getBBox().llx() - b->getBloatBBox().llx()); /* left
-							     bloat */
+      int shiftamt = gap;
+
+      if (valid /* acceptable alignment exists */
+	  && !bl->b->getAbutBox().empty() /* there is an abutment box */
+	  && !_abutbox.empty() /* there is an abutment box */) {
+	shiftamt += (_abutbox.urx() - _abutbox.llx() + 1);
+      }
+      else {
+	shiftamt += (_bloatbbox.urx() - _bbox.llx() + 1)
+	  /* width, including bloat */
+	  + (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
+      }
 
       TransformMat t;
       t.translate (shiftamt, damt);
@@ -236,27 +243,82 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       _bloatbbox = _bloatbbox ^ r;
 
       r = b->getAbutBox();
-      if (!r.empty()) {
+      if (!r.empty() && !_abutbox.empty()) {
+	Rectangle old;
 	r = bl->T.applyBox (b->getAbutBox());
+	old = _abutbox;
 	_abutbox = _abutbox ^ r;
+	// XXX: update edge attributes!
+	if (r.llx() == _abutbox.llx()) {
+	  if (old.llx() == r.llx()) {
+	    // merge!
+	    _le.mergeleft (bl->b->getLeftAlign(), damt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setleft (bl->b->getLeftAlign(), damt);
+	  }
+	}
+	if (r.urx() == _abutbox.urx()) {
+	  if (old.urx() == r.urx()) {
+	    // merge!
+	    _le.mergeright (bl->b->getRightAlign(), damt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setright (bl->b->getRightAlign(), damt);
+	  }
+	}
+	if (r.lly() == _abutbox.lly()) {
+	  if (old.lly() == r.lly()) {
+	    // merge!
+	    _le.mergebot (bl->b->getBotAlign(), shiftamt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setbot (bl->b->getBotAlign(), shiftamt);
+	  }
+	}
+	if (r.ury() == _abutbox.ury()) {
+	  if (old.ury() == r.ury()) {
+	    // merge!
+	    _le.mergetop (bl->b->getTopAlign(), shiftamt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.settop (bl->b->getTopAlign(), shiftamt);
+	  }
+	}
+      }
+      else {
+	_abutbox.clear();
+	_le.clear ();
       }
     }
     else if (c == BLOB_VERT) {
       long damt;
       bool valid;
       /* align! */
-      valid = LayoutEdgeAttrib::align (l.tl->b->getTopAlign(),
-				       b->getBotAlign(), &damt);
+      valid = LayoutEdgeAttrib::align (_le.top(), b->getBotAlign(), &damt);
 
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
 
-      int shiftamt = gap
-	+ (_bloatbbox.ury() - _bbox.lly() + 1) /* width, including bloat */
-	+ (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bottom bloat */
+      int shiftamt = gap;
 
+      if (valid /* acceptable alignment exists */
+	  && !bl->b->getAbutBox().empty() /* there is an abutment box */
+	  && !_abutbox.empty() /* there is an abutment box */) {
+	shiftamt += (_abutbox.ury() - _abutbox.lly() + 1);
+      }
+      else {
+	shiftamt += (_bloatbbox.ury() - _bbox.lly() + 1)
+	  /* width, including bloat */
+	  + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
+      }
+      
       TransformMat t;
       t.translate (damt, shiftamt);
       bl->T = t;
@@ -271,15 +333,61 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       _bloatbbox = _bloatbbox ^ r;
 
       r = b->getAbutBox();
-      if (!r.empty()) {
+      if (!r.empty() && !_abutbox.empty()) {
+	Rectangle old;
 	r = bl->T.applyBox (b->getAbutBox());
+	old = _abutbox;
 	_abutbox = _abutbox ^ r;
+	if (r.llx() == _abutbox.llx()) {
+	  if (old.llx() == r.llx()) {
+	    // merge!
+	    _le.mergeleft (bl->b->getLeftAlign(), shiftamt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setleft (bl->b->getLeftAlign(), shiftamt);
+	  }
+	}
+	if (r.urx() == _abutbox.urx()) {
+	  if (old.urx() == r.urx()) {
+	    // merge!
+	    _le.mergeright (bl->b->getRightAlign(), shiftamt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setright (bl->b->getRightAlign(), shiftamt);
+	  }
+	}
+	if (r.lly() == _abutbox.lly()) {
+	  if (old.lly() == r.lly()) {
+	    // merge!
+	    _le.mergebot (bl->b->getBotAlign(), damt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.setbot (bl->b->getBotAlign(), damt);
+	  }
+	}
+	if (r.ury() == _abutbox.ury()) {
+	  if (old.ury() == r.ury()) {
+	    // merge!
+	    _le.mergetop (bl->b->getTopAlign(), damt);
+	  }
+	  else {
+	    // shift left aligh by damt
+	    _le.settop (bl->b->getTopAlign(), damt);
+	  }
+	}
+      }
+      else {
+	_abutbox.clear();
+	_le.clear();
       }
     }
     else if (c == BLOB_MERGE) {
       _bbox = _bbox ^ b->getBBox();
       _bloatbbox = _bloatbbox ^ b->getBloatBBox();
-      if (!b->getAbutBox().empty()) {
+      if (!b->getAbutBox().empty() && !_abutbox.empty()) {
 	_abutbox = _abutbox ^ b->getAbutBox();
       }
     }

@@ -271,6 +271,21 @@ public:
 				// the bottom left corner of the
 				// actual layout bounding box is (0,0).
     struct attrib_list *next;
+
+
+    attrib_list *dup(long adj = 0) {
+      attrib_list *x = new attrib_list;
+      x->offset = offset + adj;
+      x->name = Strdup (name);
+      if (next) {
+	x->next = next->dup(adj);
+      }
+      else {
+	x->next = NULL;
+      }
+      return x;
+    }
+    
   };
 private:
 
@@ -279,12 +294,12 @@ private:
   */
   attrib_list *_left, *_right, *_top, *_bot;
 
-  attrib_list *dup (attrib_list *l) {
+  attrib_list *dup (attrib_list *l, long adj = 0) {
     if (!l) return NULL;
     attrib_list *ret, *cur;
     NEW (ret, attrib_list);
     ret->name = l->name;
-    ret->offset = l->offset;
+    ret->offset = l->offset + adj;
     ret->next = NULL;
     cur = ret;
     while (l->next) {
@@ -292,10 +307,21 @@ private:
       cur = cur->next;
       l = l->next;
       cur->name = l->name;
-      cur->offset = l->offset;
+      cur->offset = l->offset + adj;
       cur->next = NULL;
     }
     return ret;
+  }
+
+  /* merge y into x */
+  void merge (attrib_list **x, attrib_list *y) {
+    attrib_list *tmp;
+    while (y) {
+      tmp = y->next;
+      y->next = *x;
+      *x = y;
+      y = tmp;
+    }
   }
 
   void freelist (attrib_list *l) {
@@ -328,15 +354,28 @@ public:
     return tmp;
   }
 
-  void clear () {
+  void clearleft() {
     freelist (_left);
-    freelist (_right);
-    freelist (_top);
-    freelist (_bot);
     _left = NULL;
+  }
+  void clearright() {
+    freelist (_right);
     _right = NULL;
+  }
+  void cleartop() {
+    freelist (_top);
     _top = NULL;
+  }
+  void clearbot() {
+    freelist (_bot);
     _bot = NULL;
+  }
+
+  void clear () {
+    clearleft();
+    clearright();
+    cleartop();
+    clearbot();
   }
 
   attrib_list *left() { return _left; }
@@ -379,6 +418,36 @@ public:
     if (l1 || l2) return false;
     *amt = shiftamt;
     return true;
+  }
+
+  void setleft(attrib_list *x, long adj = 0) {
+    clearleft();
+    _left = dup (x, adj);
+  }
+  void setright(attrib_list *x, long adj = 0) {
+    clearright();
+    _right = dup(x, adj);
+  }
+  void settop(attrib_list *x, long adj = 0) {
+    cleartop();
+    _top = dup (x, adj);
+  }
+  void setbot(attrib_list *x, long adj = 0) {
+    clearbot();
+    _bot = dup (x, adj);
+  }
+
+  void mergeleft(attrib_list *x, long adj = 0) {
+    merge (&_left, dup (x, adj));
+  }
+  void mergeright(attrib_list *x, long adj = 0) {
+    merge (&_right, dup (x, adj));
+  }
+  void mergetop(attrib_list *x, long adj = 0) {
+    merge (&_top, dup (x, adj));
+  }
+  void mergebot(attrib_list *x, long adj = 0) {
+    merge (&_bot, dup (x, adj));
   }
 };
 
