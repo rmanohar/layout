@@ -432,6 +432,39 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
     fprintf (fp, "sbox %ld %ld %ld %ld\n", _rbox.llx(),
 	     _rbox.lly(), _rbox.urx()+1, _rbox.ury()+1);
   }
+  if (!_abutbox.empty()) {
+    fprintf (fp, "rect # $align %ld %ld %ld %ld\n", _abutbox.llx(),
+	     _abutbox.lly(), _abutbox.urx()+1, _abutbox.ury()+1);
+  }
+  LayoutEdgeAttrib::attrib_list *l;
+  
+  long x, y;
+
+  if (_abutbox.empty()) {
+    x = 0;
+    y = 0;
+  }
+  else {
+    x = _abutbox.llx();
+    y = _abutbox.lly();
+  }
+  
+  for (l = _le.left(); l; l = l->next) {
+    fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+	     l->name, x, l->offset, x, l->offset);
+  }
+  for (l = _le.right(); l; l = l->next) {
+    fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+	     l->name, x, l->offset, x, l->offset);
+  }
+  for (l = _le.top(); l; l = l->next) {
+    fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+	     l->name, l->offset, y, l->offset, y);
+  }
+  for (l = _le.bot(); l; l = l->next) {
+    fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+	     l->name, l->offset, y, l->offset, y);
+  }
 }
 
 void Layout::markPins ()
