@@ -72,8 +72,8 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
     warning ("LayoutBlob: create macro using a different constructor!");
     break;
 
-  case BLOB_CELLS:
-    warning ("LayoutBlob:: constructor called with BLOB_CELLS; converting to BLOB_BASE!");
+  case BLOB_CELL:
+    warning ("LayoutBlob:: constructor called with BLOB_CELL; converting to BLOB_BASE!");
     t = BLOB_BASE;
     type = BLOB_BASE;
   case BLOB_BASE:
@@ -122,19 +122,20 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
 }
 
 
-LayoutBlob::LayoutBlob (LayerSubcell *cells)
+LayoutBlob::LayoutBlob (SubcellInst *cell)
 {
-  t = BLOB_CELLS;
+  t = BLOB_CELL;
   
   readRect = false;
   count = 0;
 
-  Assert (cells, "What?");
+  Assert (cell, "What?");
 
-  subcell.l = cells;
-  _bbox = cells->getBBox ();
-  _bloatbbox = cells->getBloatBBox ();
-  _abutbox = cells->getAbutBox ();
+  subcell = cell;
+  _bbox = cell->getBBox ();
+  _bloatbbox = cell->getBloatBBox ();
+  _abutbox = cell->getAbutBox ();
+  _le = cell->getLayoutEdgeAttrib ();
 }
 
 
@@ -169,8 +170,8 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
     warning ("LayoutBlob::appendBlob() called on MACRO; error ignored!");
     return;
   }
-  if (t == BLOB_CELLS) {
-    warning ("LayoutBlob::appendBlob() called on CELLS; error ignored!");
+  if (t == BLOB_CELL) {
+    warning ("LayoutBlob::appendBlob() called on CELL; error ignored!");
     return;
   }
 
@@ -408,8 +409,14 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
     /* nothing to do, it is a macro */
     break;
 
-  case BLOB_CELLS:
-    fatal_error ("ARGH!\n");
+  case BLOB_CELL:
+    {
+      TransformMat m;
+      if (mat) {
+	m = *mat;
+      }
+      subcell->PrintRect (fp, &m);
+    }
     break;
 
   }
@@ -763,8 +770,8 @@ Rectangle LayoutBlob::getAbutBox()
       return Rectangle();
     }
     break;
-  case BLOB_CELLS:
-    return subcell.l->getAbutBox();
+  case BLOB_CELL:
+    return subcell->getAbutBox();
   default:
     return Rectangle();
   }

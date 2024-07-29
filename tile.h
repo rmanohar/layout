@@ -205,6 +205,8 @@ public:
   // max operator
   Rectangle operator^(const Rectangle& r) {
     Rectangle t = *this;
+    if (r.empty()) return t;
+    if (t.empty()) return r;
 
     long turx, tury;
     turx = MAX(urx(), r.urx());

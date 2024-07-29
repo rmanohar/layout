@@ -310,6 +310,26 @@ public:
   void mergebot(attrib_list *x, long adj = 0) {
     merge (&_bot, dup (x, adj));
   }
+
+  void swaplr () {
+    attrib_list *x = _left;
+    _left = _right;
+    _right = x;
+  }
+  void swaptb () {
+    attrib_list *x = _top;
+    _top = _bot;
+    _bot = x;
+  }
+
+  void swap45() {
+    attrib_list *x = _left;
+    _left = _bot;
+    _bot = x;
+    x = _right;
+    _right = _top;
+    _top = x;
+  }
 };
 
 
@@ -413,11 +433,11 @@ private:
   static double _leak_adjust;
 };
 
-class LayerSubcell;
 class LayoutBlob;
+class SubcellInst;
 
 enum blob_type { BLOB_BASE,  /* some layout */
-		 BLOB_CELLS, /* collection of subcells */
+		 BLOB_CELL,  /* subcell */
 		 BLOB_MACRO, /* macro */
 		 BLOB_LIST   /* list of blobs */
 };
@@ -459,10 +479,8 @@ private:
                                 // special layout blob that is a pure
                                 // bounding box.
     } base;
-    struct {
-      LayerSubcell *l;
-    } subcell;			// subcells
-    ExternMacro *macro;
+    SubcellInst *subcell;	// subcell
+    ExternMacro *macro;		// external macro
   };
   blob_type t;			// type field: 0 = base, 1 = horiz,
 				// 2 = vert, etc.
@@ -481,11 +499,11 @@ private:
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
-  LayoutBlob (LayerSubcell *cells);
+  LayoutBlob (SubcellInst *cell);
   LayoutBlob (ExternMacro *m);
   ~LayoutBlob ();
   
-  bool isSubcells() { return t == BLOB_CELLS ? true : false; }
+  bool isSubcell() { return t == BLOB_CELL ? true : false; }
 
   /* macros */
   bool isMacro() { return t == BLOB_MACRO ? true : false; }
@@ -546,6 +564,11 @@ public:
   Rectangle getAbutBox ();
 
   /**
+   * Get edge attributes!
+   */
+  LayoutEdgeAttrib getLayoutEdgeAttrib() { return _le; }
+
+  /**
    * Stats 
    */
   void incCount () { count++; }
@@ -558,7 +581,8 @@ public:
   LayoutEdgeAttrib::attrib_list *getRightAlign() { return _le.right(); }
   LayoutEdgeAttrib::attrib_list *getTopAlign() { return _le.top(); }
   LayoutEdgeAttrib::attrib_list *getBotAlign() { return _le.bot(); }
-  
+
+  friend class SubcellInst;
 };
 
 #endif /* __ACT_GEOM_H__ */

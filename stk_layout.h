@@ -136,6 +136,8 @@ public:
 			0 otherwise */
   path_info_t *_rect_inpath;	// input path for rectangles, if any
   const char *_rect_outdir;	// rect output directory, if any
+  const char *_rect_outinitdir; // rect output directory for initial
+				// unwired layout
 
   int _extra_tracks_top;
   int _extra_tracks_bot;

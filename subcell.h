@@ -48,6 +48,32 @@ public:
     _ny = ny;
   }
 
+  LayoutEdgeAttrib getLayoutEdgeAttrib () {
+    LayoutEdgeAttrib le = _b->getLayoutEdgeAttrib();
+
+    // apply transform matrix to see what happens to the orientation
+    // of a box!
+    long dx, dy, px, py;
+
+    _m.apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
+    _m.apply (1, 2, &px, &py);
+    px -= dx;
+    py -= dy;
+
+    if ((px < 0 ? -px : px) != 1) {
+      // x and y have been swapped
+      le.swap45 ();
+    }
+    // we just have mirrors
+    if (px < 0) {
+      le.swaplr();
+    }
+    if (py < 0) {
+      le.swaptb();
+    }
+    return le;
+  }
+
   Rectangle getBBox() {
     Rectangle r;
     if (!_b) {
@@ -100,6 +126,14 @@ public:
     }
     r.setRect (r.llx(), r.lly(), r.wx()*_nx, r.wy()*_ny);
     return r;
+  }
+
+  void PrintRect (FILE *fp, TransformMat *mat) {
+    TransformMat m;
+    if (mat) {
+      m = *mat;
+    }
+    _b->_printRect (fp, mat);
   }
 };
 

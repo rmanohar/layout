@@ -277,6 +277,18 @@ ActStackLayout::ActStackLayout (ActPass *ap)
     _rect_outdir = NULL;
   }
 
+  if (config_exists ("lefdef.rect_outinitdir")) {
+    _rect_outinitdir = config_get_string ("lefdef.rect_outinitdir");
+  }
+  else {
+    if (_rect_outdir) {
+      _rect_outinitdir = _rect_outdir;
+    }
+    else {
+      _rect_outinitdir = NULL;
+    }
+  }
+
   if (config_exists ("lefdef.rect_wells")) {
     _rect_wells = config_get_int ("lefdef.rect_wells");
     if (_rect_wells != 0 && _rect_wells != 1) {
@@ -1890,11 +1902,20 @@ void ActStackLayout::_emitwelltaprect (int flavor)
   strcat (name, ".rect");
 
   FILE *tfp;
-  if (_rect_outdir) {
+
+  const char *outdir;
+  if (b->getRead()) {
+    outdir = _rect_outdir;
+  }
+  else {
+    outdir = _rect_outinitdir;
+  }
+  
+  if (outdir) {
     char *outname;
-    int sz = strlen (name) + strlen (_rect_outdir) + 2;
+    int sz = strlen (name) + strlen (outdir) + 2;
     MALLOC (outname, char, sz);
-    snprintf (outname, sz, "%s/%s", _rect_outdir, name);
+    snprintf (outname, sz, "%s/%s", outdir, name);
     tfp = fopen (outname, "w");
     if (!tfp) {
       fatal_error ("Could not open file `%s' for writing", outname);
@@ -1978,11 +1999,20 @@ void ActStackLayout::_emitlocalRect (Process *p)
   int len = strlen (cname);
   snprintf (cname + len, 10240-len, ".rect");
 
-  if (_rect_outdir) {
+
+  const char *outdir;
+  if (blob->getRead()) {
+    outdir = _rect_outdir;
+  }
+  else {
+    outdir = _rect_outinitdir;
+  }
+
+  if (outdir) {
     char *outname;
-    int sz = strlen (cname) + strlen (_rect_outdir) + 2;
+    int sz = strlen (cname) + strlen (outdir) + 2;
     MALLOC (outname, char, sz);
-    snprintf (outname, sz, "%s/%s", _rect_outdir, cname);
+    snprintf (outname, sz, "%s/%s", outdir, cname);
     fp = fopen (outname, "w");
     if (!fp) {
       fatal_error ("Could not open file `%s' for writing", outname);
@@ -1997,9 +2027,8 @@ void ActStackLayout::_emitlocalRect (Process *p)
   }
   blob->PrintRect (fp, &mat);
 
-  
   if (_rect_wells) {
-    
+
     for (int i=0; i < Technology::T->num_devs; i++) {
       for (int j=0; j < 2; j++) {
 	long wllx, wlly, wurx, wury;
@@ -2297,6 +2326,7 @@ void ActStackLayout::runrec (int mode, UserDef *u)
     }
   }
   else if (mode == 5) {
+    /* emitDEF */
     FILE *fp;
     Process *p = dynamic_cast<Process *> (u);
     double area_mult;
