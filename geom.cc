@@ -477,7 +477,7 @@ void Layout::markPins ()
     n = ActNetlistPass::connection_to_node (N, N->bN->ports[i].c);
 #if 0
     printf ("%cpin: ", N->bN->ports[i].input ? 'i' : 'o');
-    ActNetlistPass::emit_node (N, stdout, n, 0);
+    ActNetlistPass::emit_node (N, stdout, n, NULL, NULL, 0);
     printf ("\n");
 #endif    
     for (int j=0; j < nmetals; j++) {
@@ -982,9 +982,9 @@ void Layout::propagateAllNets ()
 		      //t->getllx(), t->getlly(), k);
 		      warning ("[%s] Net propagation detected two nets are shorted.", N->bN->p->getName());
 		      fprintf (stderr, "\tnet1: ");
-		      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+		      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet(), NULL, NULL);
 		      fprintf (stderr, "; net2: ");
-		      ActNetlistPass::emit_node (N, stderr, (node_t *)neighbors[k]->getNet());
+		      ActNetlistPass::emit_node (N, stderr, (node_t *)neighbors[k]->getNet(), NULL, NULL);
 		      fprintf (stderr, "\n");
 		    }
 		  }
@@ -1064,9 +1064,9 @@ void Layout::propagateAllNets ()
 		//t->getllx(), t->getlly());
 		warning ("[%s] Net propagation detected two nets are shorted across layers.", N->bN->p->getName());
 		fprintf (stderr, "\tnet1: ");
-		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet, NULL, NULL);
 		fprintf (stderr, "; net2: ");
-		ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet());
+		ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet(), NULL, NULL);
 		fprintf (stderr, "\n");
 	      }
 	      else {
@@ -1079,9 +1079,9 @@ void Layout::propagateAllNets ()
 		//t->getllx(), t->getlly());
 		warning ("[%s] Net propagation detected two nets are shorted.", N->bN->p->getName());
 		fprintf (stderr, "\tnet1: ");
-		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+		ActNetlistPass::emit_node (N, stderr, (node_t *)propnet, NULL, NULL);
 		fprintf (stderr, "; net2: ");
-		ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+		ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet(), NULL, NULL);
 		fprintf (stderr, "\n");
 	      }
 	      else {
@@ -1092,7 +1092,7 @@ void Layout::propagateAllNets ()
 	    if (propnet) {
 #if 0	      
 	      fprintf (stderr, "[%s] propnet: ", N->bN->p->getName());
-	      ActNetlistPass::emit_node (N, stderr, (node_t *)propnet);
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)propnet, NULL, NULL);
 #endif	      
 	      if (!dn->getNet()) {
 #if 0		
@@ -1125,17 +1125,17 @@ void Layout::propagateAllNets ()
 	    fprintf (stderr, "  -> nothing to do\n");
 	    if (t->getNet()) {
 	      fprintf (stderr, "  via:");
-	      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet());
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)t->getNet(), NULL, NULL);
 	      printtile (stderr, t);
 	    }
 	    if (up->getNet()) {
 	      fprintf (stderr, " up:");
-	      ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet());
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)up->getNet(), NULL, NULL);
 	      printtile (stderr, up);
 	    }
 	    if (dn->getNet()) {
 	      fprintf (stderr, " dn:");
-	      ActNetlistPass::emit_node (N, stderr, (node_t *)dn->getNet());
+	      ActNetlistPass::emit_node (N, stderr, (node_t *)dn->getNet(), NULL, NULL);
 	      printtile (stderr, dn);
 	    }
 	    fprintf (stderr, "\n");
