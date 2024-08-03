@@ -22,6 +22,8 @@
 #ifndef __ACT_LAYOUT_ATTRIB_H__
 #define __ACT_LAYOUT_ATTRIB_H__
 
+class TransformMat;
+
 /*
  * These are used as alignment markers. They can be used for an umber
  * of different purposes, including multi-deck gridded cells.
@@ -165,6 +167,7 @@ public:
   }
 
   LayoutEdgeAttrib *Clone();
+  LayoutEdgeAttrib *Clone (TransformMat *m);
 };
 
 

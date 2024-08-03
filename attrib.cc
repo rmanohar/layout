@@ -166,3 +166,42 @@ LayoutEdgeAttrib *LayoutEdgeAttrib::Clone()
   }
   return ret;
 }
+
+
+
+LayoutEdgeAttrib *LayoutEdgeAttrib::Clone (TransformMat *m)
+{
+  LayoutEdgeAttrib *le;
+  // apply transform matrix to see what happens to the orientation
+  // of a box!
+  long dx, dy, px, py;
+
+  le = Clone ();
+
+  if (m) {
+    m->apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
+    m->apply (1, 2, &px, &py);
+  }
+  else {
+    dx = 0;
+    dy = 0;
+    px = 1;
+    py = 2;
+  }
+  
+  px -= dx;
+  py -= dy;
+
+  if ((px < 0 ? -px : px) != 1) {
+    // x and y have been swapped
+    le->swap45 ();
+  }
+  // we just have mirrors
+  if (px < 0) {
+    le->swaplr();
+  }
+  if (py < 0) {
+    le->swaptb();
+  }
+  return le;
+}

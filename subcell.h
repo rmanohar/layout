@@ -52,30 +52,9 @@ public:
     LayoutEdgeAttrib *le;
 
     le = _b->getLayoutEdgeAttrib();
-
     if (le) {
-      le = le->Clone ();
-
-      // apply transform matrix to see what happens to the orientation
-      // of a box!
-      long dx, dy, px, py;
-
-      _m.apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
-      _m.apply (1, 2, &px, &py);
-      px -= dx;
-      py -= dy;
-
-      if ((px < 0 ? -px : px) != 1) {
-	// x and y have been swapped
-	le->swap45 ();
-      }
-      // we just have mirrors
-      if (px < 0) {
-	le->swaplr();
-      }
-      if (py < 0) {
-	le->swaptb();
-      }
+      // clone, and apply transformation matrix
+      le = le->Clone (&_m);
     }
     return le;
   }
