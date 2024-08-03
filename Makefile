@@ -28,11 +28,11 @@ TARGETLIBS=pass_stk.so pass_layout.so
 OBJS1=main.o
 OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o subcell.o \
 	geom_layer.o \
-	geom_blob.o
+	geom_blob.o attrib.o
 
 OBJS3=stk_pass.os stk_layout.os geom.os tile.os subcell.os \
 	geom_layer.os \
-	geom_blob.os
+	geom_blob.os attrib.os
 
 OBJS=$(OBJS1) $(OBJS2) $(OBJS3)
 

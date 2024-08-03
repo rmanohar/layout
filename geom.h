@@ -27,6 +27,7 @@
 #include <act/passes/netlist.h>
 #include <common/path.h>
 #include "tile.h"
+#include "attrib.h"
 
 
 /*
@@ -132,208 +133,6 @@ protected:
   friend class Layout;
 };
 
-/*
- * These are used as alignment markers. They can be used for an umber
- * of different purposes, including multi-deck gridded cells.
- *
- * **Currently only using an attrib_list of length at most 1 until we
- *   include multi-deck support**
- */
-class LayoutEdgeAttrib {
-public:
-  struct attrib_list {
-    const char *name;
-    long offset;		// this offset is relative to assuming
-				// the bottom left corner of the
-				// actual layout bounding box is (0,0).
-    struct attrib_list *next;
-  };
-private:
-
-  /* at the moment, we have the same attribute for the horizontal edge
-     as the vertical edge
-  */
-  attrib_list *_left, *_right, *_top, *_bot;
-
-  attrib_list *dup (attrib_list *l, long adj = 0) {
-    if (!l) return NULL;
-    attrib_list *ret, *cur;
-    NEW (ret, attrib_list);
-    ret->name = l->name;
-    ret->offset = l->offset + adj;
-    ret->next = NULL;
-    cur = ret;
-    while (l->next) {
-      NEW (cur->next, attrib_list);
-      cur = cur->next;
-      l = l->next;
-      cur->name = l->name;
-      cur->offset = l->offset + adj;
-      cur->next = NULL;
-    }
-    return ret;
-  }
-
-  /* merge y into x */
-  void merge (attrib_list **x, attrib_list *y) {
-    attrib_list *tmp;
-    while (y) {
-      tmp = y->next;
-      y->next = *x;
-      *x = y;
-      y = tmp;
-    }
-  }
-
-  void freelist (attrib_list *l) {
-    attrib_list *tmp;
-    while (l) {
-      tmp = l;
-      l = l->next;
-      FREE (tmp);
-    }
-  }
-
-public:
-  LayoutEdgeAttrib() {
-    _left = NULL;
-    _right = NULL;
-    _top = NULL;
-    _bot = NULL;
-  }
-
-  ~LayoutEdgeAttrib() {
-    clear ();
-  }
-
-  LayoutEdgeAttrib copy() {
-    LayoutEdgeAttrib tmp;
-    tmp._left = dup (_left);
-    tmp._right = dup (_right);
-    tmp._top = dup (_top);
-    tmp._bot = dup (_bot);
-    return tmp;
-  }
-
-  void clearleft() {
-    freelist (_left);
-    _left = NULL;
-  }
-  void clearright() {
-    freelist (_right);
-    _right = NULL;
-  }
-  void cleartop() {
-    freelist (_top);
-    _top = NULL;
-  }
-  void clearbot() {
-    freelist (_bot);
-    _bot = NULL;
-  }
-
-  void clear () {
-    clearleft();
-    clearright();
-    cleartop();
-    clearbot();
-  }
-
-  attrib_list *left() { return _left; }
-  attrib_list *right() { return _right; }
-  attrib_list *top() { return _top; }
-  attrib_list *bot() { return _bot; }
-
-  /* compute alignment between two sets of markers; returns amt that
-     should be added to l2 to get to l1's offset */
-
-  /* XXX: when we support multiple independent attributes, we will
-     need multiple shift amounts for alignment
-  */
-  static bool align (attrib_list *l1, attrib_list *l2, long *amt) {
-    // no attributes: works with offset 0
-    if (!l1 && !l2) {
-      *amt = 0;
-      return true;
-    }
-
-    bool shift_computed = false;
-    long shiftamt;
-
-    while (l1 && l2) {
-      if (strcmp (l1->name, l2->name) != 0) {
-	return false;
-      }
-      if (shift_computed) {
-	if (l2->offset + shiftamt != l1->offset) {
-	  return false;
-	}
-      }
-      else {
-	shiftamt = l1->offset - l2->offset;
-	shift_computed = true;
-      }
-      l1 = l1->next;
-      l2 = l2->next;
-    }
-    if (l1 || l2) return false;
-    *amt = shiftamt;
-    return true;
-  }
-
-  void setleft(attrib_list *x, long adj = 0) {
-    clearleft();
-    _left = dup (x, adj);
-  }
-  void setright(attrib_list *x, long adj = 0) {
-    clearright();
-    _right = dup(x, adj);
-  }
-  void settop(attrib_list *x, long adj = 0) {
-    cleartop();
-    _top = dup (x, adj);
-  }
-  void setbot(attrib_list *x, long adj = 0) {
-    clearbot();
-    _bot = dup (x, adj);
-  }
-
-  void mergeleft(attrib_list *x, long adj = 0) {
-    merge (&_left, dup (x, adj));
-  }
-  void mergeright(attrib_list *x, long adj = 0) {
-    merge (&_right, dup (x, adj));
-  }
-  void mergetop(attrib_list *x, long adj = 0) {
-    merge (&_top, dup (x, adj));
-  }
-  void mergebot(attrib_list *x, long adj = 0) {
-    merge (&_bot, dup (x, adj));
-  }
-
-  void swaplr () {
-    attrib_list *x = _left;
-    _left = _right;
-    _right = x;
-  }
-  void swaptb () {
-    attrib_list *x = _top;
-    _top = _bot;
-    _bot = x;
-  }
-
-  void swap45() {
-    attrib_list *x = _left;
-    _left = _bot;
-    _bot = x;
-    x = _right;
-    _right = _top;
-    _top = x;
-  }
-};
-
-
-
 class Layout {
 public:
   static bool _initdone;
@@ -398,7 +197,7 @@ public:
   void flushBBox() { _rbox.clear(); }
 
   Rectangle &getAbutBox() { return _abutbox; }
-  LayoutEdgeAttrib &getEdgeAttrib() { return _le; }
+  LayoutEdgeAttrib *getEdgeAttrib() { return _le; }
 
   double leak_adjust() {
     if (!N->leak_correct) { return 0.0; }
@@ -418,7 +217,7 @@ private:
 				// layout
 
   Rectangle _abutbox;		// abutment information
-  LayoutEdgeAttrib _le;		// alignment information
+  LayoutEdgeAttrib *_le;	// alignment information
 
   Layer *base;
   Layer **metals;
@@ -489,7 +288,7 @@ private:
   Rectangle _bloatbbox;		// the bloated bounding box of all paint
   Rectangle _abutbox;		// the abut bounding box of all paint
 
-  LayoutEdgeAttrib _le;
+  LayoutEdgeAttrib *_le;
 
   unsigned long count;		// for statistics tracking
 
@@ -566,7 +365,7 @@ public:
   /**
    * Get edge attributes!
    */
-  LayoutEdgeAttrib getLayoutEdgeAttrib() { return _le; }
+  LayoutEdgeAttrib *getLayoutEdgeAttrib() { return _le; }
 
   /**
    * Stats 
@@ -577,10 +376,35 @@ public:
   /**
    * Alignment markers
    */
-  LayoutEdgeAttrib::attrib_list *getLeftAlign() { return _le.left(); }
-  LayoutEdgeAttrib::attrib_list *getRightAlign() { return _le.right(); }
-  LayoutEdgeAttrib::attrib_list *getTopAlign() { return _le.top(); }
-  LayoutEdgeAttrib::attrib_list *getBotAlign() { return _le.bot(); }
+  LayoutEdgeAttrib::attrib_list *getLeftAlign() {
+    return _le->left();
+  }
+  
+  LayoutEdgeAttrib::attrib_list *getRightAlign() {
+    return _le->right();
+  }
+  
+  LayoutEdgeAttrib::attrib_list *getTopAlign() {
+    return _le->top();
+  }
+  
+  LayoutEdgeAttrib::attrib_list *getBotAlign() {
+    return _le->bot();
+  }
+
+  /**
+   * Print alignment markers
+   */
+  void printAlign (FILE *fp) {
+    fprintf (fp, "l: ");
+    LayoutEdgeAttrib::print (fp, _le->left());
+    fprintf (fp, "; r: ");
+    LayoutEdgeAttrib::print (fp, _le->right());
+    fprintf (fp, "; t: ");
+    LayoutEdgeAttrib::print (fp, _le->top());
+    fprintf (fp, "; b: ");
+    LayoutEdgeAttrib::print (fp, _le->bot());
+  }
 
   friend class SubcellInst;
 };

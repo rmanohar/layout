@@ -267,6 +267,8 @@ Layout::Layout(netlist_t *_n)
     _rect_inpath = path_init ();
     path_add (_rect_inpath, config_get_string ("lefdef.rect_inpath"));
   }
+
+  _le = new LayoutEdgeAttrib();
 }
 
 Layout::~Layout()
@@ -286,6 +288,10 @@ Layout::~Layout()
   if (_rect_inpath) {
     path_free (_rect_inpath);
     _rect_inpath = NULL;
+  }
+
+  if (_le) {
+    delete _le;
   }
 }
 
@@ -448,22 +454,24 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
     x = _abutbox.llx();
     y = _abutbox.lly();
   }
-  
-  for (l = _le.left(); l; l = l->next) {
-    fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
-	     l->name, x, l->offset, x, l->offset);
-  }
-  for (l = _le.right(); l; l = l->next) {
-    fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
-	     l->name, x, l->offset, x, l->offset);
-  }
-  for (l = _le.top(); l; l = l->next) {
-    fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
-	     l->name, l->offset, y, l->offset, y);
-  }
-  for (l = _le.bot(); l; l = l->next) {
-    fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
-	     l->name, l->offset, y, l->offset, y);
+
+  if (_le) {
+    for (l = _le->left(); l; l = l->next) {
+      fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+	       l->name, x, l->offset, x, l->offset);
+    }
+    for (l = _le->right(); l; l = l->next) {
+      fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+	       l->name, x, l->offset, x, l->offset);
+    }
+    for (l = _le->top(); l; l = l->next) {
+      fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+	       l->name, l->offset, y, l->offset, y);
+    }
+    for (l = _le->bot(); l; l = l->next) {
+      fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+	       l->name, l->offset, y, l->offset, y);
+    }
   }
 }
 
@@ -630,7 +638,6 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
     }
 
-
     long rllx, rlly, rurx, rury;
     sscanf (buf+offset, "%ld %ld %ld %ld", &rllx, &rlly, &rurx, &rury);
 
@@ -684,22 +691,44 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       else if (strncmp (net, "$l:", 3) == 0) {
 	l->name = Strdup (net+3);
 	l->offset = rlly; // left alignment: lower left corner y coord
-	_le.mergeleft (l);
+	if (!_le) {
+	  _le = new LayoutEdgeAttrib();
+	}
+	_le->mergeleft (l);
       }
       else if (strncmp (net, "$r:", 3) == 0) {
 	l->name = Strdup (net+3);
 	l->offset = rlly; // right alignment: lower left corner y coord
-	_le.mergeright (l);
+	if (!_le) {
+	  _le = new LayoutEdgeAttrib();
+	}
+	_le->mergeright (l);
       }
       else if (strncmp (net, "$t:", 3) == 0) {
 	l->name = Strdup (net+3);
 	l->offset = rllx; // top alignment: lower left corner x coord
-	_le.mergetop (l);
+	if (!_le) {
+	  _le = new LayoutEdgeAttrib();
+	}
+	_le->mergetop (l);
+#if 0	
+	printf (" >> got top: ");
+	LayoutEdgeAttrib::print (stdout, _le->top());
+	printf ("\n");
+#endif	
       }
       else if (strncmp (net, "$b:", 3) == 0) {
 	l->name = Strdup (net+3);
 	l->offset = rllx; // bot alignment: lower left corner x coord
-	_le.mergebot (l);
+	if (!_le) {
+	  _le = new LayoutEdgeAttrib();
+	}
+	_le->mergebot (l);
+#if 0
+	printf (" >> got bot: ");
+	LayoutEdgeAttrib::print (stdout, _le->bot());
+	printf ("\n");
+#endif
       }
       else {
 	warning ("Invalid alignment layer directive: `%s'; skipped", net);

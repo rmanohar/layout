@@ -48,28 +48,34 @@ public:
     _ny = ny;
   }
 
-  LayoutEdgeAttrib getLayoutEdgeAttrib () {
-    LayoutEdgeAttrib le = _b->getLayoutEdgeAttrib();
+  LayoutEdgeAttrib *getLayoutEdgeAttrib () {
+    LayoutEdgeAttrib *le;
 
-    // apply transform matrix to see what happens to the orientation
-    // of a box!
-    long dx, dy, px, py;
+    le = _b->getLayoutEdgeAttrib();
 
-    _m.apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
-    _m.apply (1, 2, &px, &py);
-    px -= dx;
-    py -= dy;
+    if (le) {
+      le = le->Clone ();
 
-    if ((px < 0 ? -px : px) != 1) {
-      // x and y have been swapped
-      le.swap45 ();
-    }
-    // we just have mirrors
-    if (px < 0) {
-      le.swaplr();
-    }
-    if (py < 0) {
-      le.swaptb();
+      // apply transform matrix to see what happens to the orientation
+      // of a box!
+      long dx, dy, px, py;
+
+      _m.apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
+      _m.apply (1, 2, &px, &py);
+      px -= dx;
+      py -= dy;
+
+      if ((px < 0 ? -px : px) != 1) {
+	// x and y have been swapped
+	le->swap45 ();
+      }
+      // we just have mirrors
+      if (px < 0) {
+	le->swaplr();
+      }
+      if (py < 0) {
+	le->swaptb();
+      }
     }
     return le;
   }
