@@ -150,21 +150,12 @@ public:
     return merge (&_bot, dup (x, adj));
   }
 
-  void swaplr () {
-    attrib_list *x;
-    x = _left; _left = _right; _right = x;
-  }
-  
-  void swaptb () {
-    attrib_list *x;
-    x = _top; _top = _bot; _bot = x;
-  }
+  void swaplr ();
+  void swaptb ();
+  void swap45();
 
-  void swap45() {
-    attrib_list *x;
-    x = _left; _left = _bot; _bot = x;
-    x = _right; _right = _top; _top = x;
-  }
+  attrib_list *flipsign (attrib_list *x);
+  void adjust (attrib_list *x, long adj);
 
   LayoutEdgeAttrib *Clone();
   LayoutEdgeAttrib *Clone (TransformMat *m);

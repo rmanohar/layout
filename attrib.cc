@@ -168,7 +168,64 @@ LayoutEdgeAttrib *LayoutEdgeAttrib::Clone()
 }
 
 
+LayoutEdgeAttrib::attrib_list *
+LayoutEdgeAttrib::flipsign (LayoutEdgeAttrib::attrib_list *x)
+{
+  if (!x) return NULL;
+  attrib_list *prev, *cur;
+  prev = NULL;
+  cur = x;
+  while (cur) {
+    attrib_list *tmp;
 
+    cur->offset = -cur->offset;
+    
+    tmp = cur->next;
+    cur->next = prev;
+    prev = cur;
+    cur = cur->next;
+  }
+  return prev;
+}
+
+void LayoutEdgeAttrib::adjust (LayoutEdgeAttrib::attrib_list *x, long adj)
+{
+  while (x) {
+    x->offset += adj;
+    x = x->next;
+  }
+}
+
+void LayoutEdgeAttrib::swaplr ()
+{
+  attrib_list *x;
+  x = _left; _left = _right; _right = x;
+  // flip sign of top/bot attribs
+  _top = flipsign (_top);
+  _bot = flipsign (_bot);
+}
+  
+void LayoutEdgeAttrib::swaptb ()
+{
+  attrib_list *x;
+  x = _top; _top = _bot; _bot = x;
+  // flip sign of left/right attrib
+  _left = flipsign (_left);
+  _right = flipsign (_right);
+}
+
+void LayoutEdgeAttrib::swap45()
+{
+  attrib_list *x;
+  x = _left; _left = _bot; _bot = x;
+  x = _right; _right = _top; _top = x;
+}
+
+
+/*
+ * Clone the attributes, and adjust coordinates based on the
+ * transformation matrix
+ */
 LayoutEdgeAttrib *LayoutEdgeAttrib::Clone (TransformMat *m)
 {
   LayoutEdgeAttrib *le;
@@ -179,8 +236,10 @@ LayoutEdgeAttrib *LayoutEdgeAttrib::Clone (TransformMat *m)
   le = Clone ();
 
   if (m) {
+    // We transform a canonical rectangle; that way the code can stay
+    // the same even if the representation of m changes.
     m->apply (0, 0, &dx, &dy); // point 0 0 -> x y is the translation
-    m->apply (1, 2, &px, &py);
+    m->apply (1, 2, &px, &py); // look for rotations/flips
   }
   else {
     dx = 0;
@@ -203,5 +262,16 @@ LayoutEdgeAttrib *LayoutEdgeAttrib::Clone (TransformMat *m)
   if (py < 0) {
     le->swaptb();
   }
+
+  // now adjust list with dx and dy
+  if (dx != 0) {
+    le->adjust (_top, dx);
+    le->adjust (_bot, dx);
+  }
+  if (dy != 0) {
+    le->adjust (_left, dy);
+    le->adjust (_right, dy);
+  }
+  
   return le;
 }
