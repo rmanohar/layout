@@ -21,6 +21,9 @@
 EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
+TARGETINCS=geom.h tile.h attrib.h
+TARGETINCSUBDIR=layout
+
 TARGETS=$(EXE) $(EXE2)
 TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
 TARGETLIBS=pass_stk.so pass_layout.so
