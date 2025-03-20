@@ -300,16 +300,18 @@ public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   LayoutBlob (SubcellInst *cell);
   LayoutBlob (ExternMacro *m);
+  // LayoutBlob (const LayoutBlob& other);
   ~LayoutBlob ();
   
   bool isSubcell() { return t == BLOB_CELL ? true : false; }
+  bool isList() { return t == BLOB_LIST ? true : false; }
 
   /* macros */
   bool isMacro() { return t == BLOB_MACRO ? true : false; }
   const char *getMacroName() { return macro->getName(); }
   const char *getLEFFile() { return macro->getLEFFile(); }
 
-  void appendBlob (LayoutBlob *b, blob_compose c, long gap = 0);
+  void appendBlob (LayoutBlob *b, blob_compose c, long gap = 0, bool flip = false);
 
   void markRead () { readRect = true; }
   bool getRead() { return readRect; }

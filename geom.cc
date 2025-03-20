@@ -646,7 +646,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
 #endif
 
-    if (rllx >= rurx || rlly >= rury) {
+    if ((rllx >= rurx || rlly >= rury) && !( strcmp (material, "$align") == 0 && (rllx == rurx || rlly == rury))) {
       warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
 	       material, rllx, rlly, rurx, rury);
       continue;
@@ -687,17 +687,27 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       if (!net) {
 	/* abutbox */
 	_abutbox.setRect (rllx, rlly, rurx - rllx, rury - rlly);
+  #if 0
+  printf("new abutbox: (%ld,%ld) -> (%ld,%ld)\n",rllx, rlly, rurx, rury);
+  #endif	
       }
       else if (strncmp (net, "$l:", 3) == 0) {
-	l->name = Strdup (net+3);
-	l->offset = rlly; // left alignment: lower left corner y coord
-	if (!_le) {
-	  _le = new LayoutEdgeAttrib();
-	}
-	_le->mergeleft (l);
+	      l->name = Strdup (net+3);
+        #if 0
+        printf("new marker %s left: %ld\n",l->name, rlly);
+        #endif	
+	      l->offset = rlly; // left alignment: lower left corner y coord
+	      if (!_le) {
+	        _le = new LayoutEdgeAttrib();
+	      }
+	      _le->mergeleft (l);
       }
       else if (strncmp (net, "$r:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s right: %ld\n",l->name, rlly);
+  #endif	
 	l->offset = rlly; // right alignment: lower left corner y coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();
@@ -705,7 +715,11 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	_le->mergeright (l);
       }
       else if (strncmp (net, "$t:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s top: %ld\n",l->name, rllx);
+  #endif	
 	l->offset = rllx; // top alignment: lower left corner x coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();
@@ -718,7 +732,11 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 #endif	
       }
       else if (strncmp (net, "$b:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0	
+  printf("new marker %s bottom: %ld\n",l->name, rlly);
+  #endif
 	l->offset = rllx; // bot alignment: lower left corner x coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();
