@@ -113,12 +113,12 @@ public:
     return r;
   }
 
-  void PrintRect (FILE *fp, TransformMat *mat) {
+  void PrintRect (FILE *fp, TransformMat *mat, bool istopcell=true) {
     TransformMat m;
     if (mat) {
       m = *mat;
     }
-    _b->_printRect (fp, mat);
+    _b->_printRect (fp, mat, istopcell);
   }
 };
 

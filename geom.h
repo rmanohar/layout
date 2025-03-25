@@ -182,7 +182,7 @@ public:
   void getBBox (long *llx, long *lly, long *urx, long *ury);
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
-  void PrintRect (FILE *fp, TransformMat *t = NULL);
+  void PrintRect (FILE *fp, TransformMat *t = NULL, bool istopcell=true);
   void ReadRect (const char *file, int raw_mode = 0);
   void ReadRect (Process *p, int raw_mode = 0);
 
@@ -294,7 +294,7 @@ private:
 
   bool readRect;
 
-  void _printRect (FILE *fp, TransformMat *t);
+  void _printRect (FILE *fp, TransformMat *t, bool istopcell = true);
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
@@ -316,7 +316,7 @@ public:
   void markRead () { readRect = true; }
   bool getRead() { return readRect; }
   
-  void PrintRect (FILE *fp, TransformMat *t = NULL);
+  void PrintRect (FILE *fp, TransformMat *t = NULL, bool istopcell = true);
 
   /**
    * Computes the actual bounding box of the layout blob
