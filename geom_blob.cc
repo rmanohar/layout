@@ -284,26 +284,32 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
     _bbox = b->getBBox ();
     _bloatbbox = b->getBloatBBox ();
     _abutbox = b->getAbutBox ();
+    _le = bl->b->getLayoutEdgeAttrib ()->Clone();
     if (c == BLOB_HORIZ) {
       if (flip){
         bl->T.mirrorLR();
+        _le->swaplr();
       }
       bl->T.translate (gap, 0);
     }
     else if (c == BLOB_VERT) {
       if (flip){
         bl->T.mirrorTB();
+        _le->swaptb();
       }
       bl->T.translate (0, gap);
     }
     _bbox = bl->T.applyBox (_bbox);
     _bloatbbox = bl->T.applyBox (_bloatbbox);
     _abutbox = bl->T.applyBox (_abutbox);
-    _le = bl->b->getLayoutEdgeAttrib ()->Clone();
+    printf("abut: new:%d old:%d\n",bl->b->getAbutBox().empty(),_abutbox.empty());
+
+    
   }
   else {
     int do_merge_attrib = 0;
     Rectangle old_box;
+    LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib ()->Clone();
     long merge_x, merge_y;
     
     // we are actually appending to the blob
@@ -314,12 +320,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       bool valid;
       /* align! */
       if (flip){
-        bl->T.mirrorLR();
-        valid = LayoutEdgeAttrib::align (_le->left(), b->getLeftAlign(), &damt);
+        tmpEdgeAttr->swaplr();
       }
-      else {
-        valid = LayoutEdgeAttrib::align (_le->right(), b->getLeftAlign(), &damt);
-      }
+      valid = LayoutEdgeAttrib::align (_le->right(), tmpEdgeAttr->left(), &damt);
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
@@ -345,6 +348,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       }
 
       TransformMat t;
+      // flip?
       t.translate (shiftamt, damt);
       bl->T = t;
 
@@ -379,12 +383,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       bool valid;
       /* align! */
       if (flip){
-        bl->T.mirrorTB();
-        valid = LayoutEdgeAttrib::align (_le->bot(), b->getBotAlign(), &damt);
+        tmpEdgeAttr->swaptb();
       }
-      else {
-        valid = LayoutEdgeAttrib::align (_le->top(), b->getBotAlign(), &damt);
-      }
+      valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
 
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
@@ -455,48 +456,49 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 
     /* now merge attributes if we used abutment */
     if (do_merge_attrib) {
-      Rectangle r = b->getAbutBox();
+      Rectangle r = bl->T.applyBox (b->getAbutBox());
       if (r.llx() == _abutbox.llx()) {
 	if (old_box.llx() == r.llx()) {
 	  // merge!
-	  _le->mergeleft (bl->b->getLeftAlign(), merge_y);
+	  _le->mergeleft (tmpEdgeAttr->left(), merge_y);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setleft (bl->b->getLeftAlign(), merge_y);
+	  _le->setleft (tmpEdgeAttr->left(), merge_y);
 	}
       }
       if (r.urx() == _abutbox.urx()) {
 	if (old_box.urx() == r.urx()) {
 	  // merge!
-	  _le->mergeright (bl->b->getRightAlign(), merge_y);
+	  _le->mergeright (tmpEdgeAttr->right(), merge_y);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setright (bl->b->getRightAlign(), merge_y);
+	  _le->setright (tmpEdgeAttr->right(), merge_y);
 	}
       }
       if (r.lly() == _abutbox.lly()) {
 	if (old_box.lly() == r.lly()) {
 	  // merge!
-	  _le->mergebot (bl->b->getBotAlign(), merge_x);
+	  _le->mergebot (tmpEdgeAttr->bot(), merge_x);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setbot (bl->b->getBotAlign(), merge_x);
+	  _le->setbot (tmpEdgeAttr->bot(), merge_x);
 	}
       }
       if (r.ury() == _abutbox.ury()) {
 	if (old_box.ury() == r.ury()) {
 	  // merge!
-	  _le->mergetop (bl->b->getTopAlign(), merge_x);
+	  _le->mergetop (tmpEdgeAttr->top(), merge_x);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->settop (bl->b->getTopAlign(), merge_x);
+	  _le->settop (tmpEdgeAttr->top(), merge_x);
 	}
       }
     }
+    delete tmpEdgeAttr;
   }
 #if 0
   printf ("blob: (%ld,%ld) -> (%ld,%ld); bloat: (%ld,%ld)->(%ld,%ld)\n",
@@ -505,12 +507,12 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 }
 
 
-void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
+void LayoutBlob::_printRect (FILE *fp, TransformMat *mat, bool istopcell)
 {
   switch (t) {
   case BLOB_BASE:
     if (base.l) {
-      base.l->PrintRect (fp, mat);
+      base.l->PrintRect (fp, mat, istopcell);
     }
     break;
     
@@ -521,7 +523,7 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 	m = *mat;
       }
       m.applyMat (bl->T);
-      bl->b->_printRect (fp, &m);
+      bl->b->_printRect (fp, &m, false);
     }
     break;
 
@@ -535,31 +537,80 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
       if (mat) {
 	m = *mat;
       }
-      subcell->PrintRect (fp, &m);
+      subcell->PrintRect (fp, &m, istopcell);
     }
     break;
 
   }
 }
 
-void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
+
+void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat, bool istopcell)
 {
   long bllx, blly, burx, bury;
   long x, y;
   Rectangle bloatbox = getBloatBBox ();
+  Rectangle abutbox = getAbutBox ();
   fprintf (fp, "bbox ");
   if (mat) {
     mat->apply (bloatbox.llx(), bloatbox.lly(), &x, &y);
     fprintf (fp, "%ld %ld", x, y);
     mat->apply (bloatbox.urx()+1, bloatbox.ury()+1, &x, &y);
     fprintf (fp, " %ld %ld\n", x, y);
+    // mat->apply (abutbox.llx(), abutbox.lly(), &x, &y);
+    // fprintf (fp, "rect # $align %ld %ld", x, y);
+    // mat->apply (abutbox.urx()+1, abutbox.ury()+1, &x, &y);
+    // fprintf (fp, " %ld %ld\n", x, y);
   }
   else {
     fprintf (fp, "%ld %ld %ld %ld\n",
 	     bloatbox.llx(), bloatbox.lly(),
 	     bloatbox.urx()+1, bloatbox.ury()+1);
+
+    if (istopcell) {
+      if (!_abutbox.empty()) {
+        fprintf (fp, "rect # $align %ld %ld %ld %ld\n", _abutbox.llx(),
+          _abutbox.lly(), _abutbox.urx()+1, _abutbox.ury()+1);
+      }
+      LayoutEdgeAttrib::attrib_list *l;
+
+      long x, y;
+
+      if (_abutbox.empty()) {
+        x = 0;
+        y = 0;
+      }
+      else {
+        x = _abutbox.llx();
+        y = _abutbox.lly();
+      }
+
+      if (_le) {
+        for (l = _le->left(); l; l = l->next) {
+          fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+            l->name, x, l->offset, x, l->offset);
+        }
+        for (l = _le->right(); l; l = l->next) {
+          fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+            l->name, x, l->offset, x, l->offset);
+        }
+        for (l = _le->top(); l; l = l->next) {
+          fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+            l->name, l->offset, y, l->offset, y);
+        }
+        for (l = _le->bot(); l; l = l->next) {
+          fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+            l->name, l->offset, y, l->offset, y);
+        }
+      }
+    }
   }
-  _printRect (fp, mat);
+  if (_abutbox.empty()){
+    _printRect (fp, mat, istopcell);
+  }
+  else {
+    _printRect (fp, mat, false);
+  }
 }
 
 
