@@ -44,7 +44,7 @@ OBJS=$(OBJS_EXE) $(OBJS_EXE2) $(SHOBJS) $(SHOBJS_PASS) $(SHOBJS_PASS2)
 
 SRCS=$(OBJS_EXE:.o=.cc) $(OBJS_EXE2:.o=.cc) $(SHOBJS:.os=.cc) $(SHOBJS_PASS:.os=.cc) $(SHOBJS_PASS2:.os=.cc)
 
-LAY_SH_INCL=-lact_layout
+LAY_SH_INCL=-L$(ACT_HOME)/lib -lact_layout
 
 include $(ACT_HOME)/scripts/Makefile.std
 
