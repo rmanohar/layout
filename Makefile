@@ -42,25 +42,26 @@ SHOBJS_PASS2=stk_pass.os stk_layout.os
 
 OBJS=$(OBJS_EXE) $(OBJS_EXE2) $(SHOBJS) $(SHOBJS_PASS) $(SHOBJS_PASS2)
 
-SRCS=$(OBJS_EXE:.o=.cc) $(OBJS_EXE2:.o=.cc) $(SHOBJS:.os=.cc) $(SHOBJS_PASS:.o=.cc) $(SHOBJS_PASS2:.o=.cc)
+SRCS=$(OBJS_EXE:.o=.cc) $(OBJS_EXE2:.o=.cc) $(SHOBJS:.os=.cc) $(SHOBJS_PASS:.os=.cc) $(SHOBJS_PASS2:.os=.cc)
 
 LAY_SH_INCL=-lact_layout
 
 include $(ACT_HOME)/scripts/Makefile.std
 
 $(EXE): $(OBJS_EXE)
-	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
+	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) main.o -o $(EXE) $(SHLIBACTPASS)
 
 libact_layout.so: $(SHOBJS) 
-	$(ACT_HOME)/scripts/linkso libact_layout.so $(SHOBJS) $(SHLIBACT)
+	$(ACT_HOME)/scripts/linkso libact_layout.so $(SHOBJS) $(SHLIBACTPASS)
+	$(ACT_HOME)/scripts/install libact_layout.so $(INSTALLLIB)/libactlayout.so
 
-$(EXE2): $(OBJS_EXE2) $(ACTPASSDEPEND)
+$(EXE2): $(OBJS_EXE2) $(ACTPASSDEPEND) libact_layout.so
 	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) $(OBJS_EXE2) $(LAY_SH_INCL) -o $(EXE2) $(LIBACTPASS)
 
 pass_stk.so: $(SHOBJS_PASS) $(ACTPASSDEPEND)
 	$(ACT_HOME)/scripts/linkso pass_stk.so $(SHOBJS_PASS) $(SHLIBACTPASS)
 
-pass_layout.so: $(SHOBJS_PASS2) $(ACTPASSDEPEND)
+pass_layout.so: $(SHOBJS_PASS2) $(ACTPASSDEPEND) libact_layout.so
 	$(ACT_HOME)/scripts/linkso pass_layout.so $(SHOBJS_PASS2) $(LAY_SH_INCL)  $(SHLIBACTPASS)
 
 mag.pl: 

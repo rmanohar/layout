@@ -30,6 +30,10 @@ class TransformMat;
  *
  * **Currently only using an attrib_list of length at most 1 until we
  *   include multi-deck support**
+ *
+ * Alignment marker offsets are in the local coordinate system of the
+ * paint.
+ *
  */
 class LayoutEdgeAttrib {
 public:
