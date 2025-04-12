@@ -8,3 +8,4 @@ act2lef.*
 actrectbbox.*
 pass_stk.so
 pass_layout.so
+libact_layout.so

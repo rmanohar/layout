@@ -21,44 +21,52 @@
 EXE=act2lef.$(EXT)
 EXE2=actrectbbox.$(EXT)
 
-TARGETINCS=geom.h tile.h attrib.h
+TARGETINCS=geom.h tile.h attrib.h subcell.h
 TARGETINCSUBDIR=layout
 
 TARGETS=$(EXE) $(EXE2)
 TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
-TARGETLIBS=pass_stk.so pass_layout.so
+TARGETLIBS=libact_layout.so pass_stk.so pass_layout.so
 
-OBJS1=main.o
-OBJS2=main2.o stk_pass.o stk_layout.o geom.o tile.o subcell.o \
-	geom_layer.o \
-	geom_blob.o attrib.o
+OBJS_EXE=main.o
+OBJS_EXE2=main2.o stk_pass.o stk_layout.o
 
-OBJS3=stk_pass.os stk_layout.os geom.os tile.os subcell.os \
+SHOBJS=geom.os tile.os subcell.os \
 	geom_layer.os \
 	geom_blob.os attrib.os
 
-OBJS=$(OBJS1) $(OBJS2) $(OBJS3)
+SHOBJS_PASS=stk_pass.os 
 
-SRCS=$(OBJS1:.o=.cc) $(OBJS2:.o=.cc)
+SHOBJS_PASS2=stk_pass.os stk_layout.os 
+
+
+OBJS=$(OBJS_EXE) $(OBJS_EXE2) $(SHOBJS) $(SHOBJS_PASS) $(SHOBJS_PASS2)
+
+SRCS=$(OBJS_EXE:.o=.cc) $(OBJS_EXE2:.o=.cc) $(SHOBJS:.os=.cc) $(SHOBJS_PASS:.o=.cc) $(SHOBJS_PASS2:.o=.cc)
+
+LAY_SH_INCL=-lact_layout
 
 include $(ACT_HOME)/scripts/Makefile.std
 
-$(EXE): main.os
+$(EXE): $(OBJS_EXE)
 	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) main.os -o $(EXE) $(SHLIBACTPASS)
 
-pass_stk.so: stk_pass.os $(ACTPASSDEPEND)
-	$(ACT_HOME)/scripts/linkso pass_stk.so stk_pass.os $(SHLIBACTPASS)
+libact_layout.so: $(SHOBJS) 
+	$(ACT_HOME)/scripts/linkso libact_layout.so $(SHOBJS) $(SHLIBACT)
 
-pass_layout.so: $(OBJS3) $(ACTPASSDEPEND)
-	$(ACT_HOME)/scripts/linkso pass_layout.so $(OBJS3) $(SHLIBACTPASS)
+$(EXE2): $(OBJS_EXE2) $(ACTPASSDEPEND)
+	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) $(OBJS_EXE2) $(LAY_SH_INCL) -o $(EXE2) $(LIBACTPASS)
+
+pass_stk.so: $(SHOBJS_PASS) $(ACTPASSDEPEND)
+	$(ACT_HOME)/scripts/linkso pass_stk.so $(SHOBJS_PASS) $(SHLIBACTPASS)
+
+pass_layout.so: $(SHOBJS_PASS2) $(ACTPASSDEPEND)
+	$(ACT_HOME)/scripts/linkso pass_layout.so $(SHOBJS_PASS2) $(LAY_SH_INCL)  $(SHLIBACTPASS)
 
 mag.pl: 
 	git checkout mag.pl
 
 rect2lef.pl:
 	git checkout rect2lef.pl
-
-$(EXE2): $(OBJS2) $(ACTPASSDEPEND)
-	$(CXX) $(CFLAGS) $(OBJS2) -o $(EXE2) $(LIBACTPASS)
 
 -include Makefile.deps
