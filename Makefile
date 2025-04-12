@@ -53,7 +53,7 @@ $(EXE): $(OBJS_EXE)
 
 libact_layout.so: $(SHOBJS) 
 	$(ACT_HOME)/scripts/linkso libact_layout.so $(SHOBJS) $(SHLIBACTPASS)
-	$(ACT_HOME)/scripts/install libact_layout.so $(INSTALLLIB)/libactlayout.so
+	$(ACT_HOME)/scripts/install libact_layout.so $(INSTALLLIB)/libact_layout.so
 
 $(EXE2): $(OBJS_EXE2) $(ACTPASSDEPEND) libact_layout.so
 	$(CXX) $(SH_EXE_OPTIONS) $(CFLAGS) $(OBJS_EXE2) $(LAY_SH_INCL) -o $(EXE2) $(LIBACTPASS)
