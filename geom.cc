@@ -428,7 +428,7 @@ int Layout::DrawVia (int num, long llx, long lly, unsigned long wx, unsigned lon
 }
 
 
-void Layout::PrintRect (FILE *fp, TransformMat *t)
+void Layout::PrintRect (FILE *fp, TransformMat *t, bool istopcell)
 {
   base->PrintRect (fp, t);
   for (int i=0; i < nmetals; i++) {
@@ -438,39 +438,42 @@ void Layout::PrintRect (FILE *fp, TransformMat *t)
     fprintf (fp, "sbox %ld %ld %ld %ld\n", _rbox.llx(),
 	     _rbox.lly(), _rbox.urx()+1, _rbox.ury()+1);
   }
-  if (!_abutbox.empty()) {
-    fprintf (fp, "rect # $align %ld %ld %ld %ld\n", _abutbox.llx(),
-	     _abutbox.lly(), _abutbox.urx()+1, _abutbox.ury()+1);
-  }
-  LayoutEdgeAttrib::attrib_list *l;
-  
-  long x, y;
+  if (istopcell) {
+    Assert(t == NULL, "printing alignment with a global transformation matrix is not supported yet");
+    if (!_abutbox.empty()) {
+      fprintf (fp, "rect # $align %ld %ld %ld %ld\n", _abutbox.llx(),
+	       _abutbox.lly(), _abutbox.urx()+1, _abutbox.ury()+1);
+    }
+    LayoutEdgeAttrib::attrib_list *l;
 
-  if (_abutbox.empty()) {
-    x = 0;
-    y = 0;
-  }
-  else {
-    x = _abutbox.llx();
-    y = _abutbox.lly();
-  }
+    long x, y;
 
-  if (_le) {
-    for (l = _le->left(); l; l = l->next) {
-      fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
-	       l->name, x, l->offset, x, l->offset);
+    if (_abutbox.empty()) {
+      x = 0;
+      y = 0;
     }
-    for (l = _le->right(); l; l = l->next) {
-      fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
-	       l->name, x, l->offset, x, l->offset);
+    else {
+      x = _abutbox.llx();
+      y = _abutbox.lly();
     }
-    for (l = _le->top(); l; l = l->next) {
-      fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
-	       l->name, l->offset, y, l->offset, y);
-    }
-    for (l = _le->bot(); l; l = l->next) {
-      fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
-	       l->name, l->offset, y, l->offset, y);
+
+    if (_le) {
+      for (l = _le->left(); l; l = l->next) {
+        fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+	         l->name, x, l->offset, x, l->offset);
+      }
+      for (l = _le->right(); l; l = l->next) {
+        fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+	         l->name, x, l->offset, x, l->offset);
+      }
+      for (l = _le->top(); l; l = l->next) {
+        fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+	         l->name, l->offset, y, l->offset, y);
+      }
+      for (l = _le->bot(); l; l = l->next) {
+        fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+	         l->name, l->offset, y, l->offset, y);
+      }
     }
   }
 }
@@ -646,7 +649,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
 #endif
 
-    if (rllx >= rurx || rlly >= rury) {
+    if ((rllx >= rurx || rlly >= rury) && !( strcmp (material, "$align") == 0 && (rllx == rurx || rlly == rury))) {
       warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
 	       material, rllx, rlly, rurx, rury);
       continue;
@@ -687,17 +690,27 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       if (!net) {
 	/* abutbox */
 	_abutbox.setRect (rllx, rlly, rurx - rllx, rury - rlly);
+  #if 0
+  printf("new abutbox: (%ld,%ld) -> (%ld,%ld)\n",rllx, rlly, rurx, rury);
+  #endif	
       }
       else if (strncmp (net, "$l:", 3) == 0) {
-	l->name = Strdup (net+3);
-	l->offset = rlly; // left alignment: lower left corner y coord
-	if (!_le) {
-	  _le = new LayoutEdgeAttrib();
-	}
-	_le->mergeleft (l);
+	      l->name = Strdup (net+3);
+        #if 0
+        printf("new marker %s left: %ld\n",l->name, rlly);
+        #endif	
+	      l->offset = rlly; // left alignment: lower left corner y coord
+	      if (!_le) {
+	        _le = new LayoutEdgeAttrib();
+	      }
+	      _le->mergeleft (l);
       }
       else if (strncmp (net, "$r:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s right: %ld\n",l->name, rlly);
+  #endif	
 	l->offset = rlly; // right alignment: lower left corner y coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();
@@ -705,7 +718,11 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 	_le->mergeright (l);
       }
       else if (strncmp (net, "$t:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s top: %ld\n",l->name, rllx);
+  #endif	
 	l->offset = rllx; // top alignment: lower left corner x coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();
@@ -718,7 +735,11 @@ void Layout::ReadRect (const char *fname, int raw_mode)
 #endif	
       }
       else if (strncmp (net, "$b:", 3) == 0) {
+        
 	l->name = Strdup (net+3);
+  #if 0	
+  printf("new marker %s bottom: %ld\n",l->name, rlly);
+  #endif
 	l->offset = rllx; // bot alignment: lower left corner x coord
 	if (!_le) {
 	  _le = new LayoutEdgeAttrib();

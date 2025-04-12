@@ -143,6 +143,64 @@ LayoutBlob::LayoutBlob (SubcellInst *cell)
   _le = cell->getLayoutEdgeAttrib ()->Clone();
 }
 
+// LayoutBlob::LayoutBlob(const LayoutBlob& other) : 
+//   t(other.t),
+//   _bbox(other._bbox),
+//   _bloatbbox(other._bloatbbox),
+//   _abutbox(other._abutbox),
+//   _le(other._le ? new LayoutEdgeAttrib(*other._le) : nullptr),
+//   count(other.count),
+//   readRect(other.readRect)
+//   {
+//     // Handle the union based on the blob type
+//   switch (t) {
+//     case BLOB_BASE:
+//       // no deep copy
+//       base.l = other.base.l
+//       break;
+
+//     case BLOB_LIST:
+//       // no deep copy, copy list, not content
+//       // it might be nessesary to copy the leafs but i dont htink so
+//       if (other.l.hd) {
+//         // Create a deep copy of the linked list
+//         blob_list *copyfrom = nullptr;
+//         blob_list *copyto = nullptr;
+
+//         // Iterate through the original list
+//         l.hd = new blob_list;
+//         l.hd->T = other.l.hd->T;
+//         l.hd->b = other.l.hd->b;
+//         copyto = l.hd;
+//         copyfrom = other.hd.next;
+//         while (copyfrom) {
+//           copyto->next = new blob_list;
+//           copyto = copyto->next;
+//           copyto->T = copyfrom->T;
+//           copyto->b = copyfrom->b;
+//           copyfrom = copyfrom->next;
+//         }
+//         copyto->next = NULL;
+//         l.tl = copyto;
+//       }
+//       break;
+
+//     case BLOB_CELL:
+//       // no deep copy
+//       subcell = other.subcell;
+//       break;
+
+//     case BLOB_MACRO:
+//       // no deep copy
+//       macro = other.macro;
+//       break;
+
+//     default:
+//       fatal_error("tried to copy undefined LayoutBlob type");
+//       break;
+//   }
+//   }
+
 
 void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
 {
@@ -165,7 +223,31 @@ void LayoutBlob::setBBox (long _llx, long _lly, long _urx, long _ury)
   _abutbox.clear ();
 }
 
-void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
+// LayoutBlob *LayoutBlob::cloneAndAppendBlob(LayoutBlob *b, blob_compose c, long gap){
+//   if (t == BLOB_BASE) {
+//     fatal_error ("LayoutBlob::appendBlob() called on BASE; error ignored!");
+//     return NULL;
+//   }
+//   if (t == BLOB_MACRO) {
+//     fatal_error ("LayoutBlob::appendBlob() called on MACRO; error ignored!");
+//     return NULL;
+//   }
+//   if (t == BLOB_CELL) {
+//     fatal_error ("LayoutBlob::appendBlob() called on CELL; error ignored!");
+//     return NULL;
+//   }
+//   Assert (t == BLOB_LIST, "What?");
+//   LayoutBlob *ret = new LayoutBlob()
+//   t(other.t),
+//   _bbox(other._bbox),
+//   _bloatbbox(other._bloatbbox),
+//   _abutbox(other._abutbox),
+//   _le(other._le ? new LayoutEdgeAttrib(*other._le) : nullptr),
+//   count(other.count),
+//   readRect(other.readRect)
+// }
+
+void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 {
   if (t == BLOB_BASE) {
     warning ("LayoutBlob::appendBlob() called on BASE; error ignored!");
@@ -202,29 +284,45 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
     _bbox = b->getBBox ();
     _bloatbbox = b->getBloatBBox ();
     _abutbox = b->getAbutBox ();
+    _le = bl->b->getLayoutEdgeAttrib ()->Clone();
     if (c == BLOB_HORIZ) {
+      if (flip){
+        bl->T.mirrorLR();
+        _le->swaplr();
+      }
       bl->T.translate (gap, 0);
     }
     else if (c == BLOB_VERT) {
+      if (flip){
+        bl->T.mirrorTB();
+        _le->swaptb();
+      }
       bl->T.translate (0, gap);
     }
     _bbox = bl->T.applyBox (_bbox);
     _bloatbbox = bl->T.applyBox (_bloatbbox);
     _abutbox = bl->T.applyBox (_abutbox);
-    _le = bl->b->getLayoutEdgeAttrib ()->Clone();
+    printf("abut: new:%d old:%d\n",bl->b->getAbutBox().empty(),_abutbox.empty());
+
+    
   }
   else {
     int do_merge_attrib = 0;
     Rectangle old_box;
+    LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib ()->Clone();
     long merge_x, merge_y;
     
     // we are actually appending to the blob
     Assert (prev, "What?");
     if (c == BLOB_HORIZ) {
+      
       long damt;
       bool valid;
       /* align! */
-      valid = LayoutEdgeAttrib::align (_le->right(), b->getLeftAlign(), &damt);
+      if (flip){
+        tmpEdgeAttr->swaplr();
+      }
+      valid = LayoutEdgeAttrib::align (_le->right(), tmpEdgeAttr->left(), &damt);
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
@@ -236,14 +334,21 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 	  && !bl->b->getAbutBox().empty() /* there is an abutment box */
 	  && !_abutbox.empty() /* there is an abutment box */) {
 	shiftamt += (_abutbox.urx() - _abutbox.llx() + 1);
+  #if 0
+  printf("will use alignment - horizontal\n");
+  #endif
       }
       else {
+        #if 0
+        printf("will use bbox - horizontal- abut: new:%d old:%d\n",bl->b->getAbutBox().empty(),_abutbox.empty());
+        #endif
 	shiftamt += (_bloatbbox.urx() - _bbox.llx() + 1)
 	  /* width, including bloat */
 	  + (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
       }
 
       TransformMat t;
+      // flip?
       t.translate (shiftamt, damt);
       bl->T = t;
 
@@ -277,7 +382,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       long damt;
       bool valid;
       /* align! */
-      valid = LayoutEdgeAttrib::align (_le->top(), b->getBotAlign(), &damt);
+      if (flip){
+        tmpEdgeAttr->swaptb();
+      }
+      valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
 
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
@@ -290,8 +398,14 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 	  && !bl->b->getAbutBox().empty() /* there is an abutment box */
 	  && !_abutbox.empty() /* there is an abutment box */) {
 	shiftamt += (_abutbox.ury() - _abutbox.lly() + 1);
+  #if 0
+  printf("will use alignment - vertical\n");
+  #endif
       }
       else {
+        #if 0
+        printf("will use bbox - vertical - abut: new:%d old:%d\n",bl->b->getAbutBox().empty(),_abutbox.empty());
+        #endif
 	shiftamt += (_bloatbbox.ury() - _bbox.lly() + 1)
 	  /* width, including bloat */
 	  + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
@@ -325,6 +439,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
       }
     }
     else if (c == BLOB_MERGE) {
+      Assert(!flip,"flip does not yet work with merge");
       _bbox = _bbox ^ b->getBBox();
       _bloatbbox = _bloatbbox ^ b->getBloatBBox();
       if (!b->getAbutBox().empty() && !_abutbox.empty()) {
@@ -341,48 +456,49 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 
     /* now merge attributes if we used abutment */
     if (do_merge_attrib) {
-      Rectangle r = b->getAbutBox();
+      Rectangle r = bl->T.applyBox (b->getAbutBox());
       if (r.llx() == _abutbox.llx()) {
 	if (old_box.llx() == r.llx()) {
 	  // merge!
-	  _le->mergeleft (bl->b->getLeftAlign(), merge_y);
+	  _le->mergeleft (tmpEdgeAttr->left(), merge_y);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setleft (bl->b->getLeftAlign(), merge_y);
+	  _le->setleft (tmpEdgeAttr->left(), merge_y);
 	}
       }
       if (r.urx() == _abutbox.urx()) {
 	if (old_box.urx() == r.urx()) {
 	  // merge!
-	  _le->mergeright (bl->b->getRightAlign(), merge_y);
+	  _le->mergeright (tmpEdgeAttr->right(), merge_y);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setright (bl->b->getRightAlign(), merge_y);
+	  _le->setright (tmpEdgeAttr->right(), merge_y);
 	}
       }
       if (r.lly() == _abutbox.lly()) {
 	if (old_box.lly() == r.lly()) {
 	  // merge!
-	  _le->mergebot (bl->b->getBotAlign(), merge_x);
+	  _le->mergebot (tmpEdgeAttr->bot(), merge_x);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->setbot (bl->b->getBotAlign(), merge_x);
+	  _le->setbot (tmpEdgeAttr->bot(), merge_x);
 	}
       }
       if (r.ury() == _abutbox.ury()) {
 	if (old_box.ury() == r.ury()) {
 	  // merge!
-	  _le->mergetop (bl->b->getTopAlign(), merge_x);
+	  _le->mergetop (tmpEdgeAttr->top(), merge_x);
 	}
 	else {
 	  // shift left aligh by damt
-	  _le->settop (bl->b->getTopAlign(), merge_x);
+	  _le->settop (tmpEdgeAttr->top(), merge_x);
 	}
       }
     }
+    delete tmpEdgeAttr;
   }
 #if 0
   printf ("blob: (%ld,%ld) -> (%ld,%ld); bloat: (%ld,%ld)->(%ld,%ld)\n",
@@ -391,12 +507,12 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap)
 }
 
 
-void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
+void LayoutBlob::_printRect (FILE *fp, TransformMat *mat, bool istopcell)
 {
   switch (t) {
   case BLOB_BASE:
     if (base.l) {
-      base.l->PrintRect (fp, mat);
+      base.l->PrintRect (fp, mat, istopcell);
     }
     break;
     
@@ -407,7 +523,7 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
 	m = *mat;
       }
       m.applyMat (bl->T);
-      bl->b->_printRect (fp, &m);
+      bl->b->_printRect (fp, &m, false);
     }
     break;
 
@@ -421,31 +537,80 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat)
       if (mat) {
 	m = *mat;
       }
-      subcell->PrintRect (fp, &m);
+      subcell->PrintRect (fp, &m, istopcell);
     }
     break;
 
   }
 }
 
-void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat)
+
+void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat, bool istopcell)
 {
   long bllx, blly, burx, bury;
   long x, y;
   Rectangle bloatbox = getBloatBBox ();
+  Rectangle abutbox = getAbutBox ();
   fprintf (fp, "bbox ");
   if (mat) {
     mat->apply (bloatbox.llx(), bloatbox.lly(), &x, &y);
     fprintf (fp, "%ld %ld", x, y);
     mat->apply (bloatbox.urx()+1, bloatbox.ury()+1, &x, &y);
     fprintf (fp, " %ld %ld\n", x, y);
+    // mat->apply (abutbox.llx(), abutbox.lly(), &x, &y);
+    // fprintf (fp, "rect # $align %ld %ld", x, y);
+    // mat->apply (abutbox.urx()+1, abutbox.ury()+1, &x, &y);
+    // fprintf (fp, " %ld %ld\n", x, y);
   }
   else {
     fprintf (fp, "%ld %ld %ld %ld\n",
 	     bloatbox.llx(), bloatbox.lly(),
 	     bloatbox.urx()+1, bloatbox.ury()+1);
+
+    if (istopcell) {
+      if (!_abutbox.empty()) {
+        fprintf (fp, "rect # $align %ld %ld %ld %ld\n", _abutbox.llx(),
+          _abutbox.lly(), _abutbox.urx()+1, _abutbox.ury()+1);
+      }
+      LayoutEdgeAttrib::attrib_list *l;
+
+      long x, y;
+
+      if (_abutbox.empty()) {
+        x = 0;
+        y = 0;
+      }
+      else {
+        x = _abutbox.llx();
+        y = _abutbox.lly();
+      }
+
+      if (_le) {
+        for (l = _le->left(); l; l = l->next) {
+          fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+            l->name, x, l->offset, x, l->offset);
+        }
+        for (l = _le->right(); l; l = l->next) {
+          fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+            l->name, x, l->offset, x, l->offset);
+        }
+        for (l = _le->top(); l; l = l->next) {
+          fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+            l->name, l->offset, y, l->offset, y);
+        }
+        for (l = _le->bot(); l; l = l->next) {
+          fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+            l->name, l->offset, y, l->offset, y);
+        }
+      }
+    }
   }
-  _printRect (fp, mat);
+  if (_abutbox.empty()){
+    _printRect (fp, mat, istopcell);
+  }
+  else {
+    _printRect (fp, mat, false);
+  }
 }
 
 
@@ -778,7 +943,10 @@ Rectangle LayoutBlob::getAbutBox()
     break;
   case BLOB_CELL:
     return subcell->getAbutBox();
+  case BLOB_LIST:
+    return _abutbox;
   default:
+    warning("return empty abut box, type not implemented");
     return Rectangle();
   }
 }
