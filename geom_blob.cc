@@ -284,21 +284,19 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
     _bbox = b->getBBox ();
     _bloatbbox = b->getBloatBBox ();
     _abutbox = b->getAbutBox ();
-    _le = bl->b->getLayoutEdgeAttrib ()->Clone();
     if (c == BLOB_HORIZ) {
       if (flip){
         bl->T.mirrorLR();
-        _le->swaplr();
       }
       bl->T.translate (gap, 0);
     }
     else if (c == BLOB_VERT) {
       if (flip){
         bl->T.mirrorTB();
-        _le->swaptb();
       }
       bl->T.translate (0, gap);
     }
+    _le = bl->b->getLayoutEdgeAttrib ()->Clone(bl->T);
     _bbox = bl->T.applyBox (_bbox);
     _bloatbbox = bl->T.applyBox (_bloatbbox);
     _abutbox = bl->T.applyBox (_abutbox);
@@ -309,7 +307,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
   else {
     int do_merge_attrib = 0;
     Rectangle old_box;
-    LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib ()->Clone();
+    
     long merge_x, merge_y;
     
     // we are actually appending to the blob
@@ -320,13 +318,16 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       bool valid;
       /* align! */
       if (flip){
-        tmpEdgeAttr->swaplr();
+        //tmpEdgeAttr->swaplr();
+        bl->T.mirrorLR();
       }
+      LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(bl->T);
       valid = LayoutEdgeAttrib::align (_le->right(), tmpEdgeAttr->left(), &damt);
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
+      delete tmpEdgeAttr;
 
       int shiftamt = gap;
 
@@ -347,10 +348,10 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	  + (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
       }
 
-      TransformMat t;
-      // flip?
-      t.translate (shiftamt, damt);
-      bl->T = t;
+      //TransformMat t;
+      //// flip?
+      //t.translate (shiftamt, damt);
+      bl->T.translate (shiftamt, damt);
 
       // now we have shifted the blob; so
       Rectangle r;
@@ -372,6 +373,8 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	
 	r = bl->T.applyBox (b->getAbutBox());
 	_abutbox = _abutbox ^ r;
+    _le->mergeright(bl->b->getLayoutEdgeAttrib()->Clone(bl->T));
+
       }
       else {
 	_abutbox.clear();
@@ -383,14 +386,17 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       bool valid;
       /* align! */
       if (flip){
-        tmpEdgeAttr->swaptb();
+        bl->T.mirrorTB();
+       // tmpEdgeAttr->swaptb();
       }
+      LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(bl->T);
       valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
 
       if (!valid) {
 	warning ("appendBlob: no valid alignment, but continuing anyway");
 	damt = 0;
       }
+      delete tmpEdgeAttr;
 
       int shiftamt = gap;
 
@@ -411,9 +417,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	  + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
       }
       
-      TransformMat t;
-      t.translate (damt, shiftamt);
-      bl->T = t;
+      // TransformMat t;
+      // t.translate (damt, shiftamt);
+      bl->T.translate (damt, shiftamt);
       
       Rectangle r;
 
@@ -432,6 +438,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	_abutbox = _abutbox ^ r;
 	merge_x = damt;
 	merge_y = shiftamt;
+  _le->mergetop(bl->b->getLayoutEdgeAttrib()->Clone(bl->T));
       }
       else {
 	_abutbox.clear();
