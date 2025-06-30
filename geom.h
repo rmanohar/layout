@@ -182,7 +182,7 @@ public:
   void getBBox (long *llx, long *lly, long *urx, long *ury);
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
-  void PrintRect (FILE *fp, TransformMat *t = NULL);
+  void PrintRect (FILE *fp, TransformMat *t = NULL, bool istopcell=true);
   void ReadRect (const char *file, int raw_mode = 0);
   void ReadRect (Process *p, int raw_mode = 0);
 
@@ -294,27 +294,29 @@ private:
 
   bool readRect;
 
-  void _printRect (FILE *fp, TransformMat *t);
+  void _printRect (FILE *fp, TransformMat *t, bool istopcell = true);
   
 public:
   LayoutBlob (blob_type type, Layout *l = NULL);
   LayoutBlob (SubcellInst *cell);
   LayoutBlob (ExternMacro *m);
+  // LayoutBlob (const LayoutBlob& other);
   ~LayoutBlob ();
   
   bool isSubcell() { return t == BLOB_CELL ? true : false; }
+  bool isList() { return t == BLOB_LIST ? true : false; }
 
   /* macros */
   bool isMacro() { return t == BLOB_MACRO ? true : false; }
   const char *getMacroName() { return macro->getName(); }
   const char *getLEFFile() { return macro->getLEFFile(); }
 
-  void appendBlob (LayoutBlob *b, blob_compose c, long gap = 0);
+  void appendBlob (LayoutBlob *b, blob_compose c, long gap = 0, bool flip = false);
 
   void markRead () { readRect = true; }
   bool getRead() { return readRect; }
   
-  void PrintRect (FILE *fp, TransformMat *t = NULL);
+  void PrintRect (FILE *fp, TransformMat *t = NULL, bool istopcell = true);
 
   /**
    * Computes the actual bounding box of the layout blob
