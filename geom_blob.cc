@@ -300,9 +300,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
         _bbox = bl->T.applyBox (_bbox);
         _bloatbbox = bl->T.applyBox (_bloatbbox);
         _abutbox = bl->T.applyBox (_abutbox);
+#if 0
         printf("abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
-
-
+#endif
     }
     else {
         int do_merge_attrib = 0;
@@ -963,7 +963,9 @@ Rectangle LayoutBlob::getAbutBox()
     case BLOB_LIST:
         return _abutbox;
     default:
+#if 0
         warning("return empty abut box, type not implemented");
+#endif
         return Rectangle();
     }
 }
