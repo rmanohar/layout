@@ -3212,6 +3212,7 @@ static void dump_inst (void *x, ActId *prefix, UserDef *u)
 static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
 		      int toplevel, int pins)
 {
+  char buf[10240];
   Assert (net, "Why are you calling this function?");
   if (net->skip) return 0;
   if (net->port && (!toplevel || !pins)) return 0;
@@ -3220,16 +3221,18 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
 
   fprintf (fp, "- ");
   if (prefix) {
-    prefix->Print (fp);
-    fprintf (fp, ".");
+    prefix->sPrint (buf, 10240);
+    global_act->mfprintf (fp, "%s.", buf);
+    //prefix->Print (fp);
+    //fprintf (fp, ".");
   }
   ActId *tmp = net->net->primary()->toid();
-  tmp->Print (fp);
+  tmp->sPrint (buf, 10240);
+  global_act->mfprintf (fp, "%s", buf);
+  //tmp->Print (fp);
   delete tmp;
 
   fprintf (fp, "\n  ");
-
-  char buf[10240];
 
   if (net->port) {
     //fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
@@ -3440,7 +3443,6 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   global_act = a;
   _alp = this;
   ap->run (p);
-  global_act = NULL;
   fprintf (fp, "END COMPONENTS\n\n");
 
 
@@ -3553,6 +3555,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   
   fprintf (fp, "NETS %12lu ;\n", netcount);
   fseek (fp, 0, SEEK_END);
+  global_act = NULL;
 }
 
 

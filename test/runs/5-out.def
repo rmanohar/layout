@@ -26,22 +26,22 @@ PINS 0 ;
 END PINS
 
 NETS            6 ;
-- x.in[0]
+- x_ain_50_6
    ( x in_50_6 )
 ;
-- x.in[1]
+- x_ain_51_6
    ( x in_51_6 )
 ;
-- x.in[2]
+- x_ain_52_6
    ( x in_52_6 )
 ;
-- x.in[3]
+- x_ain_53_6
    ( x in_53_6 )
 ;
-- x.in[4]
+- x_ain_54_6
    ( x in_54_6 )
 ;
-- x.out
+- x_aout
    ( x out )
 ;
 END NETS

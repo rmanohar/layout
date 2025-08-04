@@ -26,13 +26,13 @@ PINS 0 ;
 END PINS
 
 NETS            3 ;
-- x.A
+- x_aA
    ( x A )
 ;
-- x.B
+- x_aB
    ( x B )
 ;
-- x.Y
+- x_aY
    ( x Y )
 ;
 END NETS
