@@ -591,34 +591,38 @@ void LayoutBlob::PrintRect (FILE *fp, TransformMat *mat, bool istopcell)
             }
             LayoutEdgeAttrib::attrib_list *l;
 
-            long x, y;
+            long llx, lly, urx, ury;
 
             if(_abutbox.empty()) {
-                x = 0;
-                y = 0;
+	      llx = 0;
+	      lly = 0;
+	      urx = 1;
+	      ury = 1;
             }
             else {
-                x = _abutbox.llx();
-                y = _abutbox.lly();
+	      llx = _abutbox.llx();
+	      lly = _abutbox.lly();
+	      urx = _abutbox.urx() + 1;
+	      ury = _abutbox.ury() + 1;
             }
 
             if(_le) {
-                for(l = _le->left(); l; l = l->next) {
-                    fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
-                        l->name, x, l->offset, x, l->offset);
-                }
-                for(l = _le->right(); l; l = l->next) {
-                    fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
-                        l->name, x, l->offset, x, l->offset);
-                }
-                for(l = _le->top(); l; l = l->next) {
-                    fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
-                        l->name, l->offset, y, l->offset, y);
-                }
-                for(l = _le->bot(); l; l = l->next) {
-                    fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
-                        l->name, l->offset, y, l->offset, y);
-                }
+	      for(l = _le->left(); l; l = l->next) {
+		fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
+			 l->name, llx, l->offset, llx, l->offset);
+	      }
+	      for(l = _le->right(); l; l = l->next) {
+		fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
+			 l->name, urx, l->offset, urx, l->offset);
+	      }
+	      for(l = _le->top(); l; l = l->next) {
+		fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
+			 l->name, l->offset, ury, l->offset, ury);
+	      }
+	      for(l = _le->bot(); l; l = l->next) {
+		fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
+			 l->name, l->offset, lly, l->offset, lly);
+	      }
             }
         }
     }

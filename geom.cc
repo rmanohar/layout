@@ -446,33 +446,37 @@ void Layout::PrintRect (FILE *fp, TransformMat *t, bool istopcell)
     }
     LayoutEdgeAttrib::attrib_list *l;
 
-    long x, y;
+    long llx, lly, urx, ury;
 
     if (_abutbox.empty()) {
-      x = 0;
-      y = 0;
+      llx = 0;
+      lly = 0;
+      urx = 1;
+      ury = 1;
     }
     else {
-      x = _abutbox.llx();
-      y = _abutbox.lly();
+      llx = _abutbox.llx();
+      lly = _abutbox.lly();
+      urx = _abutbox.urx() + 1;
+      ury = _abutbox.ury() + 1;
     }
 
     if (_le) {
       for (l = _le->left(); l; l = l->next) {
         fprintf (fp, "rect $l:%s $align %ld %ld %ld %ld\n",
-	         l->name, x, l->offset, x, l->offset);
+	         l->name, llx, l->offset, llx, l->offset);
       }
       for (l = _le->right(); l; l = l->next) {
         fprintf (fp, "rect $r:%s $align %ld %ld %ld %ld\n",
-	         l->name, x, l->offset, x, l->offset);
+	         l->name, urx, l->offset, urx, l->offset);
       }
       for (l = _le->top(); l; l = l->next) {
         fprintf (fp, "rect $t:%s $align %ld %ld %ld %ld\n",
-	         l->name, l->offset, y, l->offset, y);
+	         l->name, l->offset, ury, l->offset, ury);
       }
       for (l = _le->bot(); l; l = l->next) {
         fprintf (fp, "rect $b:%s $align %ld %ld %ld %ld\n",
-	         l->name, l->offset, y, l->offset, y);
+	         l->name, l->offset, lly, l->offset, lly);
       }
     }
   }
@@ -696,7 +700,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       }
       else if (strncmp (net, "$l:", 3) == 0) {
 	      l->name = Strdup (net+3);
-        #if 0
+        #if 1
         printf("new marker %s left: %ld\n",l->name, rlly);
         #endif	
 	      l->offset = rlly; // left alignment: lower left corner y coord
@@ -738,7 +742,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
         
 	l->name = Strdup (net+3);
   #if 0	
-  printf("new marker %s bottom: %ld\n",l->name, rlly);
+  printf("new marker %s bottom: %ld\n",l->name, rllx);
   #endif
 	l->offset = rllx; // bot alignment: lower left corner x coord
 	if (!_le) {
