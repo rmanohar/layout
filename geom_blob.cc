@@ -279,24 +279,24 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 
     q_ins (l.hd, l.tl, bl);
 
-    if(l.hd == l.tl) {
+    if (l.hd == l.tl) {
       // the first blob
         _bbox = b->getBBox ();
         _bloatbbox = b->getBloatBBox ();
         _abutbox = b->getAbutBox ();
-        if(c == BLOB_HORIZ) {
-            if(flip){
-                bl->T.mirrorLR();
-            }
-            bl->T.translate (gap, 0);
+        if (c == BLOB_HORIZ) {
+	  if (flip) {
+	    bl->T.mirrorLR();
+	  }
+	  bl->T.translate (gap, 0);
         }
-        else if(c == BLOB_VERT) {
-            if(flip){
-                bl->T.mirrorTB();
-            }
-            bl->T.translate (0, gap);
+        else if (c == BLOB_VERT) {
+	  if (flip) {
+	    bl->T.mirrorTB();
+	  }
+	  bl->T.translate (0, gap);
         }
-        _le = bl->b->getLayoutEdgeAttrib ()->Clone(&(bl->T));
+        _le = bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
         _bbox = bl->T.applyBox (_bbox);
         _bloatbbox = bl->T.applyBox (_bloatbbox);
         _abutbox = bl->T.applyBox (_abutbox);
@@ -305,217 +305,238 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 #endif
     }
     else {
-        int do_merge_attrib = 0;
-        Rectangle old_box;
+      int do_merge_attrib = 0;
+      Rectangle old_box;
+      long merge_x, merge_y;
 
-        long merge_x, merge_y;
+      // we are actually appending to the blob
+      Assert (prev, "What?");
 
-        // we are actually appending to the blob
-        Assert (prev, "What?");
-        if(c == BLOB_HORIZ) {
+      if (c == BLOB_HORIZ) {
+	long damt;
+	bool valid;
+	/* align! */
 
-            long damt;
-            bool valid;
-            /* align! */
-            if(flip){
-              //tmpEdgeAttr->swaplr();
-                bl->T.mirrorLR();
-            }
-            LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
-            valid = LayoutEdgeAttrib::align (_le->right(), tmpEdgeAttr->left(), &damt);
-            if(!valid) {
-                warning ("appendBlob: no valid alignment, but continuing anyway");
-                damt = 0;
-            }
-            delete tmpEdgeAttr;
+	if (flip) {
+	  //tmpEdgeAttr->swaplr();
+	  bl->T.mirrorLR();
+	}
+	LayoutEdgeAttrib *tmpEdgeAttr =
+	  bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
 
-            int shiftamt = gap;
+	valid = LayoutEdgeAttrib::align (_le->right(), tmpEdgeAttr->left(), &damt);
+	if (!valid) {
+	  warning ("appendBlob: no valid alignment, but continuing anyway");
+	  damt = 0;
+	}
+	delete tmpEdgeAttr;
 
-            if(valid /* acceptable alignment exists */
-                && !bl->b->getAbutBox().empty() /* there is an abutment box */
-                && !_abutbox.empty() /* there is an abutment box */) {
-                shiftamt += (_abutbox.urx() - _abutbox.llx() + 1);
+	Rectangle bx_bbox, bx_abutbox, bx_bloatbbox;
+	bx_bbox = bl->T.applyBox (b->getBBox());
+	bx_bloatbbox = bl->T.applyBox (b->getBloatBBox());
+	bx_abutbox = bl->T.applyBox (b->getAbutBox());
+
 #if 0
-                printf("will use alignment - horizontal\n");
+	printf ("[%d] orig box: ", flip); b->getBBox().print (stdout);
+	printf ("\n       transformed: "); bx_bbox.print (stdout);
+	printf ("\n");
+	printf ("       abut box: "); bx_abutbox.print (stdout);
+	printf ("\n");
+
+	printf ("    cur blob bbox: "); _bbox.print (stdout);
+	printf ("\n");
+	printf ("    cur abut bbox: "); _abutbox.print (stdout);
+	printf ("\n");
+	
 #endif
-            }
-            else {
+
+	int shiftamt = gap;
+
+	if(valid /* acceptable alignment exists */
+	   && !bl->b->getAbutBox().empty() /* there is an abutment box */
+	   && !_abutbox.empty() /* there is an abutment box */) {
+
+	  shiftamt += _abutbox.urx() - bx_abutbox.llx() + 1;
+	}
+	else {
+	  shiftamt += (_bloatbbox.urx() - _bbox.llx() + 1)
+	    /* width, including bloat */
+	    + (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
+	}
+
+	//TransformMat t;
+	//// flip?
+	//t.translate (shiftamt, damt);
+	bl->T.translate (shiftamt, damt);
+
+	// now we have shifted the blob; so
+	Rectangle r;
+
+	r = bl->T.applyBox (b->getBBox());
+
+	_bbox = _bbox ^ r;
+
+	r = bl->T.applyBox (b->getBloatBBox());
+	_bloatbbox = _bloatbbox ^ r;
+
+	r = b->getAbutBox();
+	if(!r.empty() && !_abutbox.empty()) {
+	  old_box = _abutbox;
+	  do_merge_attrib = 1;
+
+	  merge_x = shiftamt;
+	  merge_y = damt;
+
+	  r = bl->T.applyBox (b->getAbutBox());
+	  _abutbox = _abutbox ^ r;
+
+	}
+	else {
+	  _abutbox.clear();
+	  _le = new LayoutEdgeAttrib();
+	}
+      }
+      else if(c == BLOB_VERT) {
+	long damt;
+	bool valid;
+	/* align! */
+	if(flip){
+	  bl->T.mirrorTB();
+	  // tmpEdgeAttr->swaptb();
+	}
+	LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+	valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
+
+	if(!valid) {
+	  warning ("appendBlob: no valid alignment, but continuing anyway");
+	  damt = 0;
+	}
+	delete tmpEdgeAttr;
+
+	Rectangle bx_bbox, bx_abutbox, bx_bloatbbox;
+	bx_bbox = bl->T.applyBox (b->getBBox());
+	bx_bloatbbox = bl->T.applyBox (b->getBloatBBox());
+	bx_abutbox = bl->T.applyBox (b->getAbutBox());
+
+	int shiftamt = gap;
+
+	if(valid /* acceptable alignment exists */
+	   && !bl->b->getAbutBox().empty() /* there is an abutment box */
+	   && !_abutbox.empty() /* there is an abutment box */) {
+	  
+	  shiftamt += (_abutbox.ury() - bx_abutbox.lly() + 1);
 #if 0
-                printf("will use bbox - horizontal- abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
+	  printf("will use alignment - vertical\n");
 #endif
-                shiftamt += (_bloatbbox.urx() - _bbox.llx() + 1)
-                  /* width, including bloat */
-                    + (b->getBBox().llx() - b->getBloatBBox().llx()); /* left bloat */
-            }
-
-            //TransformMat t;
-            //// flip?
-            //t.translate (shiftamt, damt);
-            bl->T.translate (shiftamt, damt);
-
-            // now we have shifted the blob; so
-            Rectangle r;
-
-            r = bl->T.applyBox (b->getBBox());
-
-            _bbox = _bbox ^ r;
-
-            r = bl->T.applyBox (b->getBloatBBox());
-            _bloatbbox = _bloatbbox ^ r;
-
-            r = b->getAbutBox();
-            if(!r.empty() && !_abutbox.empty()) {
-                old_box = _abutbox;
-                do_merge_attrib = 1;
-
-                merge_x = shiftamt;
-                merge_y = damt;
-
-                r = bl->T.applyBox (b->getAbutBox());
-                _abutbox = _abutbox ^ r;
-
-            }
-            else {
-                _abutbox.clear();
-                _le = new LayoutEdgeAttrib();
-            }
-        }
-        else if(c == BLOB_VERT) {
-            long damt;
-            bool valid;
-            /* align! */
-            if(flip){
-                bl->T.mirrorTB();
-               // tmpEdgeAttr->swaptb();
-            }
-            LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
-            valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
-
-            if(!valid) {
-                warning ("appendBlob: no valid alignment, but continuing anyway");
-                damt = 0;
-            }
-            delete tmpEdgeAttr;
-
-            int shiftamt = gap;
-
-            if(valid /* acceptable alignment exists */
-                && !bl->b->getAbutBox().empty() /* there is an abutment box */
-                && !_abutbox.empty() /* there is an abutment box */) {
-                shiftamt += (_abutbox.ury() - _abutbox.lly() + 1);
+	}
+	else {
 #if 0
-                printf("will use alignment - vertical\n");
+	  printf("will use bbox - vertical - abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
 #endif
-            }
-            else {
-#if 0
-                printf("will use bbox - vertical - abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
-#endif
-                shiftamt += (_bloatbbox.ury() - _bbox.lly() + 1)
-                  /* width, including bloat */
-                    + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
-            }
+	  shiftamt += (_bloatbbox.ury() - _bbox.lly() + 1)
+	    /* width, including bloat */
+	    + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
+	}
 
-            // TransformMat t;
-            // t.translate (damt, shiftamt);
-            bl->T.translate (damt, shiftamt);
+	// TransformMat t;
+	// t.translate (damt, shiftamt);
+	bl->T.translate (damt, shiftamt);
 
-            Rectangle r;
+	Rectangle r;
 
-            r = bl->T.applyBox (b->getBBox());
+	r = bl->T.applyBox (b->getBBox());
 
-            _bbox = _bbox ^ r;
+	_bbox = _bbox ^ r;
 
-            r = bl->T.applyBox (b->getBloatBBox ());
-            _bloatbbox = _bloatbbox ^ r;
+	r = bl->T.applyBox (b->getBloatBBox ());
+	_bloatbbox = _bloatbbox ^ r;
 
-            r = b->getAbutBox();
-            if(!r.empty() && !_abutbox.empty()) {
-                old_box = _abutbox;
-                do_merge_attrib = 1;
-                r = bl->T.applyBox (b->getAbutBox());
-                _abutbox = _abutbox ^ r;
-                merge_x = damt;
-                merge_y = shiftamt;
-            }
-            else {
-                _abutbox.clear();
-                _le = new LayoutEdgeAttrib();
-            }
-        }
-        else if(c == BLOB_MERGE) {
-            Assert(!flip, "flip does not yet work with merge");
-            _bbox = _bbox ^ b->getBBox();
-            _bloatbbox = _bloatbbox ^ b->getBloatBBox();
-            if(!b->getAbutBox().empty() && !_abutbox.empty()) {
-                old_box = _abutbox;
-                _abutbox = _abutbox ^ b->getAbutBox();
-                do_merge_attrib = 1;
-                merge_x = 0;
-                merge_y = 0;
-            }
-        }
-        else {
-            fatal_error ("What?");
-        }
+	r = b->getAbutBox();
+	if(!r.empty() && !_abutbox.empty()) {
+	  old_box = _abutbox;
+	  do_merge_attrib = 1;
+	  r = bl->T.applyBox (b->getAbutBox());
+	  _abutbox = _abutbox ^ r;
+	  merge_x = damt;
+	  merge_y = shiftamt;
+	}
+	else {
+	  _abutbox.clear();
+	  _le = new LayoutEdgeAttrib();
+	}
+      }
+      else if(c == BLOB_MERGE) {
+	Assert(!flip, "flip does not yet work with merge");
+	_bbox = _bbox ^ b->getBBox();
+	_bloatbbox = _bloatbbox ^ b->getBloatBBox();
+	if(!b->getAbutBox().empty() && !_abutbox.empty()) {
+	  old_box = _abutbox;
+	  _abutbox = _abutbox ^ b->getAbutBox();
+	  do_merge_attrib = 1;
+	  merge_x = 0;
+	  merge_y = 0;
+	}
+      }
+      else {
+	fatal_error ("What?");
+      }
 
-        /* now merge attributes if we used abutment */
-        if(do_merge_attrib) {
-            //get the already transformed edge attibutes
-            LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
-            Rectangle r = bl->T.applyBox (b->getAbutBox());
-            if(r.llx() == _abutbox.llx()) {
-                if(old_box.llx() == r.llx()) {
-                  // merge!
-                  //_le->mergeleft (tmpEdgeAttr->left(), merge_y);
-                    _le->mergeleft (tmpEdgeAttr->left());
+      /* now merge attributes if we used abutment */
+      if(do_merge_attrib) {
+	//get the already transformed edge attibutes
+	LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+	Rectangle r = bl->T.applyBox (b->getAbutBox());
+	if(r.llx() == _abutbox.llx()) {
+	  if(old_box.llx() == r.llx()) {
+	    // merge!
+	    //_le->mergeleft (tmpEdgeAttr->left(), merge_y);
+	    _le->mergeleft (tmpEdgeAttr->left());
 
-                }
-                else {
-                  // shift left aligh by damt
-                  //_le->setleft (tmpEdgeAttr->left(), merge_y);
-                  _le->setleft (tmpEdgeAttr->left());
-                }
-            }
-            if(r.urx() == _abutbox.urx()) {
-                if(old_box.urx() == r.urx()) {
-                  // merge!
-                  //_le->mergeright (tmpEdgeAttr->right(), merge_y);
-                  _le->mergeright (tmpEdgeAttr->right());
-                }
-                else {
-                  // shift left aligh by damt
-                  //_le->setright (tmpEdgeAttr->right(), merge_y);
-                  _le->setright (tmpEdgeAttr->right());
-                }
-            }
-            if(r.lly() == _abutbox.lly()) {
-                if(old_box.lly() == r.lly()) {
-                  // merge!
-                  //_le->mergebot (tmpEdgeAttr->bot(), merge_x);
-                  _le->mergebot (tmpEdgeAttr->bot());
-                }
-                else {
-                  // shift left aligh by damt
-                  //_le->setbot (tmpEdgeAttr->bot(), merge_x);
-                  _le->setbot (tmpEdgeAttr->bot());
-                }
-            }
-            if(r.ury() == _abutbox.ury()) {
-                if(old_box.ury() == r.ury()) {
-                  // merge!
-                  //_le->mergetop (tmpEdgeAttr->top(), merge_x);
-                  _le->mergetop (tmpEdgeAttr->top());
-                }
-                else {
-                  // shift left aligh by damt
-                  //_le->settop (tmpEdgeAttr->top(), merge_x);
-                  _le->settop (tmpEdgeAttr->top());
-                }
-            }
-            delete tmpEdgeAttr;
-        }
-
+	  }
+	  else {
+	    // shift left aligh by damt
+	    //_le->setleft (tmpEdgeAttr->left(), merge_y);
+	    _le->setleft (tmpEdgeAttr->left());
+	  }
+	}
+	if(r.urx() == _abutbox.urx()) {
+	  if(old_box.urx() == r.urx()) {
+	    // merge!
+	    //_le->mergeright (tmpEdgeAttr->right(), merge_y);
+	    _le->mergeright (tmpEdgeAttr->right());
+	  }
+	  else {
+	    // shift left aligh by damt
+	    //_le->setright (tmpEdgeAttr->right(), merge_y);
+	    _le->setright (tmpEdgeAttr->right());
+	  }
+	}
+	if(r.lly() == _abutbox.lly()) {
+	  if(old_box.lly() == r.lly()) {
+	    // merge!
+	    //_le->mergebot (tmpEdgeAttr->bot(), merge_x);
+	    _le->mergebot (tmpEdgeAttr->bot());
+	  }
+	  else {
+	    // shift left aligh by damt
+	    //_le->setbot (tmpEdgeAttr->bot(), merge_x);
+	    _le->setbot (tmpEdgeAttr->bot());
+	  }
+	}
+	if(r.ury() == _abutbox.ury()) {
+	  if(old_box.ury() == r.ury()) {
+	    // merge!
+	    //_le->mergetop (tmpEdgeAttr->top(), merge_x);
+	    _le->mergetop (tmpEdgeAttr->top());
+	  }
+	  else {
+	    // shift left aligh by damt
+	    //_le->settop (tmpEdgeAttr->top(), merge_x);
+	    _le->settop (tmpEdgeAttr->top());
+	  }
+	}
+	delete tmpEdgeAttr;
+      }
     }
 #if 0
     printf ("blob: (%ld,%ld) -> (%ld,%ld); bloat: (%ld,%ld)->(%ld,%ld)\n",

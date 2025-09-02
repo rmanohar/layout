@@ -143,6 +143,10 @@ public:
     return inXRange(x) && inYRange(y);
   }
 
+  void print(FILE *fp) {
+    fprintf (fp, "(%ld,%ld) -> (%ld,%ld)", llx(), lly(), urx(), ury());
+  }
+
   bool contains (const Rectangle &r) const {
     if (llx() <= r.llx() && lly() <= r.lly() &&
 	r.urx() <= urx() && r.ury() <= ury()) {

@@ -580,6 +580,7 @@ void Layout::ReadRect (const char *fname, int raw_mode)
       offset++;
     }
     if (buf[offset] == '\0') continue;
+    if (buf[offset] == '#') continue;
     if (strncmp (buf+offset, "inrect ", 7) == 0) {
       offset += 7;
       rtype = 1;
