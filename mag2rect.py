@@ -56,10 +56,19 @@ rect_map =  {
   'nsc'         :   ['nsc', 'nndiff', 'm1' ],
 }
 
-#These are for mag file
-parse_layer = '<<\s+(?P<layer>\w+)\s+>>'
-parse_coord = 'rect\s+(?P<xl>[0-9-]+)\s+(?P<yl>[0-9-]+)\s+(?P<xh>[0-9-]+)\s+(?P<yh>[0-9-]+)'
-parse_label = 'rlabel\s*(?P<layer>\w+)\s*(?P<xl>[0-9-]+)\s+(?P<yl>[0-9-]+)\s+(?P<xh>[0-9-]+)\s+(?P<yh>[0-9-]+)\s+\d+\s+(?P<label>[a-zA-Z0-9_()#]+)'
+#
+# These are for parsing a mag file
+#
+
+# layer starts with << layername >>, extract into the "layer" named group.
+parse_layer = r'<<\s+(?P<layer>\w+)\s+>>'
+
+# rectangles (xl,yl,xh,yh)
+parse_coord = r'rect\s+(?P<xl>[0-9-]+)\s+(?P<yl>[0-9-]+)\s+(?P<xh>[0-9-]+)\s+(?P<yh>[0-9-]+)'
+
+# label is rlabel followed by the layer followed by coordinates
+# followed by the name of the label
+parse_label = r'rlabel\s*(?P<layer>\w+)\s*(?P<xl>[0-9-]+)\s+(?P<yl>[0-9-]+)\s+(?P<xh>[0-9-]+)\s+(?P<yh>[0-9-]+)\s+\d+\s+(?P<label>[a-zA-Z0-9_()#]+)'
 
 #label_map = defaultdict(list)
 label_map = {}
@@ -102,11 +111,35 @@ for line in mag_file:
     if cur_layer in rect_map:
       cur_layer = rect_map[cur_layer][0]
 
-    # ?? invalidate label for resricted addition? 
-    if (cur_label.find('restr_') != -1):
-      cur_label = '#'
+    # check for align_ labels; these are alignment markers
+    box_str = str(cur_bbox[0]) + " " + str(cur_bbox[1]) + " "
+    box_str = box_str + str(int(res.group('xh'))) + " " + str(int(res.group('yh')))
+    
+    if cur_label == "align_BBOX":
+      rect_file.write("rect # $align " + box_str + "\n")
+      continue
+    elif cur_label.startswith("alignl_"):
+      rect_file.write("rect $l:" + cur_label[7:] + " $align " + box_str + "\n")
+      continue
+    elif cur_label.startswith("alignr_"):
+      rect_file.write("rect $r:" + cur_label[7:] + " $align " + box_str + "\n")
+      continue
+    elif cur_label.startswith("alignt_"):
+      rect_file.write("rect $t:" + cur_label[7:] + " $align " + box_str + "\n")
+      continue
+    elif cur_label.startswith("alignb_"):
+      rect_file.write("rect $b:" + cur_label[7:] + " $align " + box_str + "\n")
+      continue
 
-    # ?? emove coordinate from label
+    #
+    # Special label name processing:
+    #    these used to be needed; not any more
+    #
+    # ?? invalidate label for resricted addition? 
+    #if (cur_label.find('restr_') != -1):
+    #  cur_label = '#'
+
+    # Remove coordinate from label; used to filter internal nets
     if (cur_label.find(res.group('xl')) != -1):
       cur_label = cur_label.replace('_' + res.group('xl'), '')
     if (cur_label.find(str(int(res.group('xl'))-1)) != -1):
@@ -127,12 +160,10 @@ for line in mag_file:
     if (hash_need == 1):
       cur_label = '#' + cur_label
       hash_need = 0
-    
+      
     # put label in list
     label_layer[cur_bbox] = cur_layer
     label_map[cur_bbox] = cur_label
-
-
 
 #
 # Second pass: emit the .rect file, now that we have collected all the labels
@@ -148,55 +179,58 @@ skip_layer = 0
 
 # process all rectangles/layer content
 for line in mag_file:
-        # read layer and map, stop processing if arriving at
-        # labels/end, skip on checkpaint
-	if (re.search(parse_layer, line)):
-		res = re.search(parse_layer, line)
-		cur_layer_mag = res.group('layer')
-		skip_layer = 0
-		if (cur_layer_mag.find('labels') != -1):
-                        skip_layer = 1
-                        continue
-		elif (cur_layer_mag.find('error') != -1):
-			skip_layer = 1
-			continue
-		elif (cur_layer_mag.find('checkpaint') != -1):
-			skip_layer = 1
-			continue
-		elif (cur_layer_mag.find('end') != -1):
-			break
+  # read layer and map, stop processing if arriving at
+  # labels/end, skip on checkpaint
+  if (re.search(parse_layer, line)):
+    res = re.search(parse_layer, line)
+    cur_layer_mag = res.group('layer')
+    skip_layer = 0
+    if (cur_layer_mag.find('labels') != -1):
+      skip_layer = 1
+      continue
+    elif (cur_layer_mag.find('error') != -1):
+      skip_layer = 1
+      continue
+    elif (cur_layer_mag.find('checkpaint') != -1):
+      skip_layer = 1
+      continue
+    elif (cur_layer_mag.find('end') != -1):
+      break
+    if cur_layer_mag in rect_map:
+      cur_layer = rect_map[cur_layer_mag]
+    else:
+      cur_layer = [ cur_layer_mag ]
 
-		if cur_layer_mag in rect_map:
-			cur_layer = rect_map[cur_layer_mag]
-		else:
-			cur_layer = [ cur_layer_mag ]
+  # we haven't arrived at a geometry layer, so skip.
+  if skip_layer == 1:
+    continue
 
-	if (skip_layer != 1):
-	  # get label for coordinates
-	  if (re.search(parse_coord, line)):
-	    res = re.search(parse_coord, line)
-	    cur_bbox = (int(res.group('xl')),int(res.group('yl')),int(res.group('xh')),int(res.group('yh')))
-	    # search for label inside the rectangle and on the same layer
-	    for key in label_map:
-	      if (key[0] >= cur_bbox[0] and key[0] <= cur_bbox[2]):
-	        if (key[1] >= cur_bbox[1] and key[1] <= cur_bbox[3]):
-	          if (label_layer[key] == cur_layer[0]):
-	            cur_label = label_map[key]
-	            break
-	        else:
-	          cur_label = '#'
-	      else:
-	        cur_label = '#'
-	  
-	  #skip line if cororinates were not parsed
-	  if (len(cur_bbox) == 0):
-	    continue
-	  if (len(cur_label) == 0):
-	    continue
+  # get label for coordinates
+  res = re.search(parse_coord, line)
+  if res:
+    # this is a rectangle
+    cur_bbox = (int(res.group('xl')),int(res.group('yl')),int(res.group('xh')),int(res.group('yh')))
+    # search for label inside the rectangle and on the same layer
+    for key in label_map:
+      if (key[0] >= cur_bbox[0] and key[0] <= cur_bbox[2]):
+        if (key[1] >= cur_bbox[1] and key[1] <= cur_bbox[3]):
+          if (label_layer[key] == cur_layer[0]):
+            cur_label = label_map[key]
+            break
+        else:
+          cur_label = '#'
+      else:
+        cur_label = '#'
 	
-	  # for each layer associated with the rectangle write line to rect file
-	  for layer in cur_layer:
-	    rect_file.write("rect " + cur_label + " " + layer + " " + str(cur_bbox[0]) + " " + str(cur_bbox[1]) + " " + str(cur_bbox[2]) + " " + str(cur_bbox[3]) + " " + "\n")
-	
-	  cur_bbox = ()
-	  cur_label = ''
+    #skip line if cororinates were not parsed
+    if (len(cur_bbox) == 0):
+      continue
+    if (len(cur_label) == 0):
+      continue
+    
+    # for each layer associated with the rectangle write line to rect file
+    for layer in cur_layer:
+      rect_file.write("rect " + cur_label + " " + layer + " " + str(cur_bbox[0]) + " " + str(cur_bbox[1]) + " " + str(cur_bbox[2]) + " " + str(cur_bbox[3]) + " " + "\n")
+      
+    cur_bbox = ()
+    cur_label = ''
