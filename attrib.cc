@@ -66,17 +66,23 @@ bool LayoutEdgeAttrib::merge (LayoutEdgeAttrib::attrib_list **x,
       y = y->next;
     }
     else {
-      if (!prev) {
-	prev = y;
+      if (cur->offset == y->offset && strcmp (cur->name, y->name) == 0) {
+	/* nothing to do */
 	y = y->next;
-	prev->next = cur;
-	*x = prev;
       }
       else {
-	prev->next = y;
-	y = y->next;
-	prev->next->next = cur;
-	prev = prev->next;
+	if (!prev) {
+	  prev = y;
+	  y = y->next;
+	  prev->next = cur;
+	  *x = prev;
+	}
+	else {
+	  prev->next = y;
+	  y = y->next;
+	  prev->next->next = cur;
+	  prev = prev->next;
+	}
       }
     }
   }
@@ -265,12 +271,12 @@ LayoutEdgeAttrib *LayoutEdgeAttrib::Clone (TransformMat *m)
 
   // now adjust list with dx and dy
   if (dx != 0) {
-    le->adjust (_top, dx);
-    le->adjust (_bot, dx);
+    le->adjust (le->top(), dx);
+    le->adjust (le->bot(), dx);
   }
   if (dy != 0) {
-    le->adjust (_left, dy);
-    le->adjust (_right, dy);
+    le->adjust (le->left(), dy);
+    le->adjust (le->right(), dy);
   }
   
   return le;

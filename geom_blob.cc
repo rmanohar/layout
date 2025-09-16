@@ -87,11 +87,6 @@ LayoutBlob::LayoutBlob (blob_type type, Layout *lptr)
             _bloatbbox.setRectCoords (llx, lly, urx, ury);
             _abutbox = lptr->getAbutBox ();
             _le = lptr->getEdgeAttrib ()->Clone ();
-#if 0
-            printf (" got: ");
-            LayoutEdgeAttrib::print (stdout, _le.bot());
-            printf ("\n");
-#endif
         }
         else {
             _bbox.clear ();
@@ -281,27 +276,27 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 
     if (l.hd == l.tl) {
       // the first blob
-        _bbox = b->getBBox ();
-        _bloatbbox = b->getBloatBBox ();
-        _abutbox = b->getAbutBox ();
-        if (c == BLOB_HORIZ) {
-	  if (flip) {
-	    bl->T.mirrorLR();
-	  }
-	  bl->T.translate (gap, 0);
-        }
-        else if (c == BLOB_VERT) {
-	  if (flip) {
-	    bl->T.mirrorTB();
-	  }
-	  bl->T.translate (0, gap);
-        }
-        _le = bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
-        _bbox = bl->T.applyBox (_bbox);
-        _bloatbbox = bl->T.applyBox (_bloatbbox);
-        _abutbox = bl->T.applyBox (_abutbox);
+      _bbox = b->getBBox ();
+      _bloatbbox = b->getBloatBBox ();
+      _abutbox = b->getAbutBox ();
+      if (c == BLOB_HORIZ) {
+	if (flip) {
+	  bl->T.mirrorLR();
+	}
+	bl->T.translate (gap, 0);
+      }
+      else if (c == BLOB_VERT) {
+	if (flip) {
+	  bl->T.mirrorTB();
+	}
+	bl->T.translate (0, gap);
+      }
+      _le = bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
+      _bbox = bl->T.applyBox (_bbox);
+      _bloatbbox = bl->T.applyBox (_bloatbbox);
+      _abutbox = bl->T.applyBox (_abutbox);
 #if 0
-        printf("abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
+      printf("abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
 #endif
     }
     else {
@@ -321,6 +316,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	  //tmpEdgeAttr->swaplr();
 	  bl->T.mirrorLR();
 	}
+
 	LayoutEdgeAttrib *tmpEdgeAttr =
 	  bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
 
@@ -347,7 +343,6 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	printf ("\n");
 	printf ("    cur abut bbox: "); _abutbox.print (stdout);
 	printf ("\n");
-	
 #endif
 
 	int shiftamt = gap;
@@ -482,10 +477,13 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       }
 
       /* now merge attributes if we used abutment */
-      if(do_merge_attrib) {
-	//get the already transformed edge attibutes
-	LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+      if (do_merge_attrib) {
+	//get the already transformed edge attributes
+	LayoutEdgeAttrib *tmpEdgeAttr =
+	  bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+
 	Rectangle r = bl->T.applyBox (b->getAbutBox());
+
 	if(r.llx() == _abutbox.llx()) {
 	  if(old_box.llx() == r.llx()) {
 	    // merge!
