@@ -259,18 +259,11 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 
     Assert (t == BLOB_LIST, "What?");
 
-    blob_list *bl, *prev;
+    blob_list *bl;
     NEW (bl, blob_list);
     bl->next = NULL;
     bl->b = b;
     bl->T.mkI();
-
-    if(l.hd) {
-        prev = l.tl;
-    }
-    else {
-        prev = NULL;
-    }
 
     q_ins (l.hd, l.tl, bl);
 
@@ -294,9 +287,20 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       _le = bl->b->getLayoutEdgeAttrib()->Clone (&(bl->T));
       _bbox = bl->T.applyBox (_bbox);
       _bloatbbox = bl->T.applyBox (_bloatbbox);
+
+#if 0
+      printf ("xform: ");
+      bl->T.Print (stdout);
+      printf ("\n");
+      printf("abut: old: ");
+      _abutbox.print (stdout);
+      printf ("\n");
+#endif
       _abutbox = bl->T.applyBox (_abutbox);
 #if 0
-      printf("abut: new:%d old:%d\n", bl->b->getAbutBox().empty(), _abutbox.empty());
+      printf("abut: new: ");
+      _abutbox.print (stdout);
+      printf ("\n");
 #endif
     }
     else {
@@ -305,8 +309,6 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       long merge_x, merge_y;
 
       // we are actually appending to the blob
-      Assert (prev, "What?");
-
       if (c == BLOB_HORIZ) {
 	long damt;
 	bool valid;
@@ -378,31 +380,32 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	if(!r.empty() && !_abutbox.empty()) {
 	  old_box = _abutbox;
 	  do_merge_attrib = 1;
-
-	  merge_x = shiftamt;
-	  merge_y = damt;
-
 	  r = bl->T.applyBox (b->getAbutBox());
 	  _abutbox = _abutbox ^ r;
-
+	  merge_x = shiftamt;
+	  merge_y = damt;
 	}
 	else {
 	  _abutbox.clear();
 	  _le = new LayoutEdgeAttrib();
 	}
       }
-      else if(c == BLOB_VERT) {
+      else if (c == BLOB_VERT) {
 	long damt;
 	bool valid;
 	/* align! */
-	if(flip){
-	  bl->T.mirrorTB();
+
+	if (flip) {
 	  // tmpEdgeAttr->swaptb();
+	  bl->T.mirrorTB();
 	}
-	LayoutEdgeAttrib *tmpEdgeAttr = bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+
+	LayoutEdgeAttrib *tmpEdgeAttr =
+	  bl->b->getLayoutEdgeAttrib()->Clone(&(bl->T));
+
 	valid = LayoutEdgeAttrib::align (_le->top(), tmpEdgeAttr->bot(), &damt);
 
-	if(!valid) {
+	if (!valid) {
 	  warning ("appendBlob: no valid alignment, but continuing anyway");
 	  damt = 0;
 	}
@@ -413,13 +416,26 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	bx_bloatbbox = bl->T.applyBox (b->getBloatBBox());
 	bx_abutbox = bl->T.applyBox (b->getAbutBox());
 
+#if 0
+	printf ("[%d] orig box: ", flip); b->getBBox().print (stdout);
+	printf ("\n       transformed: "); bx_bbox.print (stdout);
+	printf ("\n");
+	printf ("       abut box: "); bx_abutbox.print (stdout);
+	printf ("\n");
+
+	printf ("    cur blob bbox: "); _bbox.print (stdout);
+	printf ("\n");
+	printf ("    cur abut bbox: "); _abutbox.print (stdout);
+	printf ("\n");
+#endif
+
 	int shiftamt = gap;
 
 	if(valid /* acceptable alignment exists */
 	   && !bl->b->getAbutBox().empty() /* there is an abutment box */
 	   && !_abutbox.empty() /* there is an abutment box */) {
 	  
-	  shiftamt += (_abutbox.ury() - bx_abutbox.lly() + 1);
+	  shiftamt += _abutbox.ury() - bx_abutbox.lly() + 1;
 #if 0
 	  printf("will use alignment - vertical\n");
 #endif
@@ -430,7 +446,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 #endif
 	  shiftamt += (_bloatbbox.ury() - _bbox.lly() + 1)
 	    /* width, including bloat */
-	    + (b->getBBox().lly() - b->getBloatBBox().lly() + 1); /* bot bloat */
+	    + (b->getBBox().lly() - b->getBloatBBox().lly()); /* bot bloat */
 	}
 
 	// TransformMat t;
@@ -460,7 +476,7 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 	  _le = new LayoutEdgeAttrib();
 	}
       }
-      else if(c == BLOB_MERGE) {
+      else if (c == BLOB_MERGE) {
 	Assert(!flip, "flip does not yet work with merge");
 	_bbox = _bbox ^ b->getBBox();
 	_bloatbbox = _bloatbbox ^ b->getBloatBBox();
@@ -537,8 +553,9 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
       }
     }
 #if 0
-    printf ("blob: (%ld,%ld) -> (%ld,%ld); bloat: (%ld,%ld)->(%ld,%ld)\n",
-        llx, lly, urx, ury, bloatllx, bloatlly, bloaturx, bloatury);
+    printf ("blob: ");
+    _bbox.print (stdout);
+    printf ("\n");
 #endif
 }
 
@@ -555,10 +572,10 @@ void LayoutBlob::_printRect (FILE *fp, TransformMat *mat, bool istopcell)
     case BLOB_LIST:
         for(blob_list *bl = l.hd; bl; q_step (bl)) {
             TransformMat m;
+	    m = bl->T;
             if(mat) {
-                m = *mat;
+	      m.applyMat (*mat);
             }
-            m.applyMat (bl->T);
             bl->b->_printRect (fp, &m, false);
         }
         break;

@@ -1256,7 +1256,7 @@ list_t *Layout::searchAllMetal ()
  *   4. Translate by _dx, _dy
  *
  *  fx = +1 for no flip, -1 for flip
- *  fy = +1 for no flip, -1 for flip[
+ *  fy = +1 for no flip, -1 for flip
  *
  *  if (swap) {
  *     xnew = fy*y + dx
@@ -1405,7 +1405,7 @@ Rectangle TransformMat::applyBox (const Rectangle &r) const
     lly = ury;
     ury = lly;
   }
-  ret.setRect (llx, lly, urx - llx + 1, ury - lly + 1);
+  ret.setRect (llx, lly, r.wx(), r.wy());
   return ret;
 }
 
