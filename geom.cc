@@ -1403,9 +1403,9 @@ Rectangle TransformMat::applyBox (const Rectangle &r) const
   if (lly > ury) {
     long tmp = lly;
     lly = ury;
-    ury = lly;
+    ury = tmp;
   }
-  ret.setRect (llx, lly, r.wx(), r.wy());
+  ret.setRect (llx, lly, urx - llx + 1, ury - lly + 1);
   return ret;
 }
 
