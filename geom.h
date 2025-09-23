@@ -131,7 +131,10 @@ protected:
   Tile *find (long x, long y);
 
   friend class Layout;
+  friend class LayoutBlob;
 };
+
+class LayoutBlob;
 
 class Layout {
 public:
@@ -183,8 +186,6 @@ public:
   void getBloatBBox (long *llx, long *lly, long *urx, long *ury);
 
   void PrintRect (FILE *fp, TransformMat *t = NULL, bool istopcell=true);
-  void ReadRect (const char *file, int raw_mode = 0);
-  void ReadRect (Process *p, int raw_mode = 0);
 
   list_t *search (void *net);
   list_t *search (int attr);
@@ -211,7 +212,7 @@ private:
   bool _readrect;
 
   Rectangle _rbox;		// this is from the .rect file, and
-				// overrides any ocmputed box and
+				// overrides any computed box and
 				// bounding box. If set, it is used as
 				// both the box and bbox for the
 				// layout
@@ -230,9 +231,10 @@ private:
   path_info_t *_rect_inpath;	// input path for rectangles, if any
 
   static double _leak_adjust;
+
+  friend class LayoutBlob;
 };
 
-class LayoutBlob;
 class SubcellInst;
 
 enum blob_type { BLOB_BASE,  /* some layout */
@@ -408,7 +410,29 @@ public:
     LayoutEdgeAttrib::print (fp, _le->bot());
   }
 
+  /**
+   * Read rectangles
+   */
+  static LayoutBlob *ReadRect (const char *file, netlist_t *nl);
+
+  static LayoutBlob *ReadRect (Process *p, netlist_t *nl);
+
   friend class SubcellInst;
 };
+
+
+/* layer map */
+#define LMAP_VIA 0
+#define LMAP_DIFF 1
+#define LMAP_WDIFF 2
+#define LMAP_FET 3
+
+struct LayoutLayermap {
+  Layer *l;
+  int etype;			/* n/p, if needed */
+  int flavor;			/* flavor */
+  unsigned int lcase:2;  // LMAP_<what> is it?
+};
+  
 
 #endif /* __ACT_GEOM_H__ */

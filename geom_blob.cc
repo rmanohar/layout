@@ -1009,3 +1009,333 @@ Rectangle LayoutBlob::getAbutBox()
         return Rectangle();
     }
 }
+
+
+/*
+ * Read layout
+ */
+LayoutBlob *LayoutBlob::ReadRect (Process *p, netlist_t *nl)
+{
+  LayoutBlob *ret;
+  char cname[10240];
+  int len;
+
+  if (!p) {
+    snprintf (cname, 10240, "toplevel");
+  }
+  else {
+    ActNamespace::Act()->msnprintfproc (cname, 10240, p);
+  }
+  len = strlen (cname);
+  snprintf (cname + len, 10240 - len, ".rect");
+
+  FILE *fp;
+  char *tmpname;
+
+  if (config_exists ("lefdef.rect_inpath")) {
+    path_info_t *rect_inpath = path_init ();
+    path_add (rect_inpath, config_get_string ("lefdef.rect_inpath"));
+    tmpname = path_open (rect_inpath, cname, NULL);
+    fp = fopen (tmpname, "r");
+    path_free (rect_inpath);
+  }
+  else {
+    tmpname = NULL;
+    fp = fopen (cname, "r");
+  }
+
+  if (!fp) {
+    fatal_error ("Looking for .rect files for %s; not found!", cname);
+  }
+  fclose (fp);
+
+  if (tmpname) {
+    ret = ReadRect (tmpname, nl);
+    FREE (tmpname);
+  }
+  else {
+    ret = ReadRect (cname, nl);
+  }
+  return ret;
+}
+
+LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl)
+{
+  LayoutBlob *ret;
+  FILE *fp;
+  char buf[10240];
+  int rtype = 0;
+  int offset;
+  char *net;
+  Process *p;
+  Layout *L;
+
+  /* the process */
+  if (nl) {
+    p = nl->bN->p;
+    Assert (p->isExpanded(), "What?");
+  }
+  else {
+    p = NULL;
+  }
+
+  fp = fopen (file, "r");
+  if (!fp) {
+    return NULL;
+  }
+
+  L = new Layout (nl);
+  L->_readrect = true;
+  L->_rbox.clear ();
+  
+  while (fgets (buf, 10240, fp)) {
+#if 0
+    printf ("BUF: %s", buf);
+#endif    
+    offset = 0;
+    for (int bx=0; bx < 10240 && buf[bx]; bx++) {
+      if (!isspace (buf[bx])) { break; }
+      offset++;
+    }
+    if (buf[offset] == '\0') continue;
+    if (buf[offset] == '#') continue;
+    if (strncmp (buf+offset, "inrect ", 7) == 0) {
+      offset += 7;
+      rtype = 1;
+    }
+    else if (strncmp (buf+offset, "outrect ", 8) == 0) {
+      offset += 8;
+      rtype = 2;
+    }
+    else if (strncmp (buf+offset, "rect ", 5) == 0) {
+      offset += 5;
+      rtype = 0;
+    }
+    else if (strncmp (buf+offset, "bbox ", 5) == 0) {
+      // this is auto-generated, so ignore it.
+      continue;
+    }
+    else if (strncmp (buf+offset, "sbox ", 5) == 0) {
+      // this overrides the bbox definition, so keep it
+      long rlx, rly, rux, ruy;
+      sscanf (buf+5, "%ld %ld %ld %ld", &rlx, &rly, &rux, &ruy);
+      L->_rbox.setRect (rlx, rly, rux - rlx, ruy - rly);
+      continue;
+    }
+    else if (strncmp (buf+offset, "cell ", 5) == 0) {
+      Assert (0, "FIXME: add support for subcells!");
+      /* celltype id swap? flipx? flipy? dx dy llx lly urx ury */
+    }
+    else {
+      fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, or cell", buf);
+    }
+
+    if (strncmp (buf+offset, "# ", 2) == 0) {
+      net = NULL;
+      offset += 2;
+    }
+    else {
+      net = buf+offset;
+      while (buf[offset] && buf[offset] != ' ') {
+	offset++;
+      }
+      Assert (buf[offset], "Long line");
+      buf[offset] = '\0';
+      offset++;
+    }
+
+    node_t *n = NULL;
+
+    char *material;
+    material = buf+offset;
+
+    while (buf[offset] && buf[offset] != ' ') {
+      offset++;
+    }
+    Assert (buf[offset], "Long line");
+    buf[offset] = '\0';
+    offset++;
+
+    if (net && nl && (strcmp (material, "$align") != 0)) {
+      n = ActNetlistPass::string_to_node (nl, net);
+      if (!n) {
+	warning ("Could not find signal `%s' in netlist!", net);
+      }
+      //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
+    }
+
+    long rllx, rlly, rurx, rury;
+    sscanf (buf+offset, "%ld %ld %ld %ld", &rllx, &rlly, &rurx, &rury);
+
+#if 0
+    printf ("[%s] rtype=%d, net=%s, (%ld, %ld) -> (%ld, %ld)\n", material,
+	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
+#endif
+
+    if ((rllx >= rurx || rlly >= rury) && !( strcmp (material, "$align") == 0 && (rllx == rurx || rlly == rury))) {
+      warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
+	       material, rllx, rlly, rurx, rury);
+      continue;
+    }
+
+    /* now find the material/layer, and draw it */
+    if (material[0] == 'm' && isdigit(material[1])) {
+      /* m# is a metal layer */
+      int l;
+      sscanf (material+1, "%d", &l);
+#if 0
+      printf ("metal %d\n", l);
+#endif
+
+      if (l < 1 || l > Technology::T->nmetals) {
+	warning ("Technology has %d metal layers; found `%s'; skipped",
+		 Technology::T->nmetals, material);
+      }
+      else {
+	/*--- draw metal ---*/
+	l--;
+	L->DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
+      }
+    }
+    else if (strcmp (material, L->base->mat->getName()) == 0) {
+      /* poly */
+#if 0
+      printf ("poly\n");
+#endif
+      /*--- draw poly ---*/
+      L->DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n);
+    }
+    else if (strcmp (material, "$align") == 0) {
+      LayoutEdgeAttrib::attrib_list *l;
+      NEW (l, LayoutEdgeAttrib::attrib_list);
+      l->next = NULL;
+      /* alignment information! */
+      if (!net) {
+	/* abutbox */
+	L->_abutbox.setRect (rllx, rlly, rurx - rllx, rury - rlly);
+  #if 0
+  printf("new abutbox: (%ld,%ld) -> (%ld,%ld)\n",rllx, rlly, rurx, rury);
+  #endif	
+      }
+      else if (strncmp (net, "$l:", 3) == 0) {
+	      l->name = Strdup (net+3);
+        #if 1
+        printf("new marker %s left: %ld\n",l->name, rlly);
+        #endif	
+	      l->offset = rlly; // left alignment: lower left corner y coord
+	      if (!L->_le) {
+	        L->_le = new LayoutEdgeAttrib();
+	      }
+	      L->_le->mergeleft (l);
+      }
+      else if (strncmp (net, "$r:", 3) == 0) {
+        
+	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s right: %ld\n",l->name, rlly);
+  #endif	
+	l->offset = rlly; // right alignment: lower left corner y coord
+	if (!L->_le) {
+	  L->_le = new LayoutEdgeAttrib();
+	}
+	L->_le->mergeright (l);
+      }
+      else if (strncmp (net, "$t:", 3) == 0) {
+        
+	l->name = Strdup (net+3);
+  #if 0
+  printf("new marker %s top: %ld\n",l->name, rllx);
+  #endif	
+	l->offset = rllx; // top alignment: lower left corner x coord
+	if (!L->_le) {
+	  L->_le = new LayoutEdgeAttrib();
+	}
+	L->_le->mergetop (l);
+#if 0	
+	printf (" >> got top: ");
+	LayoutEdgeAttrib::print (stdout, L->_le->top());
+	printf ("\n");
+#endif	
+      }
+      else if (strncmp (net, "$b:", 3) == 0) {
+        
+	l->name = Strdup (net+3);
+  #if 0	
+  printf("new marker %s bottom: %ld\n",l->name, rllx);
+  #endif
+	l->offset = rllx; // bot alignment: lower left corner x coord
+	if (!L->_le) {
+	  L->_le = new LayoutEdgeAttrib();
+	}
+	L->_le->mergebot (l);
+#if 0
+	printf (" >> got bot: ");
+	LayoutEdgeAttrib::print (stdout, L->_le->bot());
+	printf ("\n");
+#endif
+      }
+      else {
+	warning ("Invalid alignment layer directive: `%s'; skipped", net);
+      }
+      FREE (l); // don't free name: that gets used by the merge
+    }
+    else {
+      struct LayoutLayermap *lm;
+      hash_bucket_t *b;
+      b = hash_lookup (L->lmap, material);
+      if (b) {
+	/*--- draw base layer or via ---*/
+	lm = (struct LayoutLayermap *) b->v;
+	switch (lm->lcase) {
+	case LMAP_DIFF:
+	  L->DrawDiff (lm->flavor, lm->etype, rllx, rlly,
+		    rurx - rllx, rury - rlly, n);
+	  break;
+	  
+	case LMAP_FET:
+	  L->DrawFet (lm->flavor, lm->etype, rllx, rlly,
+		   rurx - rllx, rury - rlly, n);
+	  break;
+	case LMAP_WDIFF:
+	  L->DrawWellDiff (lm->flavor, lm->etype, rllx, rlly,
+			rurx - rllx, rury - rlly, n);
+	  break;
+	case LMAP_VIA:
+	  lm->l->drawVia (rllx, rlly, rurx - rllx, rury - rlly, n, 0);
+	  break;
+	default:
+	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
+	  break;
+	}
+      }
+      else {
+	int iswell = 0;
+	for (int i=0; i < Technology::T->num_devs; i++) {
+	  for (int j=0; j < 2; j++) {
+	    if (Technology::T->well[j][i]) {
+	      if (strcmp (material, Technology::T->well[j][i]->getName()) == 0) {
+		iswell = 1;
+		break;
+	      }
+	    }
+	    if (iswell) {
+	      break;
+	    }
+	  }
+	}
+	if (!iswell) {
+	  warning ("Unknown material `%s'; skipped", material);
+	}
+	/* skip wells! */
+      }
+    }
+  }
+  fclose (fp);
+
+  L->propagateAllNets ();
+  L->markPins();
+  
+  ret = new LayoutBlob (BLOB_BASE, L);
+  
+  return ret;
+}

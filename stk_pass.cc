@@ -648,7 +648,7 @@ void stk_init (ActPass *a)
   ActNetlistPass *nl = NULL;
   RawActStackPass *_sp;
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *> (a);
-  
+
   Assert (dp, "What?");
 
 #if 0

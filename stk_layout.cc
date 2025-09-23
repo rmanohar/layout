@@ -1142,42 +1142,13 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   len = strlen (cname);
   snprintf (cname + len, 10240 - len, ".rect");
 
-  FILE *fp;
-  char *tmpname;
-
-  if (_rect_inpath) {
-    tmpname = path_open (_rect_inpath, cname, NULL);
-    fp = fopen (tmpname, "r");
-  }
-  else {
-    tmpname = NULL;
-    fp = fopen (cname, "r");
-  }
-
-  if (!fp) {
-    return NULL;
-  }
-  fclose (fp);
-
 #if 0
   printf (" === processing %s\n", cname);
 #endif  
-  /* found a .rect file! Override layout generation */
-  Layout *tmp = new Layout (nl->getNL (p));
-  if (tmpname) {
-    tmp->ReadRect (tmpname);
-    FREE (tmpname);
+  LayoutBlob *b = LayoutBlob::ReadRect (cname, nl->getNL (p));
+  if (!b) {
+    return NULL;
   }
-  else {
-    tmp->ReadRect (cname);
-  }
-  tmp->propagateAllNets ();
-  tmp->markPins ();
-#if 0 
-  printf (" ------ %s ------- \n", cname);
-#endif  
-  
-  LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
 
   /* now shift all the tiles to line up 0,0 in the middle of the
      diffusion section */
@@ -1665,32 +1636,11 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
 
   snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
 
-  FILE *fp;
-  if (_rect_inpath) {
-    tmpname = path_open (_rect_inpath, cname, NULL);
-    fp = fopen (tmpname, "r");
-  }
-  else {
-    tmpname = NULL;
-    fp = fopen (cname, "r");
-  }
+  LayoutBlob *b = LayoutBlob::ReadRect (cname, dummy_netlist);
 
-  if (!fp) {
+  if (!b) {
     return NULL;
   }
-  fclose (fp);
-
-  /* found a .rect file! Override layout generation */
-  Layout *tmp = new Layout (dummy_netlist);
-  if (tmpname) {
-    tmp->ReadRect (tmpname);
-    FREE (tmpname);
-  }
-  else {
-    tmp->ReadRect (cname);
-  }
-  tmp->propagateAllNets ();
-  LayoutBlob *b = new LayoutBlob (BLOB_BASE, tmp);
 
   /* now shift all the tiles to line up 0,0 in the middle of the
      ppdiff/nndiff diffusion section */

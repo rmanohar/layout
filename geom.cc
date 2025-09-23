@@ -50,22 +50,10 @@ void Layout::Init()
   }
 }
 
-#define LMAP_VIA 0
-#define LMAP_DIFF 1
-#define LMAP_WDIFF 2
-#define LMAP_FET 3
-
-struct layermap {
-  Layer *l;
-  int etype;			/* n/p, if needed */
-  int flavor;			/* flavor */
-  unsigned int lcase:2;  // LMAP_<what> is it?
-};
-  
 
 Layout::Layout(netlist_t *_n)
 {
-  struct layermap *lp;
+  struct LayoutLayermap *lp;
   hash_bucket_t *b;
   
   Layout::Init();
@@ -93,7 +81,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, FET_OFFSET),
 		    Technology::T->fet[EDGE_NFET][i]);
 
-    NEW (lp, struct layermap);
+    NEW (lp, struct LayoutLayermap);
     lp->l = base;
     lp->etype = EDGE_NFET;
     lp->flavor = i;
@@ -106,7 +94,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, FET_OFFSET),
 		    Technology::T->fet[EDGE_PFET][i]);
 
-    NEW (lp, struct layermap);
+    NEW (lp, struct LayoutLayermap);
     lp->l = base;
     lp->etype = EDGE_PFET;
     lp->flavor = i;
@@ -119,7 +107,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, DIFF_OFFSET),
 		    Technology::T->diff[EDGE_NFET][i]);
 
-    NEW (lp, struct layermap);
+    NEW (lp, struct LayoutLayermap);
     lp->l = base;
     lp->etype = EDGE_NFET;
     lp->flavor = i;
@@ -132,7 +120,7 @@ Layout::Layout(netlist_t *_n)
     if (Technology::T->diff[EDGE_NFET][i]->getUpC()) {
 
       if (!hash_lookup (lmap, Technology::T->diff[EDGE_NFET][i]->getUpC()->getName())) {
-	NEW (lp, struct layermap);
+	NEW (lp, struct LayoutLayermap);
 	lp->l = base;
 	lp->etype = EDGE_NFET;
 	lp->flavor = i;
@@ -147,7 +135,7 @@ Layout::Layout(netlist_t *_n)
     base->setOther (TOTAL_OFFSET(i, EDGE_PFET, DIFF_OFFSET),
 		    Technology::T->diff[EDGE_PFET][i]);
 
-    NEW (lp, struct layermap);
+    NEW (lp, struct LayoutLayermap);
     lp->l = base;
     lp->etype = EDGE_PFET;
     lp->flavor = i;
@@ -160,7 +148,7 @@ Layout::Layout(netlist_t *_n)
       if (!hash_lookup (lmap,
 			Technology::T->diff[EDGE_PFET][i]->getUpC()->getName())) {
       
-	NEW (lp, struct layermap);
+	NEW (lp, struct LayoutLayermap);
 	lp->l = base;
 	lp->etype = EDGE_PFET;
 	lp->flavor = i;
@@ -177,7 +165,7 @@ Layout::Layout(netlist_t *_n)
 		    Technology::T->welldiff[EDGE_NFET][i]);
 
     if (Technology::T->welldiff[EDGE_NFET][i]) {
-      NEW (lp, struct layermap);
+      NEW (lp, struct LayoutLayermap);
       lp->l = base;
       lp->etype = EDGE_NFET;
       lp->flavor = i;
@@ -188,7 +176,7 @@ Layout::Layout(netlist_t *_n)
 
       if (Technology::T->welldiff[EDGE_NFET][i]->getUpC()) {
 	if (!hash_lookup (lmap, Technology::T->welldiff[EDGE_NFET][i]->getUpC()->getName())) {
-	  NEW (lp, struct layermap);
+	  NEW (lp, struct LayoutLayermap);
 	  lp->l = base;
 	  lp->etype = EDGE_NFET;
 	  lp->flavor = i;
@@ -204,7 +192,7 @@ Layout::Layout(netlist_t *_n)
 		    Technology::T->welldiff[EDGE_PFET][i]);
 
     if (Technology::T->welldiff[EDGE_PFET][i]) {
-      NEW (lp, struct layermap);
+      NEW (lp, struct LayoutLayermap);
       lp->l = base;
       lp->etype = EDGE_PFET;
       lp->flavor = i;
@@ -215,7 +203,7 @@ Layout::Layout(netlist_t *_n)
 
       if (Technology::T->welldiff[EDGE_PFET][i]->getUpC()) {
 	if (!hash_lookup (lmap, Technology::T->welldiff[EDGE_PFET][i]->getUpC()->getName())) {
-	  NEW (lp, struct layermap);
+	  NEW (lp, struct LayoutLayermap);
 	  lp->l = base;
 	  lp->etype = EDGE_PFET;
 	  lp->flavor = i;
@@ -231,7 +219,7 @@ Layout::Layout(netlist_t *_n)
   Layer *prev = base;
 
   if (!hash_lookup (lmap, Technology::T->poly->getUpC()->getName())) {
-    NEW (lp, struct layermap);
+    NEW (lp, struct LayoutLayermap);
     lp->l = base;
     lp->etype = -1;
     lp->flavor = 0;
@@ -250,7 +238,7 @@ Layout::Layout(netlist_t *_n)
     prev = metals[i];
 
     if (Technology::T->metal[i]->getUpC()) {
-      NEW (lp, struct layermap);
+      NEW (lp, struct LayoutLayermap);
       lp->l = metals[i];
       lp->etype = -1;
       lp->flavor = 0;
@@ -502,320 +490,6 @@ void Layout::markPins ()
 }
 
 
-void Layout::ReadRect (Process *p, int raw_mode)
-{
-  char cname[10240];
-  int len;
-
-  if (!p) {
-    snprintf (cname, 10240, "toplevel");
-  }
-  else {
-    ActNamespace::Act()->msnprintfproc (cname, 10240, p);
-  }
-  len = strlen (cname);
-  snprintf (cname + len, 10240 - len, ".rect");
-
-  FILE *fp;
-  char *tmpname;
-
-  if (_rect_inpath) {
-    tmpname = path_open (_rect_inpath, cname, NULL);
-    fp = fopen (tmpname, "r");
-  }
-  else {
-    tmpname = NULL;
-    fp = fopen (cname, "r");
-  }
-
-  if (!fp) {
-    fatal_error ("Looking for .rect files for %s; not found!", cname);
-  }
-  fclose (fp);
-
-  if (tmpname) {
-    ReadRect (tmpname, raw_mode);
-    FREE (tmpname);
-  }
-  else {
-    ReadRect (cname, raw_mode);
-  }
-}
-  
-
-void Layout::ReadRect (const char *fname, int raw_mode)
-{
-  FILE *fp;
-  char buf[10240];
-  int rtype = 0;
-  int offset;
-  char *net;
-  Process *p;
-
-  if (raw_mode == 0 && (!N || !N->bN || !N->bN->p)) {
-    warning ("Layout::ReadRect() skipped; no netlist specified for layout");
-    return;
-  }
-  /* the process */
-  if (raw_mode == 0) {
-    p = N->bN->p;
-    Assert (p->isExpanded(), "What?");
-  }
-  else {
-    p = NULL;
-  }
-  _readrect = true;
-  _rbox.clear();
-  fp = fopen (fname, "r");
-  if (!fp) {
-    fatal_error ("Could not open `%s' rect file", fname);
-  }
-  while (fgets (buf, 10240, fp)) {
-#if 0
-    printf ("BUF: %s", buf);
-#endif    
-    offset = 0;
-    for (int bx=0; bx < 10240 && buf[bx]; bx++) {
-      if (!isspace (buf[bx])) { break; }
-      offset++;
-    }
-    if (buf[offset] == '\0') continue;
-    if (buf[offset] == '#') continue;
-    if (strncmp (buf+offset, "inrect ", 7) == 0) {
-      offset += 7;
-      rtype = 1;
-    }
-    else if (strncmp (buf+offset, "outrect ", 8) == 0) {
-      offset += 8;
-      rtype = 2;
-    }
-    else if (strncmp (buf+offset, "rect ", 5) == 0) {
-      offset += 5;
-      rtype = 0;
-    }
-    else if (strncmp (buf+offset, "bbox ", 5) == 0) {
-      // this is auto-generated, so ignore it.
-      continue;
-    }
-    else if (strncmp (buf+offset, "sbox ", 5) == 0) {
-      // this overrides the bbox definition, so keep it
-      long rlx, rly, rux, ruy;
-      sscanf (buf+5, "%ld %ld %ld %ld", &rlx, &rly, &rux, &ruy);
-      _rbox.setRect (rlx, rly, rux - rlx, ruy - rly);
-      continue;
-    }
-    else if (strncmp (buf+offset, "cell ", 5) == 0) {
-      Assert (0, "FIXME: add support for subcells!");
-      /* celltype id swap? flipx? flipy? dx dy llx lly urx ury */
-    }
-    else {
-      fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, or cell", buf);
-    }
-
-    if (strncmp (buf+offset, "# ", 2) == 0) {
-      net = NULL;
-      offset += 2;
-    }
-    else {
-      net = buf+offset;
-      while (buf[offset] && buf[offset] != ' ') {
-	offset++;
-      }
-      Assert (buf[offset], "Long line");
-      buf[offset] = '\0';
-      offset++;
-    }
-
-    node_t *n = NULL;
-
-    char *material;
-    material = buf+offset;
-
-    while (buf[offset] && buf[offset] != ' ') {
-      offset++;
-    }
-    Assert (buf[offset], "Long line");
-    buf[offset] = '\0';
-    offset++;
-
-    if (net && (raw_mode == 0) && (strcmp (material, "$align") != 0)) {
-      n = ActNetlistPass::string_to_node (N, net);
-      if (!n) {
-	warning ("Could not find signal `%s' in netlist!", net);
-      }
-      //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
-    }
-
-    long rllx, rlly, rurx, rury;
-    sscanf (buf+offset, "%ld %ld %ld %ld", &rllx, &rlly, &rurx, &rury);
-
-#if 0
-    printf ("[%s] rtype=%d, net=%s, (%ld, %ld) -> (%ld, %ld)\n", material,
-	    rtype, net ? net : "-none-", rllx, rlly, rurx, rury);
-#endif
-
-    if ((rllx >= rurx || rlly >= rury) && !( strcmp (material, "$align") == 0 && (rllx == rurx || rlly == rury))) {
-      warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
-	       material, rllx, rlly, rurx, rury);
-      continue;
-    }
-
-    /* now find the material/layer, and draw it */
-    if (material[0] == 'm' && isdigit(material[1])) {
-      /* m# is a metal layer */
-      int l;
-      sscanf (material+1, "%d", &l);
-#if 0
-      printf ("metal %d\n", l);
-#endif
-
-      if (l < 1 || l > Technology::T->nmetals) {
-	warning ("Technology has %d metal layers; found `%s'; skipped",
-		 Technology::T->nmetals, material);
-      }
-      else {
-	/*--- draw metal ---*/
-	l--;
-	DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
-      }
-    }
-    else if (strcmp (material, base->mat->getName()) == 0) {
-      /* poly */
-#if 0
-      printf ("poly\n");
-#endif
-      /*--- draw poly ---*/
-      DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n);
-    }
-    else if (strcmp (material, "$align") == 0) {
-      LayoutEdgeAttrib::attrib_list *l;
-      NEW (l, LayoutEdgeAttrib::attrib_list);
-      l->next = NULL;
-      /* alignment information! */
-      if (!net) {
-	/* abutbox */
-	_abutbox.setRect (rllx, rlly, rurx - rllx, rury - rlly);
-  #if 0
-  printf("new abutbox: (%ld,%ld) -> (%ld,%ld)\n",rllx, rlly, rurx, rury);
-  #endif	
-      }
-      else if (strncmp (net, "$l:", 3) == 0) {
-	      l->name = Strdup (net+3);
-        #if 1
-        printf("new marker %s left: %ld\n",l->name, rlly);
-        #endif	
-	      l->offset = rlly; // left alignment: lower left corner y coord
-	      if (!_le) {
-	        _le = new LayoutEdgeAttrib();
-	      }
-	      _le->mergeleft (l);
-      }
-      else if (strncmp (net, "$r:", 3) == 0) {
-        
-	l->name = Strdup (net+3);
-  #if 0
-  printf("new marker %s right: %ld\n",l->name, rlly);
-  #endif	
-	l->offset = rlly; // right alignment: lower left corner y coord
-	if (!_le) {
-	  _le = new LayoutEdgeAttrib();
-	}
-	_le->mergeright (l);
-      }
-      else if (strncmp (net, "$t:", 3) == 0) {
-        
-	l->name = Strdup (net+3);
-  #if 0
-  printf("new marker %s top: %ld\n",l->name, rllx);
-  #endif	
-	l->offset = rllx; // top alignment: lower left corner x coord
-	if (!_le) {
-	  _le = new LayoutEdgeAttrib();
-	}
-	_le->mergetop (l);
-#if 0	
-	printf (" >> got top: ");
-	LayoutEdgeAttrib::print (stdout, _le->top());
-	printf ("\n");
-#endif	
-      }
-      else if (strncmp (net, "$b:", 3) == 0) {
-        
-	l->name = Strdup (net+3);
-  #if 0	
-  printf("new marker %s bottom: %ld\n",l->name, rllx);
-  #endif
-	l->offset = rllx; // bot alignment: lower left corner x coord
-	if (!_le) {
-	  _le = new LayoutEdgeAttrib();
-	}
-	_le->mergebot (l);
-#if 0
-	printf (" >> got bot: ");
-	LayoutEdgeAttrib::print (stdout, _le->bot());
-	printf ("\n");
-#endif
-      }
-      else {
-	warning ("Invalid alignment layer directive: `%s'; skipped", net);
-      }
-      FREE (l); // don't free name: that gets used by the merge
-    }
-    else {
-      struct layermap *lm;
-      hash_bucket_t *b;
-      b = hash_lookup (lmap, material);
-      if (b) {
-	/*--- draw base layer or via ---*/
-	lm = (struct layermap *) b->v;
-	switch (lm->lcase) {
-	case LMAP_DIFF:
-	  DrawDiff (lm->flavor, lm->etype, rllx, rlly,
-		    rurx - rllx, rury - rlly, n);
-	  break;
-	  
-	case LMAP_FET:
-	  DrawFet (lm->flavor, lm->etype, rllx, rlly,
-		   rurx - rllx, rury - rlly, n);
-	  break;
-	case LMAP_WDIFF:
-	  DrawWellDiff (lm->flavor, lm->etype, rllx, rlly,
-			rurx - rllx, rury - rlly, n);
-	  break;
-	case LMAP_VIA:
-	  lm->l->drawVia (rllx, rlly, rurx - rllx, rury - rlly, n, 0);
-	  break;
-	default:
-	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
-	  break;
-	}
-      }
-      else {
-	int iswell = 0;
-	for (int i=0; i < Technology::T->num_devs; i++) {
-	  for (int j=0; j < 2; j++) {
-	    if (Technology::T->well[j][i]) {
-	      if (strcmp (material, Technology::T->well[j][i]->getName()) == 0) {
-		iswell = 1;
-		break;
-	      }
-	    }
-	    if (iswell) {
-	      break;
-	    }
-	  }
-	}
-	if (!iswell) {
-	  warning ("Unknown material `%s'; skipped", material);
-	}
-	/* skip wells! */
-      }
-    }
-  }
-  fclose (fp);
-}
-
-
 void Layout::getBBox (long *llx, long *lly, long *urx, long *ury)
 {
   long a, b, c, d;
@@ -990,6 +664,9 @@ void Layout::propagateAllNets ()
   int rep;
 
   list_t **tl;
+
+  // No netlist, so there are no nets to propagate! Quit here
+  if (!N || !N->bN) return;
 
   /* 0 = base, 1 = viabase, 2 = metal1, etc.. */
 
