@@ -22,6 +22,7 @@
 #include <common/heap.h>
 #include "stk_pass.h"
 #include <common/config.h>
+#include <act/iter.h>
 
 #ifndef MIN
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
@@ -707,6 +708,21 @@ void *stk_proc (ActPass *_ap, Process *p, int mode)
   printf ("--------------------------------------------\n");
   printf ("creating stacks for: %s\n", p->getName());
 #endif  
+
+  if (!ActNetlistPass::emptyNetlist (N)) {
+    Scope *sc;
+    if (p) {
+      sc = p->CurScope();
+    }
+    else {
+      sc = ActNamespace::Global()->CurScope();
+    }
+    ActUniqProcInstiter i(sc);
+    if (i.begin() != i.end()) {
+      warning ("Process `%s': contains local circuits + subcircuits.",
+	       p ? p->getName() : "-toplevel-");
+    }
+  }
 
   /* nodes to be processed */
   pnodes = list_new ();
