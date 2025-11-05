@@ -24,7 +24,7 @@ TARGETINCS=geom.h tile.h attrib.h subcell.h
 TARGETINCSUBDIR=layout
 
 TARGETS=$(EXE) $(EXE2)
-TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py
+TARGETSCRIPTS=mag.pl rect2lef.pl mag2rect.py gds2rect.py rect2gds.py gds2rect.sh
 TARGETLIBS=libact_layout.so pass_stk.so pass_layout.so
 
 OBJS_EXE=main.o
