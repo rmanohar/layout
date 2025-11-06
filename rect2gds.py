@@ -2,17 +2,19 @@
 """
 This script converts rect files to GDS depending on a ACT tech configuration
 
+requires gdsfactory, tested with version 6.11 and 9.20(+)
+
 Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>]
+       rect2gds.py -cnf<tech.conf> [-i]<input.rect> [-o<output.gds>]
 
 Accepted options:
-  -T<tech> or -T <tech>
+  -T<tech> or -T <tech> or -cnf<path/layout.conf> or -cnf <path/layout.conf>
   -i<inputfile> or -i <inputfile>
   -o<outputfile> or -o <outputfile>
   <inputfile> 
 
 Note+TODO: Pins are just drawn as rectangles, the direction property is not maintained
 merging all the drawn rectangles is recomended in EDA tools for cleaner use.
-CMD options should also be able to read a local config with -cnf
 
 ----
 Copyright (c) 2025 Thomans Jagielski - Yale University
@@ -244,10 +246,8 @@ def resolve_paths_from_Targ(argv):
     """
     Parse argv and return (layout_conf_path, input_path, output_path).
 
-    @Todo should also be able to read a local config with -cnf
-
     Accepted forms:
-      -T<tech> or -T <tech>
+      -T<tech> or -T <tech> -cnf<path/layout.conf> or -cnf <path/layout.conf>
       -i<inputfile> or -i <inputfile>
       -o<outputfile> or -o <outputfile>
       <inputfile> 
@@ -258,6 +258,7 @@ def resolve_paths_from_Targ(argv):
     Raises SystemExit with usage/error messages on failure.
     """
     tech = None
+    techfile = None
     inp = None
     out = None
 
@@ -268,6 +269,11 @@ def resolve_paths_from_Targ(argv):
             tech = a[2:]
         elif a == '-T' and i + 1 < len(argv):
             tech = argv[i + 1]
+            i += 1
+        elif a.startswith('-cnf') and len(a) > 4:
+            techfile = a[4:]
+        elif a == '-cnf' and i + 1 < len(argv):
+            techfile = argv[i + 1]
             i += 1
         elif a.startswith('-i') and len(a) > 2:
             inp = a[2:]
@@ -283,8 +289,8 @@ def resolve_paths_from_Targ(argv):
             inp = a
         i += 1
 
-    if tech is None or inp is None:
-        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>]")
+    if (tech is None and techfile is None) or inp is None:
+        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>] or rect2gds.py -cnf<layout.conf> [-i]<input.rect> [-o<output.gds>]")
     elif out is None:
         #assuming file name ends with ".rect"
         out = inp[:-5]+str(".gds")
@@ -293,11 +299,14 @@ def resolve_paths_from_Targ(argv):
     inp = os.path.expanduser(os.path.expandvars(inp))
     out = os.path.expanduser(os.path.expandvars(out))
 
-    act_home = os.environ.get('ACT_HOME')
-    if not act_home:
-        raise SystemExit("Environment variable ACT_HOME not set")
+    if tech:
+        act_home = os.environ.get('ACT_HOME')
+        if not act_home:
+            raise SystemExit("Environment variable ACT_HOME not set")
 
-    layout = os.path.join(act_home, 'conf', tech, 'layout.conf')
+        layout = os.path.join(act_home, 'conf', tech, 'layout.conf')
+    else:
+        layout = os.path.expanduser(os.path.expandvars(techfile))
     if not os.path.isfile(layout):
         raise SystemExit(f"Layout conf not found: {layout}")
 

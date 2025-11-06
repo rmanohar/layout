@@ -2,18 +2,28 @@
 """
 This script converts gds files to rect formart depending on a ACT tech configuration
 
-Usage: gds2rect.py -T<tech> [-i]<input.gds> [-o<output.rect>]
+The recomended way for .gds -> .rect is to use gds2rect.sh: .gds -> Magic -> .mag -> mag2rect -> rect with netgen -T<tech>,
+this script gds2rect.py is an alternative if Magic has some behavoir that make it not viable.
+
+This script gds2rect will work fine in a lot of cases but has limitations:
+    This script will ignore and not reverse layer-bloating generation of complex layers like n- or p-transistor.
+    All pins have no direction, so will become inrects.
+    This script does not handle hirachical gds/rects (it flattens - hopefully)
+    
+depends on modern gdsfactory (Klayout back end) - tested with 9.20(+)
+
+Usage: gds2rect.py -T<tech> [-i]<input.gds> [-o<output.rect>] [-f]
+gds2rect.py -cnf<tech.conf> [-i]<input.gds> [-o<output.rect>] [-f]
 
 Accepted options:
-  -T<tech> or -T <tech>
+  -T<tech> or -T <tech> or -cnf<path/layout.conf> or -cnf <path/layout.conf>
   -i<inputfile> or -i <inputfile>
   -o<outputfile> or -o <outputfile>
   <inputfile> 
+  -f ignore mapping errors and contiure 
 
 Note+TODO: Pins are just drawn as inrect, the direction property is not maintained
 the way the rectangles are cut out is not optimal, and gds bloating is ignored
-CMD options should also be able to read a local config with -cnf
-force option should be added -f, to force skipping errors (internally already implemented)
 
 ----
 Copyright (c) 2025 Thomans Jagielski - Yale University
@@ -254,13 +264,12 @@ def resolve_paths_from_Targ(argv):
     """
     Parse argv and return (layout_conf_path, input_path, output_path).
 
-    @Todo should also be able to read a local config with -cnf
-
     Accepted forms:
-      -T<tech> or -T <tech>
+      -T<tech> or -T <tech> or -cnf<path/layout.conf> or -cnf <path/layout.conf>
       -i<inputfile> or -i <inputfile>
       -o<outputfile> or -o <outputfile>
       <inputfile> 
+      -f
 
     Returns:
       (layout_conf_path, input_path, output_path)
@@ -268,8 +277,10 @@ def resolve_paths_from_Targ(argv):
     Raises SystemExit with usage/error messages on failure.
     """
     tech = None
+    techfile = None
     inp = None
     out = None
+    force = False
 
     i = 1
     while i < len(argv):
@@ -278,6 +289,11 @@ def resolve_paths_from_Targ(argv):
             tech = a[2:]
         elif a == '-T' and i + 1 < len(argv):
             tech = argv[i + 1]
+            i += 1
+        elif a.startswith('-cnf') and len(a) > 4:
+            techfile = a[4:]
+        elif a == '-cnf' and i + 1 < len(argv):
+            techfile = argv[i + 1]
             i += 1
         elif a.startswith('-i') and len(a) > 2:
             inp = a[2:]
@@ -289,12 +305,14 @@ def resolve_paths_from_Targ(argv):
         elif a == '-o' and i + 1 < len(argv):
             out = argv[i + 1]
             i += 1
+        elif a == '-f':
+            force = True
         elif inp is None:
             inp = a
         i += 1
 
-    if tech is None or inp is None:
-        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.gds> [-o<output.rect>]")
+    if (tech is None and techfile is None) or inp is None:
+        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.gds> [-o<output.rect>] or rect2gds.py -cnf<layout.conf> [-i]<input.gds> [-o<output.rect>]")
     elif out is None:
         #assuming file name ends with ".gds"
         out = inp[:-4]+str(".rect")
@@ -303,11 +321,14 @@ def resolve_paths_from_Targ(argv):
     inp = os.path.expanduser(os.path.expandvars(inp))
     out = os.path.expanduser(os.path.expandvars(out))
 
-    act_home = os.environ.get('ACT_HOME')
-    if not act_home:
-        raise SystemExit("Environment variable ACT_HOME not set")
+    if tech:
+        act_home = os.environ.get('ACT_HOME')
+        if not act_home:
+            raise SystemExit("Environment variable ACT_HOME not set")
 
-    layout = os.path.join(act_home, 'conf', tech, 'layout.conf')
+        layout = os.path.join(act_home, 'conf', tech, 'layout.conf')
+    else:
+        layout = os.path.expanduser(os.path.expandvars(techfile))
     if not os.path.isfile(layout):
         raise SystemExit(f"Layout conf not found: {layout}")
 
@@ -318,7 +339,7 @@ def resolve_paths_from_Targ(argv):
     if not os.path.isdir(out_dir):
         raise SystemExit(f"Output directory does not exist: {out_dir}")
 
-    return layout, inp, out
+    return layout, inp, out, force
 
 def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_layer_names, rect_type="rect", force = False):
     """
@@ -590,20 +611,7 @@ def gds_to_rect(gds_path: str, rect_path: str,
 
 
 if __name__ == '__main__':
-    message = """
-    
-    #### GDS2RECT #### for use with modern gdsfactory (Klayout back end)
-
-    The recomended way for .gds -> .rect is to use .gds -> Magic -> .mag -> mag2rect -> rect with netgen -T<tech>,
-    this script is a fall back if Magic has some bugs that make it not viable.
-    This script gds2rect will work fine in a lot of cases but has limitations:
-        This script will ignore and not reverse layer-bloating generation of complex layers like n- or p-transistor.
-        All pins have no direction, so will become inrects.
-        This script does not handle hirachical gds/rects (it flattens - hopefully)
-    
-    """
-    warn(message)
-    path, inputfile, outputfile = resolve_paths_from_Targ(sys.argv)
+    path, inputfile, outputfile, force = resolve_paths_from_Targ(sys.argv)
     scale, gds, materials, material_text, materials_bloat, materials_mask, metals, metal_pin, metal_text, metals_bloat, vias, via_text, vias_bloat, align = parse_conf_file(path)
     rect_object = gds_to_rect(gds_path=inputfile, rect_path=outputfile, 
         gds=gds, materials=materials, 
@@ -615,5 +623,6 @@ if __name__ == '__main__':
         metal_pin=metal_pin,
         metal_text=metal_text,
         align=align,
-        scale=scale)
+        scale=scale,
+        force=force)
     print("output file written to "+str(outputfile))
