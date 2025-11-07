@@ -39,6 +39,8 @@
 #endif
 
 
+Hashtable *LayoutBlob::procToBlob = NULL;
+
 LayoutBlob::LayoutBlob (ExternMacro *m)
 {
     long llx, lly, urx, ury;
@@ -562,39 +564,39 @@ void LayoutBlob::appendBlob (LayoutBlob *b, blob_compose c, long gap, bool flip)
 
 void LayoutBlob::_printRect (FILE *fp, TransformMat *mat, bool istopcell)
 {
-    switch(t) {
-    case BLOB_BASE:
-        if(base.l) {
-            base.l->PrintRect (fp, mat, istopcell);
-        }
-        break;
-
-    case BLOB_LIST:
-        for(blob_list *bl = l.hd; bl; q_step (bl)) {
-            TransformMat m;
-	    m = bl->T;
-            if(mat) {
-	      m.applyMat (*mat);
-            }
-            bl->b->_printRect (fp, &m, false);
-        }
-        break;
-
-    case BLOB_MACRO:
-      /* nothing to do, it is a macro */
-        break;
-
-    case BLOB_CELL:
-    {
-        TransformMat m;
-        if(mat) {
-            m = *mat;
-        }
-        subcell->PrintRect (fp, &m, istopcell);
+  switch(t) {
+  case BLOB_BASE:
+    if (base.l) {
+      base.l->PrintRect (fp, mat, istopcell);
     }
     break;
 
+  case BLOB_LIST:
+    for (blob_list *bl = l.hd; bl; q_step (bl)) {
+      TransformMat m;
+      m = bl->T;
+      if (mat) {
+	m.applyMat (*mat);
+      }
+      bl->b->_printRect (fp, &m, false);
     }
+    break;
+
+  case BLOB_MACRO:
+    /* nothing to do, it is a macro */
+    break;
+
+  case BLOB_CELL:
+    {
+      // this is for flat cells
+      TransformMat m;
+      if (mat) {
+	m = *mat;
+      }
+      subcell->PrintRect (fp, &m);
+    }
+    break;
+  }
 }
 
 
@@ -1123,8 +1125,43 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl)
       continue;
     }
     else if (strncmp (buf+offset, "cell ", 5) == 0) {
-      Assert (0, "FIXME: add support for subcells!");
-      /* celltype id swap? flipx? flipy? dx dy llx lly urx ury */
+      char inst[10240], celltype[10240];
+      /* celltype id orientation dx dy [arr nx px ny py] */
+      offset += 5;
+      if (sscanf (buf+offset, "%s %s", celltype, inst) != 2) {
+	fatal_error ("Line: %s\ncell spec error", buf);
+      }
+      for (int skip=0; skip < 2; skip++) {
+	while (buf[offset] && isspace (buf[offset])) {
+	  offset++;
+	}
+	while (buf[offset] && !isspace (buf[offset])) {
+	  offset++;
+	}
+      }
+      int skipamt = 0;
+      TransformMat mat = TransformMat::ReadRect (buf+offset, &skipamt);
+      offset += skipamt;
+      int nx, px, ny, py;
+      if (sscanf (buf+offset, "arr %d %d %d %d", &nx, &px, &ny, &py) == 4) {
+	// ok we have parsed the subcell instance!
+      }
+      else {
+	while (buf[offset]) {
+	  if (!isspace (buf[offset])) {
+	    fatal_error ("Line %s\ncell spec error", buf);
+	  }
+	  offset++;
+	}
+	nx = 1;
+	ny = 1;
+	px = 0;
+	py = 0;
+      }
+      // at this point we don't have any geometry for this subcell;
+      // but we should have already read in this one, so let's look it up
+      Assert (0, "Process subcell instance!");
+      continue;
     }
     else {
       fatal_error ("Line: %s\nNeeds inrect, outrect, rect, bbox, sbox, or cell", buf);

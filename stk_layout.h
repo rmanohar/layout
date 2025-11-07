@@ -93,6 +93,10 @@ public:
   LayoutBlob *_readwelltap (int flavor);
   void _emitwelltaprect (int flavor);
 
+  /* layoutblob list following the shared staticizer type list */
+  list_t *_weak_supplies;
+  LayoutBlob *_create_weaksupply (ActNetlistPass::shared_stat *s);
+
 
   /* aligned LEF boundary */
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);

@@ -217,43 +217,6 @@ void LayerSubcell::delSubcell (SubcellInst *s)
 }
 
 
-SubcellList *SubcellList::flushClear ()
-{
-  SubcellList *tmp, *prev, *cur;
-  prev = NULL;
-  cur = this;
-  while (cur) {
-    if (!cur->_cell) {
-      if (prev) {
-	prev->_next = cur->_next;
-	tmp = cur;
-	cur = cur->_next;
-	delete tmp;
-      }
-      else {
-	if (cur->_next) {
-	  tmp = cur->_next;
-	  cur->_cell = tmp->_cell;
-	  cur->_next = tmp->_next;
-	  delete tmp;
-	  cur = cur->_next;
-	}
-	else {
-	  delete this;
-	  return NULL;
-	}
-      }
-    }
-    else {
-      prev = cur;
-      cur = cur->_next;
-    }
-  }
-  if (!prev) {
-    return NULL;
-  }
-  return this;
-}
 
 
 void LayerSubcell::_computeBBox ()
@@ -301,4 +264,243 @@ Rectangle LayerSubcell::getAbutBox ()
     _computeBBox();
   }
   return _abutbox;
+}
+
+
+SubcellInst::SubcellInst (LayoutBlob *b, const char *id, const char *name,
+			  TransformMat *m)
+{
+  _nx = 1;
+  _ny = 1;
+  _b = b;
+  _uid = id;
+  _name = name;
+  if (m) {
+    _m = *m;
+  }
+}
+
+void SubcellInst::mkArray (int nx, int pitchx, int ny, int pitchy)
+{
+  _nx = nx;
+  _ny = ny;
+  _px = pitchx;
+  _py = pitchy;
+}
+
+LayoutEdgeAttrib *SubcellInst::getLayoutEdgeAttrib ()
+{
+  LayoutEdgeAttrib *le;
+
+  le = _b->getLayoutEdgeAttrib();
+  if (le) {
+    // clone, and apply transformation matrix
+    le = le->Clone (&_m);
+  }
+  return le;
+}
+
+Rectangle SubcellInst::getBBox()
+{
+  Assert (0, "What?");
+
+  Rectangle r;
+  if (!_b) {
+    return r;
+  }
+  r = _b->getBBox ();
+  Rectangle a = _b->getAbutBox ();
+  if (a.empty()) {
+    a = r;
+  }
+
+  // XXX: this is wrong
+
+  long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
+  long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
+
+  r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
+		   r.lly() + a.wy()*_ny + fringey);
+
+  return r;
+}
+
+Rectangle SubcellInst::getBloatBBox()
+{
+  Assert (0, "What?");
+
+  Rectangle r;
+  if (!_b) {
+    return r;
+  }
+  r = _b->getBBox ();
+  Rectangle a = _b->getAbutBox ();
+  if (a.empty()) {
+    a = r;
+  }
+  r = _b->getBloatBBox ();
+
+  // XXX: this is wrong
+
+  long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
+  long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
+
+  r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
+		   r.lly() + a.wy()*_ny + fringey);
+
+  return r;
+}
+
+
+Rectangle SubcellInst::getAbutBox ()
+{
+  Assert (0, "What?");
+
+  Rectangle r;
+  if (!_b) {
+    return r;
+  }
+  r = _b->getAbutBox ();
+  if (r.empty()) {
+    return getBBox();
+  }
+  // XXX: this is wrong
+  r.setRect (r.llx(), r.lly(), r.wx()*_nx, r.wy()*_ny);
+  return r;
+}
+
+
+void SubcellInst::PrintRect (FILE *fp, TransformMat *mat)
+{
+  TransformMat m = _m;
+  fprintf (fp, "cell %s %s ", _name, _uid);
+  if (mat) {
+    m.applyMat (*mat);
+    m.PrintRect (fp);
+  }
+  else {
+    fprintf (fp, "N 0 0");
+  }
+  if (_nx > 1 || _ny > 1) {
+    fprintf (fp, " arr %d %d %d %d",
+	     _nx, _px, _ny, _py);
+  }
+  fprintf (fp, "\n");
+}
+
+
+void SubcellList::append (SubcellInst *c, bool sort_x)
+{
+  SubcellList *tmp = new SubcellList (c);
+  SubcellList *prev,  *cur;
+
+  prev = NULL;
+  cur = this;
+  while (cur) {
+    bool gonext;
+    if (sort_x) {
+      if (cur->_cell->getBBox().urx() < c->getBBox().llx()) {
+	gonext = true;
+      }
+      else {
+	gonext = false;
+      }
+    }
+    else {
+      if (cur->_cell->getBBox().ury() < c->getBBox().lly()) {
+	gonext = true;
+      }
+      else {
+	gonext = false;
+      }
+    }
+    if (gonext) {
+      prev = cur;
+      cur = cur->_next;
+    }
+    else {
+      if (!prev) {
+	SubcellInst *x;
+	tmp->_next = _next;
+	_next = tmp;
+	tmp->_cell = _cell;
+	_cell = c;
+	return;
+      }
+      else {
+	prev->_next = tmp;
+	tmp->_next = cur;
+	return;
+      }
+    }
+  }
+  prev->_next = tmp;
+}
+
+SubcellList *SubcellList::del (SubcellInst *c)
+{
+  SubcellList *prev, *cur;
+
+  prev = NULL;
+  cur = this;
+  while (cur) {
+    if (cur->_cell == c) {
+      break;
+    }
+    else {
+      prev = cur;
+      cur = cur->_next;
+    }
+  }
+  if (cur) {
+    if (prev) {
+      prev->_next = cur->_next;
+      delete cur;
+      return this;
+    }
+    else {
+      cur = cur->_next;
+      delete this;
+      return cur;
+    }
+  }
+  return this;
+}
+
+SubcellList *SubcellList::flushClear ()
+{
+  SubcellList *tmp, *prev, *cur;
+  prev = NULL;
+  cur = this;
+  while (cur) {
+    if (!cur->_cell) {
+      if (prev) {
+	prev->_next = cur->_next;
+	tmp = cur;
+	cur = cur->_next;
+	delete tmp;
+      }
+      else {
+	if (cur->_next) {
+	  tmp = cur->_next;
+	  cur->_cell = tmp->_cell;
+	  cur->_next = tmp->_next;
+	  delete tmp;
+	  cur = cur->_next;
+	}
+	else {
+	  delete this;
+	  return NULL;
+	}
+      }
+    }
+    else {
+      prev = cur;
+      cur = cur->_next;
+    }
+  }
+  if (!prev) {
+    return NULL;
+  }
+  return this;
 }

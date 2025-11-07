@@ -30,96 +30,26 @@ private:
   TransformMat _m;		//< geometric transformations to get
 				// the tiles into global coordinates
   const char *_uid;		//< unique identifier for the subcell
+  const char *_name;		//< cell name
   int _nx, _ny;			//< array size
+  int _px, _py;			//< x,y pitch
 
 public:
-  SubcellInst (LayoutBlob *b, const char *id, TransformMat *m = NULL) {
-    _nx = 1;
-    _ny = 1;
-    _b = b;
-    _uid = id;
-    if (m) {
-      _m = *m;
-    }
-  }
+  /** We use aliases for the id and name pointers, so they should be
+      persistent pointers.
+  **/
+  SubcellInst (LayoutBlob *b, const char *id, const char *name,
+	       TransformMat *m = NULL);
 
-  void mkArray (int nx, int ny) {
-    _nx = nx;
-    _ny = ny;
-  }
+  void mkArray (int nx, int pitchx, int ny, int pitchy);
 
-  LayoutEdgeAttrib *getLayoutEdgeAttrib () {
-    LayoutEdgeAttrib *le;
+  LayoutEdgeAttrib *getLayoutEdgeAttrib ();
 
-    le = _b->getLayoutEdgeAttrib();
-    if (le) {
-      // clone, and apply transformation matrix
-      le = le->Clone (&_m);
-    }
-    return le;
-  }
+  Rectangle getBBox();
+  Rectangle getBloatBBox();
+  Rectangle getAbutBox ();
 
-  Rectangle getBBox() {
-    Rectangle r;
-    if (!_b) {
-      return r;
-    }
-    r = _b->getBBox ();
-    Rectangle a = _b->getAbutBox ();
-    if (a.empty()) {
-      a = r;
-    }
-
-    long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
-    long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
-    
-    r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
-		     r.lly() + a.wy()*_ny + fringey);
-    
-    return r;
-  }
-
-  Rectangle getBloatBBox() {
-    Rectangle r;
-    if (!_b) {
-      return r;
-    }
-    r = _b->getBBox ();
-    Rectangle a = _b->getAbutBox ();
-    if (a.empty()) {
-      a = r;
-    }
-    r = _b->getBloatBBox ();
-
-    long fringex = (a.llx() - r.llx()) + (r.urx() - a.urx());
-    long fringey = (a.lly() - r.lly()) + (r.ury() - a.ury());
-    
-    r.setRectCoords (r.llx(), r.lly(), r.llx() + a.wx()*_nx + fringex,
-		     r.lly() + a.wy()*_ny + fringey);
-
-    return r;
-  }
-
-  Rectangle getAbutBox () {
-    Rectangle r;
-    if (!_b) {
-      return r;
-    }
-    r = _b->getAbutBox ();
-    if (r.empty()) {
-      return getBBox();
-    }
-    r.setRect (r.llx(), r.lly(), r.wx()*_nx, r.wy()*_ny);
-    return r;
-  }
-
-  void PrintRect (FILE *fp, TransformMat *mat, bool istopcell=true) {
-    TransformMat m;
-    if (mat) {
-      m = *mat;
-    }
-    _b->_printRect (fp, mat, istopcell);
-  }
+  void PrintRect (FILE *fp, TransformMat *mat);
 };
 
 class SubcellList {
@@ -137,84 +67,13 @@ class SubcellList {
     if (_next) {
       delete _next;
     }
+    if (_cell) {
+      delete _cell;
+    }
   }
 
-  void append (SubcellInst *c, bool sort_x) {
-    SubcellList *tmp = new SubcellList (c);
-    SubcellList *prev,  *cur;
-    
-    prev = NULL;
-    cur = this;
-    while (cur) {
-      bool gonext;
-      if (sort_x) {
-	if (cur->_cell->getBBox().urx() < c->getBBox().llx()) {
-	  gonext = true;
-	}
-	else {
-	  gonext = false;
-	}
-      }
-      else {
-	if (cur->_cell->getBBox().ury() < c->getBBox().lly()) {
-	  gonext = true;
-	}
-	else {
-	  gonext = false;
-	}
-      }
-      if (gonext) {
-	prev = cur;
-	cur = cur->_next;
-      }
-      else {
-	if (!prev) {
-	  SubcellInst *x;
-	  tmp->_next = _next;
-	  _next = tmp;
-	  tmp->_cell = _cell;
-	  _cell = c;
-	  return;
-	}
-	else {
-	  prev->_next = tmp;
-	  tmp->_next = cur;
-	  return;
-	}
-      }
-    }
-    prev->_next = tmp;
-  }
-
-  SubcellList *del (SubcellInst *c) {
-    SubcellList *prev, *cur;
-    
-    prev = NULL;
-    cur = this;
-    while (cur) {
-      if (cur->_cell == c) {
-	break;
-      }
-      else {
-	prev = cur;
-	cur = cur->_next;
-      }
-    }
-    if (cur) {
-      if (prev) {
-	prev->_next = cur->_next;
-	delete cur;
-	return this;
-      }
-      else {
-	cur = cur->_next;
-	delete this;
-	return cur;
-      }
-    }
-    return this;
-  }
-
+  void append (SubcellInst *c, bool sort_x);
+  SubcellList *del (SubcellInst *c);
   SubcellList *getNext() { return _next; }
   SubcellInst *getCell() { return _cell; }
   void clearCell() { _cell = NULL; }

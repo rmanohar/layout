@@ -1100,3 +1100,103 @@ void TransformMat::Print (FILE *fp) const
   }
   fprintf (fp, " dx=%ld dy=%ld }", _dx, _dy);
 }
+
+void TransformMat::PrintRect (FILE *fp) const
+{
+  // bit vector is flipx flipy swap
+  //  000 = N
+  //  001 = FW
+  //  010 = FS
+  //  011 = W
+  //  100 = FN
+  //  101 = E
+  //  110 = S
+  //  111 = FE
+  const char *val[] =
+    { "N", "FW", "FS", "W", "FN", "E", "S", "FE" };
+
+  fprintf (fp, "%s %ld %ld", val[_swap|(_flipy << 1)|(_flipx<<2)], _dx, _dy);
+}
+
+
+void TransformMat::_set_orientation (char *buf)
+{
+  if (strcmp (buf, "N") == 0) {
+    // nothing
+  }
+  else if (strcmp (buf, "FW") == 0) {
+    _swap = 1;
+  }
+  else if (strcmp (buf,  "FS") == 0) {
+    _flipy = 1;
+  }
+  else if (strcmp (buf, "W") == 0) {
+    _swap = 1;
+    _flipy = 1;
+  }
+  else if (strcmp (buf, "FN") == 0) {
+    _flipx = 1;
+  }
+  else if (strcmp (buf, "E") == 0) {
+    _swap = 1;
+    _flipx = 1;
+  }
+  else if (strcmp (buf, "S") == 0) {
+    _flipx = 1;
+    _flipy = 1;
+  }
+  else if (strcmp (buf, "FE") == 0) {
+    _flipx = 1;
+    _flipy = 1;
+    _swap = 1;
+  }
+  else {
+    mkI();
+    warning ("Error reading transformation matrix orientation (%s); using identity.", buf);
+  }
+}
+
+TransformMat TransformMat::ReadRect (FILE *fp)
+{
+  char buf[32];
+  TransformMat m;
+
+  if (fscanf (fp, "%s %ld %ld", buf, &m._dx, &m._dy) != 3) {
+    m.mkI();
+    warning ("Error reading transformation matrix; using identity.");
+  }
+  else {
+    m._set_orientation (buf);
+  }
+  return m;
+}
+
+
+TransformMat TransformMat::ReadRect (char *buf, int *amt)
+{
+  TransformMat m;
+  char tmp[32];
+
+  if (sscanf (buf, "%s %ld %ld", tmp, &m._dx, &m._dy) != 3) {
+    m.mkI ();
+    if (amt) {
+      *amt = 0;
+    }
+    warning ("Error reading transformation matrix (%s); using identity.", buf);
+  }
+  else {
+    m._set_orientation (tmp);
+    if (amt) {
+      *amt = 0;
+      for (int skip=0; skip < 3; skip++) {
+	while (buf[*amt] && isspace (buf[*amt])) {
+	  *amt = *amt + 1;
+	}
+	while (buf[*amt] && !isspace (buf[*amt])) {
+	  *amt = *amt + 1;
+	}
+      }
+    }
+  }
+  return m;
+}

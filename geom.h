@@ -38,6 +38,8 @@ class TransformMat {
   unsigned int _flipx:1;
   unsigned int _flipy:1;
   unsigned int _swap:1;
+
+  void _set_orientation (char *buf);
 public:
   TransformMat ();
 
@@ -55,6 +57,14 @@ public:
   void applyMat (const TransformMat &t);
 
   void Print (FILE *fp) const;
+  void PrintRect (FILE *fp) const;
+
+  // reads transform matrix
+  static TransformMat ReadRect (FILE *fp);
+
+  // reads transform matrix and returns the # of characters processed
+  // in amt
+  static TransformMat ReadRect (char *buf, int *amt);
 };
 
 
@@ -416,6 +426,11 @@ public:
   static LayoutBlob *ReadRect (const char *file, netlist_t *nl);
 
   static LayoutBlob *ReadRect (Process *p, netlist_t *nl);
+
+  /**
+   * Map from Process * to a LayoutBlob
+   */
+  static Hashtable *procToBlob;
 
   friend class SubcellInst;
 };

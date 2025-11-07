@@ -1916,6 +1916,18 @@ void ActStackLayout::run_post (void)
   for (int flavor=0; flavor < ntaps; flavor++) {
     wellplugs[flavor] = _createwelltap (flavor);
   }
+
+  /* create any shared staticizer cells */
+  _weak_supplies = NULL;
+  list_t *l = nl->getSharedStatTypes ();
+  if (l && !list_isempty (l)) {
+    _weak_supplies = list_new ();
+    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+      LayoutBlob *b =
+	_create_weaksupply ((ActNetlistPass::shared_stat *)list_value (li));
+      list_append (_weak_supplies, b);
+    }
+  }
 }
 
 void ActStackLayout::_emitlocalRect (Process *p)
@@ -2478,6 +2490,8 @@ int ActStackLayout::_emitlocalLEF (Process *p)
   }
 
   /* check Vdd/GND */
+
+  // XXX: this needs to be corrected
   if (!found_vdd && n->Vdd) {
     found_vdd = 1;
     if (n->Vdd->e && list_length (n->Vdd->e) > 0) {
@@ -3158,6 +3172,35 @@ static void dump_inst (void *x, ActId *prefix, UserDef *u)
   }
 }
 
+static const char *global_vdd = NULL;
+static const char *global_gnd = NULL;
+static const char *local_vdd = NULL;
+static const char *local_gnd = NULL;
+
+static void _initglobals ()
+{
+  if (!global_vdd || !global_gnd) {
+    global_gnd = config_get_string ("net.global_gnd");
+    global_vdd = config_get_string ("net.global_vdd");
+    local_gnd = config_get_string ("net.local_gnd");
+    local_vdd = config_get_string ("net.local_vdd");
+  }
+}
+
+static bool _is_global_supply (ActId *sig)
+{
+  if (sig->isNamespace()) {
+    sig = sig->Rest();
+  }
+  if (sig->Rest() || sig->arrayInfo()) {
+    return false;
+  }
+  if (strcmp (sig->getName(), global_vdd) == 0) return true;
+  if (strcmp (sig->getName(), global_gnd) == 0) return true;
+  if (strcmp (sig->getName(), local_vdd) == 0) return true;
+  if (strcmp (sig->getName(), local_gnd) == 0) return true;
+  return false;
+}
 
 static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
 		      int toplevel, int pins)
@@ -3193,15 +3236,14 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
     delete tmp;
   }
   else if (net->net->isglobal() && pins) {
-    ActId *tmp = net->net->toid();
-    tmp->sPrint (buf, 10240);
-    delete tmp;
-    if ((strcmp (buf, "Vdd") == 0) || (strcmp (buf, "GND") == 0)) {
+    _initglobals ();
+    if (_is_global_supply (tmp)) {
       /* omit */
     }
     else {
       fprintf (fp, " ( PIN %s )", buf);
     }
+    delete tmp;
   }
 
   for (int i=0; i < A_LEN (net->pins); i++) {
@@ -3397,11 +3439,6 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
 
   /* -- pins -- */
-  ActPass *anlp = a->pass_find ("prs2net");
-  Assert (anlp, "What?");
-  ActNetlistPass *nl = dynamic_cast<ActNetlistPass *>(anlp);
-  Assert (nl, "What?");
-
   netlist_t *act_ckt = nl->getNL (p);
   Assert (act_ckt, "No circuit?");
   act_boolean_netlist_t *act_bnl = act_ckt->bN;
@@ -3410,8 +3447,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
   if (do_pins) {
     int num_pins = 0;
-    const char *gvdd = config_get_string ("net.global_vdd");
-    const char *ggnd = config_get_string ("net.global_gnd");
+    _initglobals ();
 
     for (int i=0; i < A_LEN (act_bnl->ports); i++) {
       if (act_bnl->ports[i].omit) continue;
@@ -3421,10 +3457,8 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
         /* gloal nets */
     for (int i=0; i < A_LEN (act_bnl->nets); i++) {
       if (act_bnl->nets[i].net->isglobal()) {
-	char buf[100];
 	ActId *tmp = act_bnl->nets[i].net->toid();
-	tmp->sPrint (buf, 100);
-	if (strcmp (buf, gvdd) == 0 || strcmp (buf, ggnd) == 0) {
+	if (_is_global_supply (tmp)) {
 	  /* nothing for power supplies */
 	}
 	else {
@@ -3460,10 +3494,8 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     /* gloal nets */
     for (int i=0; i < A_LEN (act_bnl->nets); i++) {
       if (act_bnl->nets[i].net->isglobal()) {
-	char buf[100];
 	ActId *tmp = act_bnl->nets[i].net->toid();
-	tmp->sPrint (buf, 100);
-	if (strcmp (buf, gvdd) == 0 || strcmp (buf, ggnd) == 0) {
+	if (_is_global_supply (tmp)) {
 	  /* nothing */
 	}
 	else {
@@ -3949,4 +3981,131 @@ int layout_runcmd (ActPass *_ap, const char *name)
   lp->setBBox (p, 0, 0, w, h);
 
   return 1;
+}
+
+
+LayoutBlob *ActStackLayout::_create_weaksupply (ActNetlistPass::shared_stat *s)
+{
+  BBox b;
+
+  b.n.llx = 0;
+  b.n.lly = 0;
+  b.n.urx = 0;
+  b.n.ury = 0;
+  b.p = b.n;
+
+  Layout *l = new Layout (s->nl);
+
+  // everything needs a contact!
+  for (node_t *n = s->nl->hd; n; n = n->next) {
+    n->contact = 1;
+  }
+
+  // XXX: compute the diffspace here. This is much simpler because
+  // there are no notches/etc.
+
+  int diffspace;
+  diffspace = Technology::T->diff[EDGE_NFET][s->en->flavor]->getOppDiffSpacing (s->en->flavor);
+  diffspace = MAX(diffspace,
+		  Technology::T->diff[EDGE_PFET][s->en->flavor]->getOppDiffSpacing (s->en->flavor));
+
+  if (s->en && s->ep) {
+    struct gate_pairs gp;
+    gp.basepair = 1;
+    gp.visited = 0;
+    gp.share = 1;
+    gp.n_start = 0;
+    gp.p_start = 0;
+    gp.n_fold = 0;
+    gp.p_fold = 0;
+    gp.nodeshare = 0;
+
+    gp.l.n = s->en->a;
+    gp.l.p = s->ep->a;
+    gp.r.n = s->en->b;
+    gp.r.p = s->ep->b;
+    gp.u.e.n = s->en;
+    gp.u.e.p = s->ep;
+
+    diffspace = MAX(diffspace,
+		    Technology::T->poly->getOverhang (getlength (gp.u.e.n, 0)));
+
+    b = print_dualstack (l, &gp, diffspace);
+    
+    l->DrawDiffBBox (b.flavor, EDGE_PFET, b.p.llx, b.p.lly,
+		     b.p.urx - b.p.llx, b.p.ury - b.p.lly);
+    l->DrawDiffBBox (b.flavor, EDGE_NFET, b.n.llx, b.n.lly,
+		     b.n.urx - b.n.llx, b.n.ury - b.n.lly);
+  }
+  else if (s->en) {
+    list_t *onestk = list_new ();
+    list_append (onestk, s->en->a);
+    list_append (onestk, s->en);
+    list_append (onestk, (void *)(long)0);
+    list_append (onestk, s->en->b);
+    list_t *stk = list_new ();
+    list_append (stk, onestk);
+    
+    b = print_singlestack (l, stk, diffspace, 0);
+    
+    list_free (onestk);
+    list_free (stk);
+  }
+  else {
+    list_t *onestk = list_new ();
+    list_append (onestk, s->en->a);
+    list_append (onestk, s->en);
+    list_append (onestk, (void *)(long)0);
+    list_append (onestk, s->en->b);
+    list_t *stk = list_new ();
+    list_append (stk, onestk);
+    
+    b = print_singlestack (l, stk, diffspace, 0);
+    
+    list_free (onestk);
+    list_free (stk);
+  }
+  LayoutBlob *BLOB = new LayoutBlob (BLOB_BASE, l);
+  BLOB = computeLEFBoundary (BLOB);
+
+  /* add pins */
+  Rectangle b_bbox;
+  b_bbox = BLOB->getBBox ();
+
+  int tedge;
+  tedge = snap_up_y (b_bbox.ury() - b_bbox.lly() + 1);
+
+  while (tedge - _pin_metal->getLEFWidth() <=
+	 _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
+	 _pin_metal->minSpacing())
+    {
+      tedge += _m_align_y->getPitch();
+    }
+
+  int p = _m_align_x->getPitch();
+  Layout *pins = new Layout (s->nl);
+  int w = _pin_metal->getLEFWidth();
+
+  if (s->en) {
+    pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p,
+			b_bbox.lly() + tedge - w, w, w,
+			s->en->b, 0);
+  }
+
+  if (s->ep) {
+    pins->DrawMetalPin (_pin_layer,
+			b_bbox.llx() + p,
+			b_bbox.lly() + _m_align_y->getPitch(), w, w,
+			s->ep->b, 0);
+  }
+
+  LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
+  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
+  bl->appendBlob (BLOB, BLOB_MERGE);
+
+  bl = LayoutBlob::delBBox (bl);
+
+  BLOB = computeLEFBoundary (bl);
+
+  return BLOB;
 }
