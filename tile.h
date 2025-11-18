@@ -125,6 +125,14 @@ public:
     _wy = 0;
   }
 
+  int operator !=(const Rectangle&r) const {
+    if (_llx != r._llx || _lly != r._lly ||
+	_wx != r._wx || _wy != r._wy) {
+      return true;
+    }
+    return false;
+  }
+
   bool empty() const { return (_wx == 0) && (_wy == 0); }
 
   long llx() const { return _llx; }

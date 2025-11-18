@@ -427,8 +427,11 @@ public:
    *   mode = 3 : 2 + verbose read
    *   mode = 4 : 2 + warning on bbox change
    *   mode = 5 : 3 + warning on bbox change
+   *
+   * Returns the bbox as well
    */
-  static LayoutBlob *ReadRect (const char *file, netlist_t *nl, int mode = 1);
+  static LayoutBlob *ReadRect (const char *file, netlist_t *nl,
+			       Rectangle& bbox, int mode = 1);
 
   //static LayoutBlob *ReadRect (Process *p, netlist_t *nl, int mode = 1);
 

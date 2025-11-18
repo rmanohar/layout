@@ -1013,7 +1013,8 @@ Rectangle LayoutBlob::getAbutBox()
 }
 
 
-LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl, int mode)
+LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
+				  Rectangle& bbox, int mode)
 {
   LayoutBlob *ret;
   FILE *fp;
@@ -1023,6 +1024,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl, int mode)
   char *net;
   Process *p;
   Layout *L;
+
+  bbox.clear ();
 
   /* the process */
   if (nl) {
@@ -1073,6 +1076,7 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl, int mode)
       long rlx, rly, rux, ruy;
       sscanf (buf+5, "%ld %ld %ld %ld", &rlx, &rly, &rux, &ruy);
       // this is auto-generated, so ignore it.
+      bbox.setRect (rlx, rly, rux - rlx, ruy - rly);
       continue;
     }
     else if (strncmp (buf+offset, "sbox ", 5) == 0) {

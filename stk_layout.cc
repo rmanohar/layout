@@ -1160,8 +1160,10 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   printf (" === processing %s\n", cname);
 #endif
 
+  Rectangle file_bbox;
   LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
-					nl->getNL (p), _rect_import);
+					nl->getNL (p), file_bbox,
+					_rect_import);
   if (tmpname) {
     FREE (tmpname);
   }
@@ -1246,8 +1248,15 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   b = computeLEFBoundary (b);
   b->markRead ();
 
-  if (_rect_import == 3 || _rect_import == 4) {
-    //warning ("%s: bounding box for rect file was changed", p->getName());
+  if (_rect_import == 4 || _rect_import == 5) {
+    if (b->getBBox() != file_bbox) {
+      warning ("%s: bounding box for rect file was changed", p->getName());
+      fprintf (stderr, "file: ");
+      file_bbox.print(stderr);
+      fprintf (stderr, "; computed: ");
+      b->getBBox().print(stderr);
+      fprintf (stderr, "\n");
+    }
   }
   
   return b;
@@ -1669,9 +1678,11 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
   else {
     tmpname = NULL;
   }
-    
+
+  Rectangle file_bbox;
   LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
-					dummy_netlist, _rect_import);
+					dummy_netlist, file_bbox,
+					_rect_import);
   if (tmpname) {
     FREE (tmpname);
   }
@@ -1752,9 +1763,16 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
     }
   }
   b = computeLEFBoundary (b);
-  if (0 /* XXX */) {
-    //warning ("welltap_%s: boundary was changed.",
-    //act_dev_value_to_string (flavor));
+  if (_rect_import == 4 || _rect_import == 5) {
+    if (b->getBBox() != file_bbox) {
+      warning ("welltap_%s: boundary was changed.",
+	       act_dev_value_to_string (flavor));
+      fprintf (stderr, "file: ");
+      file_bbox.print(stderr);
+      fprintf (stderr, "; computed: ");
+      b->getBBox().print(stderr);
+      fprintf (stderr, "\n");
+    }
   }
   b->markRead ();
   
