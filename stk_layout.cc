@@ -123,29 +123,9 @@ void layout_init (ActPass *a)
   dp->setParam ("raw", (void *)new ActStackLayout(a));
 }
 
-ActStackLayout::ActStackLayout (ActPass *ap) 
+
+void ActStackLayout::cacheConfig ()
 {
-  me = ap;
-  a = ap->getAct();
-  boxH = NULL;
-
-  ActPass *pass = a->pass_find ("net2stk");
-  Assert (pass, "Hmm...");
-  stk = dynamic_cast<ActDynamicPass *>(pass);
-  Assert (stk, "Hmm too...");
-
-  pass = a->pass_find ("prs2net");
-  Assert (pass, "Missing netlist pass...");
-  nl = dynamic_cast<ActNetlistPass *> (pass);
-  Assert (nl, "What?");
-
-  _total_area = -1;
-  _total_stdcell_area = -1;
-  _total_instances = -1;
-  _maxht = -1;
-  _ymin = 0;
-  _ymax = 0;
-
   double net_lambda;
   net_lambda = config_get_real ("net.lambda");
   lambda_to_scale = (int)(net_lambda*1e9/Technology::T->scale + 0.5);
@@ -153,9 +133,6 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   if (fabs(lambda_to_scale*Technology::T->scale - net_lambda*1e9) > 0.001) {
     warning ("Lambda (%g) and technology scale factor (%g) are not integer multiples; rounding down", net_lambda, Technology::T->scale);
   }
-
-  wellplugs = NULL;
-  dummy_netlist = NULL;
 
   /* more parameters */
   if (config_exists ("lefdef.version")) {
@@ -254,8 +231,8 @@ ActStackLayout::ActStackLayout (ActPass *ap)
 
   if (config_exists ("lefdef.rect_import")) {
     _rect_import = config_get_int ("lefdef.rect_import");
-    if (_rect_import != 0 && _rect_import != 1) {
-      fatal_error ("lefdef.rect_import: must be 0 or 1");
+    if (_rect_import < 0 || _rect_import > 5) {
+      fatal_error ("lefdef.rect_import: must be in the 0-5 range");
     }
   }
   else {
@@ -323,6 +300,35 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   else {
     _extra_tracks_right = 0;
   }
+}
+
+ActStackLayout::ActStackLayout (ActPass *ap) 
+{
+  me = ap;
+  a = ap->getAct();
+  boxH = NULL;
+
+  ActPass *pass = a->pass_find ("net2stk");
+  Assert (pass, "Hmm...");
+  stk = dynamic_cast<ActDynamicPass *>(pass);
+  Assert (stk, "Hmm too...");
+
+  pass = a->pass_find ("prs2net");
+  Assert (pass, "Missing netlist pass...");
+  nl = dynamic_cast<ActNetlistPass *> (pass);
+  Assert (nl, "What?");
+
+  _total_area = -1;
+  _total_stdcell_area = -1;
+  _total_instances = -1;
+  _maxht = -1;
+  _ymin = 0;
+  _ymax = 0;
+
+  cacheConfig ();
+
+  wellplugs = NULL;
+  dummy_netlist = NULL;
 
   _lef_header = 0;
   _cell_header = 0;
@@ -1129,7 +1135,7 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   char cname[10240];
   int len;
 
-  if (!_rect_import) {
+  if (_rect_import == 0) {
     return NULL;
   }
   
@@ -1142,10 +1148,24 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   len = strlen (cname);
   snprintf (cname + len, 10240 - len, ".rect");
 
+  char *tmpname;
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, cname, NULL);
+  }
+  else {
+    tmpname = NULL;
+  }
+    
 #if 0
   printf (" === processing %s\n", cname);
-#endif  
-  LayoutBlob *b = LayoutBlob::ReadRect (cname, nl->getNL (p));
+#endif
+
+  LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
+					nl->getNL (p), _rect_import);
+  if (tmpname) {
+    FREE (tmpname);
+  }
+
   if (!b) {
     return NULL;
   }
@@ -1223,9 +1243,12 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
       b = tmp;
     }
   }
-  
   b = computeLEFBoundary (b);
   b->markRead ();
+
+  if (_rect_import == 3 || _rect_import == 4) {
+    //warning ("%s: bounding box for rect file was changed", p->getName());
+  }
   
   return b;
 }
@@ -1267,6 +1290,10 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
   BLOB = _readlocalRect (p);
   if (BLOB) {
     return BLOB;
+  }
+
+  if (_rect_import > 1) {
+    fatal_error ("Process %s: could not read local .rect file", p->getName());
   }
 
   b.n.llx = 0;
@@ -1630,14 +1657,24 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
   char cname[128];
   char *tmpname;
   
-  if (!_rect_import) {
+  if (_rect_import == 0) {
     return NULL;
   }
 
   snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
 
-  LayoutBlob *b = LayoutBlob::ReadRect (cname, dummy_netlist);
-
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, cname, NULL);
+  }
+  else {
+    tmpname = NULL;
+  }
+    
+  LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
+					dummy_netlist, _rect_import);
+  if (tmpname) {
+    FREE (tmpname);
+  }
   if (!b) {
     return NULL;
   }
@@ -1714,8 +1751,11 @@ LayoutBlob *ActStackLayout::_readwelltap (int flavor)
       b = tmp;
     }
   }
-  
   b = computeLEFBoundary (b);
+  if (0 /* XXX */) {
+    //warning ("welltap_%s: boundary was changed.",
+    //act_dev_value_to_string (flavor));
+  }
   b->markRead ();
   
   return b;
@@ -1732,6 +1772,11 @@ LayoutBlob *ActStackLayout::_createwelltap (int flavor)
   BLOB = _readwelltap (flavor);
   if (BLOB) {
     return BLOB;
+  }
+  
+  if (_rect_import > 1) {
+    fatal_error ("welltap_%s: could not read local .rect file",
+		 act_dev_value_to_string (flavor));
   }
 
   /* no well tap */
@@ -3930,25 +3975,19 @@ long ActStackLayout::getBBoxCount (Process *p)
 }
 
 
-int layout_runcmd (ActPass *_ap, const char *name)
+/*
+ *  The setbbox command, which is used to pass in the LEF bounding box
+ *  for pre-defined standard cells to the layout LEF/DEF generation
+ *  engine.
+ */
+static int _layoutcmd_setbbox (ActDynamicPass *ap, ActStackLayout *lp)
 {
-  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
-  ActStackLayout *lp;
-  Process *p;
-  Assert (ap, "What?");
-
-  if (strcmp (name, "setbbox") != 0) {
-    fprintf (stderr, "Unknown command `%s'!\n", name);
-    return -1;
-  }
-
-  lp = (ActStackLayout *)ap->getPtrParam ("raw");
-
   if (!ap->completed()) {
     return 0;
   }
 
   const char *x = (const char *) ap->getPtrParam ("cell_name");
+  
   if (!x) {
     return 0;
   }
@@ -3971,7 +4010,7 @@ int layout_runcmd (ActPass *_ap, const char *name)
     strcat (buf, "<>");
   }
 
-  p = ap->getAct()->findProcess (buf);
+  Process *p = ap->getAct()->findProcess (buf);
 
   if (!p) {
     fprintf (stderr, "stk2layout pass: runcmd failed, could not find process `%s'", buf);
@@ -3981,6 +4020,65 @@ int layout_runcmd (ActPass *_ap, const char *name)
   lp->setBBox (p, 0, 0, w, h);
 
   return 1;
+}
+
+
+int _layoutcmd_rectstatus (ActDynamicPass *ap, ActStackLayout *lp)
+{
+  int stat = lp->getImport ();
+  printf ("INFO: .rect file import configuration:\n");
+  printf ("  import flag: %d\n", stat);
+  if (stat == 0) {
+    printf ("    > always create fresh rect files\n");
+  }
+  else if (stat == 1) {
+    printf ("    > read rect files, or create fresh ones if not found\n");
+  }
+  else if (stat == 2) {
+    printf ("    > read rect files, error out if not found\n");
+  }
+  else if (stat == 3) {
+    printf ("    > read rect files, and print file names\n");
+  }
+  else if (stat == 4) {
+    printf ("    > read rect files, print warning if bbox changes\n");
+  }
+  else if (stat == 5) {
+    printf ("    > read rect files, print file names + warning if bbox changes\n");
+  }
+  lp->reportDirs (stdout);
+  return 1;
+}
+
+int _layoutcmd_configrefresh (ActDynamicPass *ap, ActStackLayout *lp)
+{
+  lp->cacheConfig ();
+  return 1;
+}
+
+/*
+ * Used to invoke specific commands about the layout package
+ */
+int layout_runcmd (ActPass *_ap, const char *name)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  ActStackLayout *lp;
+  Assert (ap, "What?");
+
+  lp = (ActStackLayout *)ap->getPtrParam ("raw");
+
+  if (strcmp (name, "setbbox") == 0) {
+    return _layoutcmd_setbbox (ap, lp);
+  }
+  else if (strcmp (name, "rect_status") == 0) {
+    return _layoutcmd_rectstatus (ap, lp);
+  }
+  else if (strcmp (name, "config_refresh") == 0) {
+    return _layoutcmd_configrefresh (ap, lp);
+  }
+  else {
+    return -1;
+  }
 }
 
 
@@ -4104,8 +4202,37 @@ LayoutBlob *ActStackLayout::_create_weaksupply (ActNetlistPass::shared_stat *s)
   bl->appendBlob (BLOB, BLOB_MERGE);
 
   bl = LayoutBlob::delBBox (bl);
-
   BLOB = computeLEFBoundary (bl);
 
   return BLOB;
 }
+
+
+void ActStackLayout::reportDirs (FILE *fp)
+{
+  fprintf (fp, "  .rect file directories:\n");
+  fprintf (fp, "    inpath:");
+  if (_rect_inpath) {
+    struct actual_pathlist {
+      char *path;
+      struct actual_pathlist *next;
+    };
+    struct actual_path_info {
+      actual_pathlist *hd, *tl;
+    };
+    actual_pathlist *ac = ((actual_path_info *) _rect_inpath)->hd;
+    while (ac) {
+      fprintf (fp, " %s", ac->path);
+      ac = ac->next;
+    }
+  }
+  else {
+    fprintf (fp, " none");
+  }
+  fprintf (fp, "\n");
+
+  fprintf (fp, "    outinitdir: %s\n", _rect_outinitdir ? _rect_outinitdir : "none");
+  fprintf (fp, "    outdir: %s\n", _rect_outdir ? _rect_outdir : "none");
+}
+
+

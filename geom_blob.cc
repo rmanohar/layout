@@ -1013,55 +1013,7 @@ Rectangle LayoutBlob::getAbutBox()
 }
 
 
-/*
- * Read layout
- */
-LayoutBlob *LayoutBlob::ReadRect (Process *p, netlist_t *nl)
-{
-  LayoutBlob *ret;
-  char cname[10240];
-  int len;
-
-  if (!p) {
-    snprintf (cname, 10240, "toplevel");
-  }
-  else {
-    ActNamespace::Act()->msnprintfproc (cname, 10240, p);
-  }
-  len = strlen (cname);
-  snprintf (cname + len, 10240 - len, ".rect");
-
-  FILE *fp;
-  char *tmpname;
-
-  if (config_exists ("lefdef.rect_inpath")) {
-    path_info_t *rect_inpath = path_init ();
-    path_add (rect_inpath, config_get_string ("lefdef.rect_inpath"));
-    tmpname = path_open (rect_inpath, cname, NULL);
-    fp = fopen (tmpname, "r");
-    path_free (rect_inpath);
-  }
-  else {
-    tmpname = NULL;
-    fp = fopen (cname, "r");
-  }
-
-  if (!fp) {
-    fatal_error ("Looking for .rect files for %s; not found!", cname);
-  }
-  fclose (fp);
-
-  if (tmpname) {
-    ret = ReadRect (tmpname, nl);
-    FREE (tmpname);
-  }
-  else {
-    ret = ReadRect (cname, nl);
-  }
-  return ret;
-}
-
-LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl)
+LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl, int mode)
 {
   LayoutBlob *ret;
   FILE *fp;
@@ -1084,6 +1036,10 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl)
   fp = fopen (file, "r");
   if (!fp) {
     return NULL;
+  }
+
+  if (mode == 3 || mode == 5) {
+    printf ("INFO: read rect: %s\n", file);
   }
 
   L = new Layout (nl);
@@ -1114,6 +1070,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl)
       rtype = 0;
     }
     else if (strncmp (buf+offset, "bbox ", 5) == 0) {
+      long rlx, rly, rux, ruy;
+      sscanf (buf+5, "%ld %ld %ld %ld", &rlx, &rly, &rux, &ruy);
       // this is auto-generated, so ignore it.
       continue;
     }

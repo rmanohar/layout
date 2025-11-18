@@ -51,6 +51,11 @@ public:
   void incBBox (Process *p);
   long getBBoxCount (Process *p);
 
+
+  int getImport () { return _rect_import; }
+  void reportDirs (FILE *fp);
+  void cacheConfig ();
+
  private:
   int _localdiffspace (Process *p);
 
@@ -98,7 +103,7 @@ public:
   LayoutBlob *_create_weaksupply (ActNetlistPass::shared_stat *s);
 
 
-  /* aligned LEF boundary */
+  /* compute aligned LEF boundary */
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
   ActDynamicPass *stk;

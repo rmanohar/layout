@@ -422,10 +422,15 @@ public:
 
   /**
    * Read rectangles
+   *   mode = 1 : normal read
+   *   mode = 2 : normal read, error if have to generate it
+   *   mode = 3 : 2 + verbose read
+   *   mode = 4 : 2 + warning on bbox change
+   *   mode = 5 : 3 + warning on bbox change
    */
-  static LayoutBlob *ReadRect (const char *file, netlist_t *nl);
+  static LayoutBlob *ReadRect (const char *file, netlist_t *nl, int mode = 1);
 
-  static LayoutBlob *ReadRect (Process *p, netlist_t *nl);
+  //static LayoutBlob *ReadRect (Process *p, netlist_t *nl, int mode = 1);
 
   /**
    * Map from Process * to a LayoutBlob
