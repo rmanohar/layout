@@ -3300,6 +3300,7 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
   }
   else if (net->net->isglobal() && pins) {
     _initglobals ();
+    ActId *tmp = net->net->toid();
     if (_is_global_supply (tmp)) {
       /* omit */
     }
