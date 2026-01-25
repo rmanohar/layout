@@ -2356,6 +2356,9 @@ void ActStackLayout::runrec (int mode, UserDef *u)
     Process *p = dynamic_cast<Process *> (u);
     double area_mult;
     double aspect_ratio;
+    double bb_x;
+    double bb_y;
+    int is_bb = 0;
     int do_pins;
     ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
     if (!p || !dp) {
@@ -2367,9 +2370,20 @@ void ActStackLayout::runrec (int mode, UserDef *u)
     
     fp = (FILE *) dp->getPtrParam ("def_file");
     do_pins = dp->getIntParam ("do_pins");
-    area_mult = dp->getRealParam ("area_mult");
-    aspect_ratio = dp->getRealParam ("aspect_ratio");
-    emitDEF (fp, p, area_mult, aspect_ratio, do_pins);
+    if (dp->hasParam("is_bb")) {
+      is_bb = dp->getIntParam ("is_bb");
+    }
+    if (is_bb) {
+      bb_x = dp->getRealParam ("bb_x");
+      bb_y = dp->getRealParam ("bb_y");
+      emitDEF (fp, p, bb_x, bb_y, do_pins, true);
+    }
+    else {
+      area_mult = dp->getRealParam ("area_mult");
+      aspect_ratio = dp->getRealParam ("aspect_ratio");
+      emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
+    }
+    
 
     dp->setParam ("total_area", _total_area);
     dp->setParam ("stdcell_area", _total_stdcell_area);
@@ -3408,7 +3422,7 @@ void ActStackLayout::emitDEFHeader (FILE *fp, Process *p)
 }
 
 void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
-				  double ratio, int do_pins)
+				  double ratio, int do_pins, bool is_bounding_box)
 {
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
   Assert (dp, "What?");
@@ -3435,16 +3449,12 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   _total_area = _areacount;
   _total_stdcell_area = _areastdcell;
 
-  _total_area *= pad;
-  _total_stdcell_area *= pad;
 
-  double sidey = sqrt (_total_area/ratio);
-  double sidex = sidey*ratio;
+  double sidey;
+  double sidex;
 
   double unit_conv = Technology::T->scale*_micron_conv/1000.0;
 
-  sidex *= unit_conv;
-  sidey *= unit_conv;
 
   int pitchx, pitchy, track_gap;
   int nx, ny;
@@ -3459,12 +3469,43 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
   track_gap = pitchy * TRACK_HEIGHT;
 
-  nx = (sidex + pitchx - 1)/pitchx;
-  ny = (sidey + track_gap - 1)/track_gap;
+   /* 
+   make it able to specify the area as a bounding box instead of a ratio and densety
+   the question here is, do we also skip the track snapping from below?
+   for now no, but might be nessesary, margins are removed to not mess with floorplanning.
+   */
+  if (is_bounding_box){
+    sidex = pad;
+    sidey = ratio;
+    if (_total_area > sidex*sidey) {
+      warning("Your densety inside the bounding box is above 1 placement will (probably) fail");
+    }
+    _total_area = sidex*sidey;
 
-  fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
-	   10*pitchx, track_gap,
-	   (10+nx)*pitchx, (1+ny)*track_gap);
+    sidex *= unit_conv;
+    sidey *= unit_conv;
+    nx = (sidex)/pitchx;
+    ny = (sidey)/track_gap;
+
+    fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
+      0, 0,
+      (nx)*pitchx, (ny)*track_gap);
+  }
+  // the original generate size on densety and ratio
+  else {
+    _total_area *= pad;
+    _total_stdcell_area *= pad;
+    sidey = sqrt (_total_area/ratio);
+    sidex = sidey*ratio;
+    sidex *= unit_conv;
+    sidey *= unit_conv;
+    nx = (sidex + pitchx - 1)/pitchx;
+    ny = (sidey + track_gap - 1)/track_gap;
+
+    fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
+      10*pitchx, track_gap,
+      (10+nx)*pitchx, (1+ny)*track_gap);
+  }
   
   //  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
   //	   10*pitchx, pitchy, ny, track_gap);
@@ -3479,16 +3520,34 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     int ntracksx = (pitchx*nx)/pitchxy;
     int ntracksy = (track_gap*ny)/pitchxy;
 
-    /* vertical tracks */
-    if (ntracksx > 0) {
-      fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
-	       10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
+    /* if a bounding box is specified we dont add a margin to keep inside the bb, 
+    the top level floorplanning is responcible for the margins*/
+    if (is_bounding_box) {
+      /* vertical tracks */
+      if (ntracksx > 0) {
+        fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
+          startxy, ntracksx, pitchxy, mx->getLEFName());
+      }
+      /* horizontal tracks */
+      if (ntracksy > 0) {
+        fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
+          startxy, ntracksy, pitchxy, mx->getLEFName());
+      }
     }
-    /* horizontal tracks */
-    if (ntracksy > 0) {
-      fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
-	       track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
+    else {
+      /* vertical tracks */
+      if (ntracksx > 0) {
+        fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
+          10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
+      }
+      /* horizontal tracks */
+      if (ntracksy > 0) {
+        fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
+          track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
+      }
     }
+  
+    
     fprintf (fp, "\n");
   }
 
