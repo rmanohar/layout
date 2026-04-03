@@ -43,7 +43,7 @@ public:
 
   void *localop (ActPass *ap, Process *p, int mode);
 
-  void run_post (void);
+  void run_post (Process *top);
   void runrec (int mode, UserDef *u);
 
   void setBBox (Process *p, long llx, long lly, long urx, long ury);

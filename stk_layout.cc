@@ -1261,6 +1261,20 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
   
   return b;
 }
+
+
+static bool _empty_stacks (list_t *l)
+{
+  listitem_t *li;
+
+  if (!l || list_isempty (l)) return true;
+
+  for (li = list_first (l); li; li = list_next (li)) {
+    list_t *tmp = (list_t *) list_value (li);
+    if (tmp && !list_isempty (tmp)) return false;
+  }
+  return true;
+}
   
 
 /*
@@ -1292,7 +1306,8 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
   }
  
   stks = (list_t *) stk->getMap (p);
-  if (!stks || list_length (stks) == 0) {
+
+  if (!stks || _empty_stacks (stks)) {
     return NULL;
   }
 
@@ -1964,11 +1979,15 @@ void layout_run (ActPass *_ap, Process *p)
   Assert (ap, "What?");
 
   lp = (ActStackLayout *)ap->getPtrParam ("raw");
-  lp->run_post ();
+  lp->run_post (p);
 }
 
-void ActStackLayout::run_post (void)
+void ActStackLayout::run_post (Process *top)
 {
+  if (!dummy_netlist) {
+    dummy_netlist = nl->getNL (top);
+  }
+    
   if (!dummy_netlist) {
     fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
   }
