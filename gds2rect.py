@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 """
 This script converts gds files to rect formart depending on a ACT tech configuration
 
