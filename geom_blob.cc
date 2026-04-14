@@ -1193,7 +1193,10 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
       else {
 	/*--- draw metal ---*/
 	l--;
-	L->DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n);
+	if (!L->DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n)) {
+	  warning ("Skipped rect: metal%d @ (%ld,%ld) -> (%ld,%ld)",
+		   l+1, rllx, rlly, rurx, rury);
+	}
       }
     }
     else if (strcmp (material, L->base->mat->getName()) == 0) {
@@ -1202,7 +1205,10 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
       printf ("poly\n");
 #endif
       /*--- draw poly ---*/
-      L->DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n);
+      if (!L->DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n)) {
+	warning ("Skipped rect: poly @ (%ld,%ld) -> (%ld,%ld)",
+		 rllx, rlly, rurx, rury);
+      }
     }
     else if (strcmp (material, "$align") == 0) {
       LayoutEdgeAttrib::attrib_list *l;
@@ -1283,28 +1289,41 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
       hash_bucket_t *b;
       b = hash_lookup (L->lmap, material);
       if (b) {
+	const char *errname = NULL;
 	/*--- draw base layer or via ---*/
 	lm = (struct LayoutLayermap *) b->v;
 	switch (lm->lcase) {
 	case LMAP_DIFF:
-	  L->DrawDiff (lm->flavor, lm->etype, rllx, rlly,
-		    rurx - rllx, rury - rlly, n);
+	  if (!L->DrawDiff (lm->flavor, lm->etype, rllx, rlly,
+			    rurx - rllx, rury - rlly, n)) {
+	    errname = "diffusion";
+	  }
 	  break;
 	  
 	case LMAP_FET:
-	  L->DrawFet (lm->flavor, lm->etype, rllx, rlly,
-		   rurx - rllx, rury - rlly, n);
+	  if (!L->DrawFet (lm->flavor, lm->etype, rllx, rlly,
+			   rurx - rllx, rury - rlly, n)) {
+	    errname = "fet";
+	  }
 	  break;
 	case LMAP_WDIFF:
-	  L->DrawWellDiff (lm->flavor, lm->etype, rllx, rlly,
-			rurx - rllx, rury - rlly, n);
+	  if (!L->DrawWellDiff (lm->flavor, lm->etype, rllx, rlly,
+				rurx - rllx, rury - rlly, n)) {
+	    errname = "welldiff";
+	  }
 	  break;
 	case LMAP_VIA:
-	  lm->l->drawVia (rllx, rlly, rurx - rllx, rury - rlly, n, 0);
+	  if (!lm->l->drawVia (rllx, rlly, rurx - rllx, rury - rlly, n, 0)) {
+	    errname = "via";
+	  }
 	  break;
 	default:
 	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
 	  break;
+	}
+	if (errname) {
+	  warning ("Skipped rect %s: (%ld,%ld) -> (%ld,%ld)",
+		   errname, rllx, rlly, rurx, rury);
 	}
       }
       else {

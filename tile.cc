@@ -351,7 +351,7 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
 		     bool force)
 {
 #if 0
-  printf ("addrect @ %d: (%ld, %ld) -> (%ld, %ld)\n", pall, _llx, _lly,
+  printf ("addrect: (%ld, %ld) -> (%ld, %ld)\n", _llx, _lly,
 	  _llx + wx - 1, _lly + wy - 1);
   //printall();
   fflush (stdout);
@@ -380,7 +380,8 @@ Tile *Tile::addRect (long _llx, long _lly, unsigned long wx, unsigned long wy,
   printf ("   Region has %d tiles\n", list_length (l));
   for (li = list_first (l); li; li = list_next (li)) {
     Tile *tmp = (Tile *) list_value (li);
-    printf ("  -> "); tmp->print ();
+    printf ("  -> "); tmp->print (stdout);
+    printf ("\n");
   }
   fflush (stdout);
 #endif  

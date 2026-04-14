@@ -321,6 +321,11 @@ class Tile {
   int isPoly() { return TILE_ATTR_ISROUTE(attr) || (virt && TILE_ATTR_ISFET(attr)); }
   int isDiff() { return !virt && !TILE_ATTR_ISROUTE(attr) && TILE_ATTR_ISDIFF(attr); }
 
+  void print(FILE *fp) {
+    fprintf (fp, "attr %x, virt:%d space:%d (%ld,%ld) -> (%ld,%ld)", attr,
+	     virt, space, getllx(), getlly(), geturx(), getury());
+  }
+
   static int isConnected (Layer *l, Tile *t1, Tile *t2);
   
   friend class Layer;
