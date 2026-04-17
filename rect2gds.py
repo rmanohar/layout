@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 """
 This script converts rect files to GDS depending on a ACT tech configuration
 
@@ -469,4 +469,4 @@ if __name__ == '__main__':
         align=align,
         scale=scale
         )
-    gds_object.write_gds(outputfile)
+    gds_object.write_gds(outputfile, with_metadata=False)
