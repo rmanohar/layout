@@ -56,6 +56,9 @@ public:
   void reportDirs (FILE *fp);
   void cacheConfig ();
 
+  struct pHashtable *getStats() { return _cellStats; }
+  void _getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy);
+
  private:
   int _localdiffspace (Process *p);
 
@@ -78,7 +81,7 @@ public:
   void emitWellHeader (FILE *fp);
 
   /* mode 2 */
-  void _reportLocalStats(Process *p);
+  void _collectLocalStats(Process *p);
 
   /* mode 3 */
   void _maxHeightlocal (Process *p);
@@ -112,6 +115,14 @@ public:
 
   /*-- bounding box for black boxes --*/
   struct pHashtable *boxH;
+
+
+  /*-- statistics for area breakdown --*/
+  struct pHashtable *_cellStats;
+
+  void _getNetDetails (Process *p, unsigned long *ncount,
+		       unsigned long *ecount, unsigned long *ekeeper);
+		     
 
   int isEmpty (list_t *stk);
 

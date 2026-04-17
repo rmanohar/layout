@@ -34,6 +34,14 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
+
+/*
+ *
+ * Each _cellStats entry is a pHashtable that maps cell pointers to a
+ * count of the number of times the cells exists
+ *
+ */
+
 static double manufacturing_grid_in_nm;
 
 static long snap_up (long w, unsigned long pitch)
@@ -307,6 +315,7 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   me = ap;
   a = ap->getAct();
   boxH = NULL;
+  _cellStats = NULL;
 
   ActPass *pass = a->pass_find ("net2stk");
   Assert (pass, "Hmm...");
@@ -1101,7 +1110,9 @@ void *ActStackLayout::localop (ActPass *ap, Process *p, int mode)
     _emitlocalLEF (p);
   }
   else if (mode == 2) {
-    _reportLocalStats (p);
+    if (!dp->hasParam ("area_collected")) {
+      _collectLocalStats (p);
+    }
   }
   else if (mode == 3) {
     _maxHeightlocal (p);
@@ -2295,6 +2306,53 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
 }
 
 
+void ActStackLayout::_getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy)
+{
+  long bllx, blly, burx, bury;
+
+  if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
+    *dx = 0;
+    *dy = 0;
+  }
+  else {
+    *dx = (burx - bllx + 1);
+    *dy = (bury - blly + 1);
+  }
+}
+
+void ActStackLayout::_getNetDetails (Process *p, unsigned long *ncount,
+				     unsigned long *ecount,
+				     unsigned long *ekeeper)
+{
+  LayoutBlob *blob = getLayout (p);
+
+  *ncount = 0;
+  *ecount = 0;
+  *ekeeper = 0;
+  
+  if (blob) {
+    netlist_t *mynl = nl->getNL (p);
+    node_t *n;
+
+    for (n = mynl->hd; n; n = n->next) {
+      (*ncount) = (*ncount) + 1;
+      listitem_t *li;
+      edge_t *e;
+      for (li = list_first (n->e); li; li = list_next (li)) {
+	e = (edge_t *) list_value (li);
+	if (e->keeper) {
+	  (*ekeeper) = (*ekeeper) + 1;
+	}
+	else {
+	  (*ecount) = (*ecount) + 1;
+	}
+      }
+    }
+    *ecount /= 2;
+    *ekeeper /= 2;
+  }
+}
+
 void ActStackLayout::runrec (int mode, UserDef *u)
 {
   if (mode == 1) {
@@ -2403,11 +2461,51 @@ void ActStackLayout::runrec (int mode, UserDef *u)
       emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
     }
     
-
     dp->setParam ("total_area", _total_area);
     dp->setParam ("stdcell_area", _total_stdcell_area);
-
   }
+}
+
+
+struct report_info {
+  char *str;
+  double metric;
+};
+
+L_A_DECL(report_info, _report);
+static void _init_report ()
+{
+  A_INIT (_report);
+}
+
+static void _add_report (char *s, double metric)
+{
+  A_NEW (_report, report_info);
+  A_NEXT (_report).str = Strdup (s);
+  A_NEXT (_report).metric = metric;
+  A_INC (_report);
+}
+
+
+// condition to swap
+static int mycmpfn (char *a, char *b)
+{
+  report_info *ra = (report_info *) a;
+  report_info *rb = (report_info *) b;
+  if (ra->metric < rb->metric) return 1;
+  return 0;
+}
+
+static void _print_report (FILE *fp)
+{
+  mygenmergesort ((char *)_report, sizeof (report_info), A_LEN (_report),
+		  mycmpfn);
+  
+  for (int i=0; i < A_LEN (_report); i++) {
+    fprintf (fp, "  %s\n", _report[i].str);
+    FREE (_report[i].str);
+  }
+  A_FREE (_report);
 }
 
 void layout_recursive (ActPass *_ap, UserDef *u, int mode)
@@ -2420,6 +2518,145 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
   Assert (dp, "What?");
   ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
   lp->runrec (mode, u);
+  if (mode == 2) {
+    dp->setParam ("area_collected", 1);
+    if (dp->hasParam ("hier_report")) {
+      phash_bucket_t *b;
+      phash_iter_t it;
+      struct pHashtable *tab;
+      const char *tmp = (const char *) dp->getPtrParam ("hier_report");
+      Process *report;
+      if (strcmp (tmp, "") == 0) {
+	// top level
+	report = dynamic_cast<Process *> (u);
+	Assert (report, "What?");
+      }
+      else {
+	report = _ap->getAct()->findProcess (tmp);
+	if (!report) {
+	  printf (" -> Could not find process `%s'\n", tmp);
+	  return;
+	}
+      }
+
+      char *tmpns = report->getns()->Name();
+      if (tmpns[0] == ':' && tmpns[1] == ':' && tmpns[2] == '\0') {
+	tmpns[0] = '\0';
+      }
+      
+      b = phash_lookup (lp->getStats(), report);
+      if (!b) {
+	long llx, lly, urx, ury;
+	if (lp->getBBox (report, &llx, &lly, &urx, &ury)) {
+	  printf (">> Report for %s::%s (leaf cell)\n", tmpns, report->getName());
+	}
+	else {
+	  printf (" -> Process `%s::%s' is in design, but not reached from the top-level.\n", tmpns, report->getName());
+	}
+	FREE (tmpns);
+	return;
+      }
+
+      printf (">> Report for %s::%s\n", tmpns, report->getName());
+      FREE (tmpns);
+      
+      tab = (struct pHashtable *) b->v;
+      phash_iter_init (tab, &it);
+      double local_area = 0.0;
+      double scale = Technology::T->scale/1000.0;
+      scale = scale*scale;
+
+      while ((b = phash_iter_next (tab, &it))) {
+	Process *p = (Process *) b->key;
+	unsigned long dx, dy;
+	double contrib;
+	lp->_getAreaInfo (p, &dx, &dy);
+	contrib = (dx * dy) * scale * b->i;
+	local_area += contrib;
+      }
+      printf (">> Cell area: %.3g um^2 = %.3g mm^2\n", local_area,
+	      local_area / 1.0e6);
+
+      phash_iter_init (tab, &it);
+      _init_report ();
+      while ((b = phash_iter_next (tab, &it))) {
+	char buf[10240];
+	Process *p = (Process *) b->key;
+	unsigned long dx, dy;
+	double contrib;
+	tmpns = p->getns()->Name();
+	if (tmpns[0] == ':' && tmpns[1] == ':' && tmpns[2] == '\0') {
+	  tmpns[0] = '\0';
+	}
+	lp->_getAreaInfo (p, &dx, &dy);
+	contrib = (dx * dy) * scale * b->i;
+	snprintf (buf, 10240, "%s::%s count=%d, area=%.3g um^2 (%.2f%%)",
+		  tmpns, p->getName(), b->i,
+		  (dx * dy) * scale,
+		  contrib/local_area*100.0);
+	_add_report (buf, contrib);
+	//printf ("   %s\n", buf);
+	FREE (tmpns);
+      }
+      _print_report (stdout);
+
+
+      printf (">> Instances within the process:\n");
+
+      _init_report ();
+      ActUniqProcInstiter inst(report->CurScope());
+      for (inst = inst.begin(); inst != inst.end(); inst++) {
+	char buf[10240];
+	int pos = 0;
+	ValueIdx *vx = (*inst);
+	Process *proc;
+	proc = dynamic_cast<Process *> (vx->t->BaseType());
+	Assert (proc, "Hmm");
+	tmpns = proc->getns()->Name();
+	if (strcmp (tmpns, "::") != 0) {
+	  snprintf (buf+pos, 10240-pos, "%s", tmpns);
+	  pos += strlen (buf+pos);
+	}
+	FREE (tmpns);
+	snprintf (buf+pos, 10240-pos, "::");
+	pos += strlen (buf+pos);
+	vx->t->sPrint (buf+pos, 10240-pos);
+	pos += strlen (buf+pos);
+	snprintf (buf+pos, 10240-pos, " %s ", vx->getName());
+	pos += strlen (buf+pos);
+	
+	double my_area = 0;
+	phash_bucket_t *lb;
+	lb = phash_lookup (lp->getStats(), proc);
+	if (!lb) {
+	  long llx, lly, urx, ury;
+	  if (lp->getBBox (proc, &llx, &lly, &urx, &ury)) {
+	    snprintf (buf+pos, 10240-pos, "(leaf cell)");
+	  }
+	  else {
+	    snprintf (buf+pos, 10240-pos, "***err");
+	  }
+	  pos += strlen (buf+pos);
+	}
+	else {
+	  struct pHashtable *subtab = (struct pHashtable *) lb->v;
+	  phash_iter_t subit;
+	  phash_iter_init (subtab, &subit);
+	  while ((lb = phash_iter_next (subtab, &subit))) {
+	    Process *localp = (Process *) lb->key;
+	    unsigned long dx, dy;
+	    lp->_getAreaInfo (localp, &dx, &dy);
+	    my_area += (dx * dy) * scale * lb->i;
+	  }
+	  snprintf (buf+pos, 10240-pos, "area=%.3g um^2 = %.3g mm^2 (%.2f%%)",
+		    my_area, my_area/1.0e6, my_area/local_area*100.0);
+	}
+	_add_report (buf, my_area);
+	//printf ("  %s\n", buf);
+      }
+      _print_report (stdout);
+    }
+  }
 }
 
 /*
@@ -3683,17 +3920,89 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 }
 
 
-void ActStackLayout::_reportLocalStats(Process *p)
+void ActStackLayout::_collectLocalStats(Process *p)
 {
   LayoutBlob *blob = getLayout (p);
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
 
   long bllx, blly, burx, bury;
   long count;
+
   if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
+    /*
+      This is not a leaf cell; collect stats here and record them in
+      a table.
+      XXX
+    */
+    if (!_cellStats) {
+      _cellStats = phash_new (8);
+    }
+    phash_bucket_t *b;
+    b = phash_lookup (_cellStats, p);
+    if (b) {
+      warning ("%s: Duplicate call to local stats collection?", p->getName());
+      return;
+    }
+    b = phash_add (_cellStats, p);
+    struct pHashtable *mytab;
+    mytab = phash_new (4);
+    b->v = mytab;
+
+    ActUniqProcInstiter it(p->CurScope());
+    for (it = it.begin(); it != it.end(); it++) {
+      ValueIdx *vx = *it;
+      Process *ip = dynamic_cast<Process *>(vx->t->BaseType());
+      Assert (ip, "What?");
+
+      int sz;
+      if (vx->t->arrayInfo()) {
+	sz = vx->t->arrayInfo()->size();
+      }
+      else {
+	sz = 1;
+      }
+      
+      b = phash_lookup (_cellStats, ip);
+
+      if (b) {
+	/* subcells exist! */
+	struct pHashtable *subtable = (struct pHashtable *)b->v;
+	phash_iter_t it;
+	phash_iter_init (subtable, &it);
+	while ((b = phash_iter_next (subtable, &it))) {
+	  phash_bucket_t *nb;
+	  nb = phash_lookup (mytab, b->key);
+	  if (!nb) {
+	    nb = phash_add (mytab, b->key);
+	    nb->i = 0;
+	  }
+	  nb->i += b->i*sz;
+	}
+      }
+      else {
+	/* leaf cell */
+	phash_bucket_t *nb;
+	nb = phash_lookup (mytab, ip);
+	if (!nb) {
+	  nb = phash_add (mytab, ip);
+	  nb->i = 0;
+	}
+	nb->i += sz;
+      }
+    }
     return;
   }
   if (bllx > burx || blly > bury) return;
+
+
+  /**
+   *
+   * What follows here should just be eliminated; keep for
+   * cross-checking results
+   *
+   */
+  
+  /*-- record the information about this cell --*/
 
   char *tmp = p->getns()->Name();
 
@@ -3701,10 +4010,14 @@ void ActStackLayout::_reportLocalStats(Process *p)
     tmp[0] = '\0';
   }
   double all_area = dp->getRealParam ("total_area");
+  double area_mult = dp->getRealParam ("area_mult");
   printf ("--- Cell %s::%s ---\n", tmp, p->getName());
   FREE (tmp);
 
-  unsigned long area = (burx-bllx+1)*(bury-blly+1);
+  unsigned long dx, dy;
+  _getAreaInfo (p, &dx, &dy);
+
+  unsigned long area = dx * dy;
   if (blob) {
     count = blob->getCount();
   }
@@ -3714,31 +4027,11 @@ void ActStackLayout::_reportLocalStats(Process *p)
   printf ("  count=%lu; ", count);
   printf ("cell_area=%.3g um^2; ", area*Technology::T->scale/1000.0*
 	  Technology::T->scale/1000.0);
-  printf ("area: %.2f%%\n", area*count*100.0/all_area);
+  printf ("area: %.2f%%\n", area*count*100.0/all_area*area_mult);
 
-  if (blob) {
-    netlist_t *mynl = nl->getNL (p);
-    node_t *n;
-    unsigned long ncount = 0;
-    unsigned long ecount = 0;
-    unsigned long keeper = 0;
-    for (n = mynl->hd; n; n = n->next) {
-      ncount++;
-      listitem_t *li;
-      edge_t *e;
-      for (li = list_first (n->e); li; li = list_next (li)) {
-	e = (edge_t *) list_value (li);
-	if (e->keeper) {
-	  keeper++;
-	}
-	else {
-	  ecount++;
-	}
-      }
-    }
-    ecount /= 2;
-    keeper /= 2;
-  
+  unsigned long ncount, ecount, keeper;
+  _getNetDetails (p, &ncount, &ecount, &keeper);
+  if (ncount > 0) {
     printf ("  nodes=%lu; ", ncount);
     printf ("fets: std=%lu; ", ecount);
     printf ("keeper=%lu\n", keeper);
