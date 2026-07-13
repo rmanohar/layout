@@ -43,6 +43,11 @@ import sys
 import shlex
 from pprint import pprint
 
+# for grid snapping
+from fractions import Fraction
+from decimal import Decimal
+from math import gcd
+
 def find_in_stack(stack, name):
     try:
         return len(stack) - 1 - stack[::-1].index(name)
@@ -326,6 +331,19 @@ def add_pin(component, x0, y0, x1, y1, layer, direction):
     # so far pins are ignored, i dont know if gds has a notion of what a pin is, and gdsfactory has a non compatible notion of ports
     component.add_polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], layer=layer)
 
+def middle_snap_grid(a: float, b: float) -> float:
+    # snap to lower
+    A = Fraction(str(a)); B = Fraction(str(b))
+    dec = max(-Decimal(str(a)).as_tuple().exponent, -Decimal(str(b)).as_tuple().exponent)
+    scale = 10**dec
+    sa, sb = int(A*scale), int(B*scale)
+    fa, fb = sa % scale, sb % scale
+    g = gcd(fa, fb) if (fa or fb) else (gcd(sa, sb) if (sa or sb) else scale)
+    step = Fraction(g, scale)
+    mid = (A + B) / 2
+    q = mid / step
+    k = q.numerator // q.denominator
+    return float(step * k)
 
 def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_bloat, vias_bloat, metals_bloat, material_text, via_text, metal_text, metal_pin, align, scale: float = 1.0):
     filename = os.path.basename(filepath)
@@ -369,7 +387,7 @@ def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_blo
                     else:
                         layer_text = gds[materials[layer_name][0]]
                     if port_name != "#":
-                        center = ((x0 + x1) / 2, (y0 + y1) / 2)
+                        center = (middle_snap_grid(x0, x1), middle_snap_grid(y0, y1))
                         c.add_label(
                             port_name,
                             position=center,
@@ -397,7 +415,7 @@ def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_blo
                     else:
                         layer_text = gds[metals[layer_name][0]]
                     if port_name != "#":
-                        center = ((x0 + x1) / 2, (y0 + y1) / 2)
+                        center = (middle_snap_grid(x0, x1), middle_snap_grid(y0, y1))
                         c.add_label(
                             port_name,
                             position=center,
@@ -416,9 +434,9 @@ def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_blo
                         layer_text = gds[via_text[layer_name]]
                     else:
                         layer_text = gds[vias[layer_name][0]]
-                    center = ((x0 + x1) / 2, (y0 + y1) / 2)
+                    center = (middle_snap_grid(x0, x1), middle_snap_grid(y0, y1))
                     if port_name != "#":
-                        center = ((x0 + x1) / 2, (y0 + y1) / 2)
+                        center = (middle_snap_grid(x0, x1), middle_snap_grid(y0, y1))
                         c.add_label(
                             port_name,
                             position=center,
@@ -443,7 +461,7 @@ def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_blo
 
                     add_box(c, x0, y0, x1, y1, layer)
                     if port_name != "#":
-                        center = ((x0 + x1) / 2, (y0 + y1) / 2)
+                        center = (middle_snap_grid(x0, x1), middle_snap_grid(y0, y1))
                         c.add_label(
                             port_name,
                             position=center,
