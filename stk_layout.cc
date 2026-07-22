@@ -2579,8 +2579,12 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 
       phash_iter_init (tab, &it);
       _init_report ();
+
+      char *buf;
+      int bufln = 10240;
+      MALLOC (buf, char, bufln);
+      
       while ((b = phash_iter_next (tab, &it))) {
-	char buf[10240];
 	Process *p = (Process *) b->key;
 	unsigned long dx, dy;
 	double contrib;
@@ -2590,7 +2594,13 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 	}
 	lp->_getAreaInfo (p, &dx, &dy);
 	contrib = (dx * dy) * scale * b->i;
-	snprintf (buf, 10240, "%s::%s count=%d, area=%.3g um^2 (%.2f%%)",
+
+	if (strlen (tmpns) + strlen (p->getName()) > bufln - 256) {
+	  bufln = strlen (tmpns) + strlen (p->getName()) + 1024;
+	  REALLOC (buf, char, bufln);
+	}
+	
+	snprintf (buf, bufln, "%s::%s count=%d, area=%.3g um^2 (%.2f%%)",
 		  tmpns, p->getName(), b->i,
 		  (dx * dy) * scale,
 		  contrib/local_area*100.0);
@@ -2606,23 +2616,28 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
       _init_report ();
       ActUniqProcInstiter inst(report->CurScope());
       for (inst = inst.begin(); inst != inst.end(); inst++) {
-	char buf[10240];
 	int pos = 0;
 	ValueIdx *vx = (*inst);
 	Process *proc;
 	proc = dynamic_cast<Process *> (vx->t->BaseType());
 	Assert (proc, "Hmm");
 	tmpns = proc->getns()->Name();
+
+	if (strlen (tmpns) + strlen (proc->getName()) > bufln - 256) {
+	  bufln = strlen (tmpns) + strlen (proc->getName()) + 1024;
+	  REALLOC (buf, char, bufln);
+	}
+	
 	if (strcmp (tmpns, "::") != 0) {
-	  snprintf (buf+pos, 10240-pos, "%s", tmpns);
+	  snprintf (buf+pos, bufln-pos, "%s", tmpns);
 	  pos += strlen (buf+pos);
 	}
 	FREE (tmpns);
-	snprintf (buf+pos, 10240-pos, "::");
+	snprintf (buf+pos, bufln-pos, "::");
 	pos += strlen (buf+pos);
-	vx->t->sPrint (buf+pos, 10240-pos);
+	vx->t->sPrint (buf+pos, bufln-pos);
 	pos += strlen (buf+pos);
-	snprintf (buf+pos, 10240-pos, " %s ", vx->getName());
+	snprintf (buf+pos, bufln-pos, " %s ", vx->getName());
 	pos += strlen (buf+pos);
 	
 	double my_area = 0;
@@ -2631,10 +2646,10 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 	if (!lb) {
 	  long llx, lly, urx, ury;
 	  if (lp->getBBox (proc, &llx, &lly, &urx, &ury)) {
-	    snprintf (buf+pos, 10240-pos, "(leaf cell)");
+	    snprintf (buf+pos, bufln-pos, "(leaf cell)");
 	  }
 	  else {
-	    snprintf (buf+pos, 10240-pos, "***err");
+	    snprintf (buf+pos, bufln-pos, "***err");
 	  }
 	  pos += strlen (buf+pos);
 	}
@@ -2648,13 +2663,14 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 	    lp->_getAreaInfo (localp, &dx, &dy);
 	    my_area += (dx * dy) * scale * lb->i;
 	  }
-	  snprintf (buf+pos, 10240-pos, "area=%.3g um^2 = %.3g mm^2 (%.2f%%)",
+	  snprintf (buf+pos, bufln-pos, "area=%.3g um^2 = %.3g mm^2 (%.2f%%)",
 		    my_area, my_area/1.0e6, my_area/local_area*100.0);
 	}
 	_add_report (buf, my_area);
 	//printf ("  %s\n", buf);
       }
       _print_report (stdout);
+      FREE (buf);
     }
   }
 }
