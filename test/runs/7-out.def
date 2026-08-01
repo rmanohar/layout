@@ -1,0 +1,106 @@
+VERSION 5.6 ;
+
+BUSBITCHARS "[]" ;
+
+DIVIDERCHAR "/" ;
+
+DESIGN test ;
+
+UNITS DISTANCE MICRONS 2000 ;
+
+DIEAREA ( 48000 86400 ) ( 124800 172800 ) ;
+TRACKS X 49200 DO 16 STEP 4800 LAYER m1 ;
+TRACKS Y 87600 DO 18 STEP 4800 LAYER m1 ;
+
+TRACKS X 49200 DO 16 STEP 4800 LAYER m2 ;
+TRACKS Y 87600 DO 18 STEP 4800 LAYER m2 ;
+
+TRACKS X 49800 DO 12 STEP 6000 LAYER m3 ;
+TRACKS Y 88200 DO 14 STEP 6000 LAYER m3 ;
+
+COMPONENTS 4 ;
+- x_50_6 mycell ;
+- x_51_6 mycell ;
+- x_52_6 mycell ;
+- x_53_6 mycell ;
+END COMPONENTS
+
+PINS 0 ;
+END PINS
+
+NETS           24 ;
+- x_50_6_ain_50_6
+   ( x_50_6 in_50_6 )
+;
+- x_50_6_ain_51_6
+   ( x_50_6 in_51_6 )
+;
+- x_50_6_ain_52_6
+   ( x_50_6 in_52_6 )
+;
+- x_50_6_ain_53_6
+   ( x_50_6 in_53_6 )
+;
+- x_50_6_ain_54_6
+   ( x_50_6 in_54_6 )
+;
+- x_50_6_aout
+   ( x_50_6 out )
+;
+- x_51_6_ain_50_6
+   ( x_51_6 in_50_6 )
+;
+- x_51_6_ain_51_6
+   ( x_51_6 in_51_6 )
+;
+- x_51_6_ain_52_6
+   ( x_51_6 in_52_6 )
+;
+- x_51_6_ain_53_6
+   ( x_51_6 in_53_6 )
+;
+- x_51_6_ain_54_6
+   ( x_51_6 in_54_6 )
+;
+- x_51_6_aout
+   ( x_51_6 out )
+;
+- x_52_6_ain_50_6
+   ( x_52_6 in_50_6 )
+;
+- x_52_6_ain_51_6
+   ( x_52_6 in_51_6 )
+;
+- x_52_6_ain_52_6
+   ( x_52_6 in_52_6 )
+;
+- x_52_6_ain_53_6
+   ( x_52_6 in_53_6 )
+;
+- x_52_6_ain_54_6
+   ( x_52_6 in_54_6 )
+;
+- x_52_6_aout
+   ( x_52_6 out )
+;
+- x_53_6_ain_50_6
+   ( x_53_6 in_50_6 )
+;
+- x_53_6_ain_51_6
+   ( x_53_6 in_51_6 )
+;
+- x_53_6_ain_52_6
+   ( x_53_6 in_52_6 )
+;
+- x_53_6_ain_53_6
+   ( x_53_6 in_53_6 )
+;
+- x_53_6_ain_54_6
+   ( x_53_6 in_54_6 )
+;
+- x_53_6_aout
+   ( x_53_6 out )
+;
+END NETS
+
+END DESIGN
