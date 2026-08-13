@@ -12,15 +12,16 @@ This script gds2rect will work fine in a lot of cases but has limitations:
     
 depends on modern gdsfactory (Klayout back end) - tested with 9.20(+)
 
-Usage: gds2rect.py -T<tech> [-i]<input.gds> [-o<output.rect>] [-f]
-gds2rect.py -cnf<tech.conf> [-i]<input.gds> [-o<output.rect>] [-f]
+Usage: gds2rect.py -T<tech> [-i]<input.gds> [-o<output.rect>] [-f] [-x]
+gds2rect.py -cnf<tech.conf> [-i]<input.gds> [-o<output.rect>] [-f] [-x]
 
 Accepted options:
   -T<tech> or -T <tech> or -cnf<path/layout.conf> or -cnf <path/layout.conf>
   -i<inputfile> or -i <inputfile>
   -o<outputfile> or -o <outputfile>
   <inputfile> 
-  -f ignore mapping errors and contiure 
+  -f ignore mapping errors and continue 
+  -x exclude pplus and nplus from rect output
 
 Note+TODO: Pins are just drawn as inrect, the direction property is not maintained
 the way the rectangles are cut out is not optimal, and gds bloating is ignored
@@ -28,6 +29,7 @@ the way the rectangles are cut out is not optimal, and gds bloating is ignored
 ----
 Copyright (c) 2025 Thomans Jagielski - Yale University
 Copyright (c) 2025 Ole Richter - Technical University of Denmark
+Copyright (c) 2026 Luis Zuniga 
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -54,6 +56,8 @@ import sys
 import shlex
 from pprint import pprint
 
+# materials to be exluded with flag -x
+EXCLUDED_LAYERS={"nplus", "pplus"}
 
 def find_in_stack(stack, name):
     try:
@@ -78,7 +82,7 @@ def parse_conf_file(path):
     materials = {}        # material_name -> list of gds strings
     material_text = {}    # material_name -> gds string
     materials_bloat = {}  # material_name -> list of ints (gds_bloat)
-    materials_mask = {}   # material_name -> list of gds strings (gds_masking
+    materials_mask = {}   # material_name -> list of gds strings (gds_masking)
     metals = {}           # metal_name -> list of gds strings
     metal_text = {}       # metal_name -> string
     metal_pin = {}        # metal_name -> string
@@ -102,8 +106,10 @@ def parse_conf_file(path):
             # tokenize preserving quoted strings
             try:
                 toks = shlex.split(line, posix=True)
-            except ValueError:
+            except ValueError as error:
                 # skip malformed lines
+                print(f"Malformed line: {line!r}")
+                print(f"Reason: {error}")
                 continue
             if not toks:
                 continue
@@ -270,6 +276,7 @@ def resolve_paths_from_Targ(argv):
       -o<outputfile> or -o <outputfile>
       <inputfile> 
       -f
+      -x
 
     Returns:
       (layout_conf_path, input_path, output_path)
@@ -281,6 +288,7 @@ def resolve_paths_from_Targ(argv):
     inp = None
     out = None
     force = False
+    exclude = False
 
     i = 1
     while i < len(argv):
@@ -307,6 +315,8 @@ def resolve_paths_from_Targ(argv):
             i += 1
         elif a == '-f':
             force = True
+        elif a == '-x':
+            exclude = True
         elif inp is None:
             inp = a
         i += 1
@@ -339,9 +349,9 @@ def resolve_paths_from_Targ(argv):
     if not os.path.isdir(out_dir):
         raise SystemExit(f"Output directory does not exist: {out_dir}")
 
-    return layout, inp, out, force
+    return layout, inp, out, force, exclude
 
-def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_layer_names, rect_type="rect", force = False):
+def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_layer_names, rect_type="rect", force = False, exclude = False):
     """
     This will take all constructed layer pairs of (rect layer name, gds_foundry layer object), 
     pass the read gds though them -> c
@@ -375,7 +385,7 @@ def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_la
                     warn("More than one aligh/PR boundry\n")
                 pr_writen = True
             elif polygon.is_rectilinear():
-                warn("poligon is rectilinear but not a rectange, decomposition failed, Poligon will be skipped: "+str(polygon)+ " on layer "+str(layerk))
+                warn("poligon is rectilinear but not a rectangle, decomposition failed, Poligon will be skipped: "+str(polygon)+ " on layer "+str(layerk))
                 if not force:
                     exit(4)
                 continue
@@ -385,7 +395,7 @@ def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_la
                     exit(5)
                 continue
             else:
-                warn("Non manhatten geometry dectected after rectangle decomposition, decomposition failed, Polygon will be skipped: "+str(polygon)+ " on layer "+str(layerk))
+                warn("Non manhattan geometry dectected after rectangle decomposition, decomposition failed, Polygon will be skipped: "+str(polygon)+ " on layer "+str(layerk))
                 if not force:
                     exit(6)
                 continue
@@ -398,7 +408,7 @@ def decompose_and_write_align(align, align_layer, c, f, all_labels, scale, gf_la
             pr_marker = label.position().to_itype(1/INTERNAL_DB_SCALE)
             f.write(f"{rect_type} {label.string.strip()} $align {int(pr_marker.x*scale/INTERNAL_DB_SCALE)} {int(pr_marker.y*scale/INTERNAL_DB_SCALE)} {int(pr_marker.x*scale/INTERNAL_DB_SCALE)} {int(pr_marker.y*scale/INTERNAL_DB_SCALE)}\n")
 
-def decompose_and_write_rect(layer_touples, c, f, all_labels, scale, gf_layer_names, rect_type="rect", force = False):
+def decompose_and_write_rect(layer_touples, c, f, all_labels, scale, gf_layer_names, rect_type="rect", force = False, exclude = False):
     """
     This will take all constructed layer pairs of (rect layer name, gds_foundry layer object), 
     pass the read gds though them -> c
@@ -409,6 +419,10 @@ def decompose_and_write_rect(layer_touples, c, f, all_labels, scale, gf_layer_na
     # this is a magic number that is adaped to how the klayout backend makes the conversion from unit (DPoint) to unit less (Point) points when decomposing
     INTERNAL_DB_SCALE = 1000       
     for layerk, layer in layer_touples:
+        # omitt excluded layers
+        if exclude and layerk in EXCLUDED_LAYERS:
+            continue
+
         layer_region = layer.get_shapes(c)
         # here we lose database attachment
         polygons = layer_region.decompose_trapezoids()
@@ -476,7 +490,8 @@ def gds_to_rect(gds_path: str, rect_path: str,
         align,
         scale: float = 1000.0,
         force = False,
-        flat = True):
+        flat = True,
+        exclude = False):
     """
     The Idea is:
     construct corresonding layers in gdsfoundry for all rect layers, so also layer stacks like eg ptransistor:
@@ -492,7 +507,7 @@ def gds_to_rect(gds_path: str, rect_path: str,
 
     used_layers = {}
     
-    for act_layer in chain(materials.values(), metals.values(), vias.values()):
+    for act_layer in chain(materials.values(), material_mask.values(), metals.values(), vias.values()):
         for gds_layer in act_layer:
             if gds_layer not in used_layers:
                 used_layers[gds_layer] = gf.technology.LogicalLayer(layer=gds[gds_layer], name=gds_layer)
@@ -512,7 +527,7 @@ def gds_to_rect(gds_path: str, rect_path: str,
                 test = True
                 break
         if not test:
-            warn("A used GDS later is not defind in Act layout.conf as a layer and will be skipped: "+str(layer))
+            warn("A used GDS later is not defined in Act layout.conf as a layer and will be skipped: "+str(layer))
             end = True
             
     if end and not force:
@@ -539,7 +554,7 @@ def gds_to_rect(gds_path: str, rect_path: str,
         if mk in via_text:
             if via_text[mk] not in gf_layer_names[mk]:
                 gf_layer_names[mk].append(via_text[mk])
-    
+
     for mk, mv in metals.items():
         if len(mv) <= 1:
             metal_tmp = used_layers[mv[0]]
@@ -579,20 +594,17 @@ def gds_to_rect(gds_path: str, rect_path: str,
             for i in range(1,len(mv)):
                 tmp_layer = gf.technology.DerivedLayer(layer1=tmp_layer,layer2=used_layers[mv[i]],operation='and')
             material_tmp = tmp_layer
+        # gds_mask is used during GDS-to-abstract conversion to remove
+        # physical mask geometry from the reconstructed material.
+        for mask_layer in material_mask.get(mk, []):
+            material_tmp = gf.technology.DerivedLayer(
+                layer1=material_tmp,
+                layer2=used_layers[mask_layer],
+                operation='not')
         #label layer lookup
         gf_layer_names[mk] = mv
-        # mask the complex layer by further layers:
-        if mk in material_mask.keys():
-            if len(materials_mask[mk]) <= 1:
-                mask_tmp = used_layers[materials_mask[mk][0]]
-            else:
-                tmp_layer = used_layers[materials_mask[mk][0]]
-                for i in range(1,len(materials_mask[mk])):
-                    tmp_layer = gf.technology.DerivedLayer(layer1=tmp_layer,layer2=used_layers[materials_mask[mk][i]],operation='or')
-                mask_tmp = tmp_layer
-            gf_layers[mk] = gf.technology.DerivedLayer(layer1=material_tmp,layer2=mask_tmp,operation='not')
-        else:
-            gf_layers[mk] = material_tmp
+        # mask the complex layer by further layers: 
+        gf_layers[mk] = material_tmp
         # add label layer
         if mk in material_text:
             if material_text[mk] not in gf_layer_names[mk]:
@@ -605,13 +617,13 @@ def gds_to_rect(gds_path: str, rect_path: str,
         # bbox is a database point (Dpoint) -> float in um
         f.write(f"bbox  {int(c.bbox().p1.x*scale)} {int(c.bbox().p1.y*scale)} {int(c.bbox().p2.x*scale)} {int(c.bbox().p2.y*scale)}\n")
         if align:
-            decompose_and_write_align(align,used_layers[align],c,f,all_labels,scale,gf_layer_names,force=force)
-        decompose_and_write_rect(gf_pinlayers.items(), c, f, all_labels, scale, gf_layer_names, "inrect",force)
-        decompose_and_write_rect(gf_layers.items(), c, f, all_labels, scale, gf_layer_names, "rect",force)
+            decompose_and_write_align(align,used_layers[align],c,f,all_labels,scale,gf_layer_names,force=force, exclude=exclude)
+        decompose_and_write_rect(gf_pinlayers.items(), c, f, all_labels, scale, gf_layer_names, "inrect",force, exclude)
+        decompose_and_write_rect(gf_layers.items(), c, f, all_labels, scale, gf_layer_names, "rect",force, exclude)
 
 
 if __name__ == '__main__':
-    path, inputfile, outputfile, force = resolve_paths_from_Targ(sys.argv)
+    path, inputfile, outputfile, force, exclude = resolve_paths_from_Targ(sys.argv)
     scale, gds, materials, material_text, materials_bloat, materials_mask, metals, metal_pin, metal_text, metals_bloat, vias, via_text, vias_bloat, align = parse_conf_file(path)
     rect_object = gds_to_rect(gds_path=inputfile, rect_path=outputfile, 
         gds=gds, materials=materials, 
@@ -624,5 +636,7 @@ if __name__ == '__main__':
         metal_text=metal_text,
         align=align,
         scale=scale,
-        force=force)
+        force=force,
+        exclude=exclude)
     print("output file written to "+str(outputfile))
+
