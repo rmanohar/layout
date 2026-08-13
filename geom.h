@@ -152,6 +152,14 @@ public:
   static void Init();
   static double getLeakAdjust () { return _leak_adjust; }
 
+  enum extra_layers {
+    N_SELECT = 0,
+    P_SELECT = 1,
+    NFET_WELL = 2,		// well for nfets (pwell)
+    PFET_WELL = 3,		// well for pfets (nwell)
+    NUM_EXTRA = 4
+  };
+
   /*
      The base layer is special as this is where the transistors are
      drawn. It includes poly, fets, diffusion, and virtual diffusion.
@@ -231,6 +239,7 @@ private:
   LayoutEdgeAttrib *_le;	// alignment information
 
   Layer *base;
+  Layer **extra;      // extra layers, used for pass-through materials
   Layer **metals;
   int nflavors;
   int nmetals;
@@ -450,11 +459,16 @@ public:
 #define LMAP_WDIFF 2
 #define LMAP_FET 3
 
+#define LMAP_NFET_WELL 4
+#define LMAP_PFET_WELL 5
+#define LMAP_NSELECT 6
+#define LMAP_PSELECT 7
+
 struct LayoutLayermap {
   Layer *l;
   int etype;			/* n/p, if needed */
   int flavor;			/* flavor */
-  unsigned int lcase:2;  // LMAP_<what> is it?
+  unsigned int lcase:3;  // LMAP_<what> is it?
 };
   
 

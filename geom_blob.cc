@@ -1317,6 +1317,30 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 	    errname = "via";
 	  }
 	  break;
+
+	case LMAP_NSELECT:
+	case LMAP_PSELECT:
+	case LMAP_NFET_WELL:
+	case LMAP_PFET_WELL:
+	  if (!lm->l->Draw (rllx, rlly, rurx - rllx, rury - rlly, n, 0)) {
+	    if (lm->lcase == LMAP_NSELECT) {
+	      errname = "nselect";
+	    }
+	    else if (lm->lcase == LMAP_PSELECT) {
+	      errname = "pselect";
+	    }
+	    else if (lm->lcase == LMAP_NFET_WELL) {
+	      errname = "nwell";
+	    }
+	    else if (lm->lcase == LMAP_PFET_WELL) {
+	      errname = "pwell";
+	    }
+	    else {
+	      Assert (0, "Should not be here");
+	    }
+	  }
+	  break;
+	  
 	default:
 	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
 	  break;
@@ -1326,6 +1350,10 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 		   errname, rllx, rlly, rurx, rury);
 	}
       }
+      else {
+	warning ("Unknown material `%s'; skipped", material);
+      }
+#if 0      
       else {
 	int iswell = 0;
 	for (int i=0; i < Technology::T->num_devs; i++) {
@@ -1346,6 +1374,7 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 	}
 	/* skip wells! */
       }
+#endif
     }
   }
   fclose (fp);

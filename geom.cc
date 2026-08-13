@@ -76,6 +76,16 @@ Layout::Layout(netlist_t *_n)
   nflavors = sz;
   nmetals = Technology::T->nmetals;
 
+  /* 3. extra layers
+        n_select, p_select, and two wells
+  */
+  MALLOC (extra, Layer *, Layout::extra_layers::NUM_EXTRA*sz);
+  for (int i=0; i < Layout::extra_layers::NUM_EXTRA*sz; i++) {
+    extra[i] = NULL;
+  }
+
+  int tl = Layout::extra_layers::NUM_EXTRA;
+
   base->allocOther (sz*6);
   for (int i=0; i < sz; i++) {
     base->setOther (TOTAL_OFFSET(i, EDGE_NFET, FET_OFFSET),
@@ -212,6 +222,62 @@ Layout::Layout(netlist_t *_n)
 	  b = hash_add (lmap, Technology::T->welldiff[EDGE_PFET][i]->getUpC()->getName());
 	  b->v = lp;
 	}
+      }
+    }
+    if (Technology::T->well[EDGE_NFET][i]) {
+      if (!hash_lookup (lmap, Technology::T->well[EDGE_NFET][i]->getName())) {
+	Assert (!extra[Layout::extra_layers::NFET_WELL+i*tl], "What?");
+	extra[Layout::extra_layers::NFET_WELL + i*tl] =
+	  new Layer (Technology::T->well[EDGE_NFET][i], _n);
+	NEW (lp, struct LayoutLayermap);
+	lp->l = extra[Layout::extra_layers::NFET_WELL+i*tl];
+	lp->etype = EDGE_NFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_NFET_WELL;
+	b = hash_add (lmap, Technology::T->well[EDGE_NFET][i]->getName());
+	b->v = lp;
+      }
+    }
+    if (Technology::T->well[EDGE_PFET][i]) {
+      if (!hash_lookup (lmap, Technology::T->well[EDGE_PFET][i]->getName())) {
+	Assert (!extra[Layout::extra_layers::PFET_WELL+i*tl], "What?");
+	extra[Layout::extra_layers::PFET_WELL+i*tl] =
+	  new Layer (Technology::T->well[EDGE_PFET][i], _n);
+	NEW (lp, struct LayoutLayermap);
+	lp->l = extra[Layout::extra_layers::PFET_WELL+i*tl];
+	lp->etype = EDGE_PFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_PFET_WELL;
+	b = hash_add (lmap, Technology::T->well[EDGE_PFET][i]->getName());
+	b->v = lp;
+      }
+    }
+    if (Technology::T->sel[EDGE_NFET][i]) {
+      if (!hash_lookup (lmap, Technology::T->sel[EDGE_NFET][i]->getName())) {
+	Assert (!extra[Layout::extra_layers::N_SELECT+i*tl], "What?");
+	extra[Layout::extra_layers::N_SELECT + i*tl] =
+	  new Layer (Technology::T->sel[EDGE_NFET][i], _n);
+	NEW (lp, struct LayoutLayermap);
+	lp->l = extra[Layout::extra_layers::N_SELECT+i*tl];
+	lp->etype = EDGE_NFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_NSELECT;
+	b = hash_add (lmap, Technology::T->sel[EDGE_NFET][i]->getName());
+	b->v = lp;
+      }
+    }
+    if (Technology::T->sel[EDGE_PFET][i]) {
+      if (!hash_lookup (lmap, Technology::T->sel[EDGE_PFET][i]->getName())) {
+	Assert (!extra[Layout::extra_layers::P_SELECT+i*tl], "What?");
+	extra[Layout::extra_layers::P_SELECT + i*tl] =
+	  new Layer (Technology::T->sel[EDGE_PFET][i], _n);
+	NEW (lp, struct LayoutLayermap);
+	lp->l = extra[Layout::extra_layers::P_SELECT+i*tl];
+	lp->etype = EDGE_PFET;
+	lp->flavor = i;
+	lp->lcase = LMAP_PSELECT;
+	b = hash_add (lmap, Technology::T->sel[EDGE_PFET][i]->getName());
+	b->v = lp;
       }
     }
   }
@@ -418,7 +484,16 @@ int Layout::DrawVia (int num, long llx, long lly, unsigned long wx, unsigned lon
 
 void Layout::PrintRect (FILE *fp, TransformMat *t, bool istopcell)
 {
+  int sz = config_get_table_size ("act.dev_flavors");
   base->PrintRect (fp, t);
+
+  /* print extra layers */
+  for (int i=0; i < sz*Layout::extra_layers::NUM_EXTRA; i++) {
+    if (extra[i]) {
+      extra[i]->PrintRect (fp, t);
+    }
+  }
+
   for (int i=0; i < nmetals; i++) {
     metals[i]->PrintRect (fp, t);
   }
