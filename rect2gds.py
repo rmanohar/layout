@@ -2,15 +2,16 @@
 """
 This script converts rect files to GDS depending on a ACT tech configuration
 
-requires gdsfactory, tested with version 6.11 and 9.20(+)
+requires gdsfactory, tested with 9.20.6(+)
 
-Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>]
-       rect2gds.py -cnf<tech.conf> [-i]<input.rect> [-o<output.gds>]
+Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>] [-m]
+       rect2gds.py -cnf<tech.conf> [-i]<input.rect> [-o<output.gds>] [-m]
 
 Accepted options:
   -T<tech> or -T <tech> or -cnf<path/layout.conf> or -cnf <path/layout.conf>
   -i<inputfile> or -i <inputfile>
   -o<outputfile> or -o <outputfile>
+  -m merge touching and overlapping polygons on each GDS layer
   <inputfile> 
 
 Note+TODO: Pins are just drawn as rectangles, the direction property is not maintained
@@ -19,6 +20,7 @@ merging all the drawn rectangles is recomended in EDA tools for cleaner use.
 ----
 Copyright (c) 2025 Thomans Jagielski - Yale University
 Copyright (c) 2025 Ole Richter - Technical University of Denmark
+Copyright (c) 2026 Luis Zuniga
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -143,7 +145,7 @@ def parse_conf_file(path):
                         material_text[matname] = toks[2]
                     elif find_in_stack(stack, 'vias') != -1:
                         vianame = key[:-9]
-                        via_text[matname] = toks[2]
+                        via_text[vianame] = toks[2]
                 elif key == "gds_align":
                     align = toks[2]
 
@@ -249,16 +251,17 @@ def parse_conf_file(path):
 
 def resolve_paths_from_Targ(argv):
     """
-    Parse argv and return (layout_conf_path, input_path, output_path).
+    Parse argv and return (layout_conf_path, input_path, output_path, merge).
 
     Accepted forms:
       -T<tech> or -T <tech> -cnf<path/layout.conf> or -cnf <path/layout.conf>
       -i<inputfile> or -i <inputfile>
       -o<outputfile> or -o <outputfile>
+      -m
       <inputfile> 
 
     Returns:
-      (layout_conf_path, input_path, output_path)
+      (layout_conf_path, input_path, output_path, merge)
 
     Raises SystemExit with usage/error messages on failure.
     """
@@ -266,6 +269,7 @@ def resolve_paths_from_Targ(argv):
     techfile = None
     inp = None
     out = None
+    merge = False
 
     i = 1
     while i < len(argv):
@@ -290,12 +294,14 @@ def resolve_paths_from_Targ(argv):
         elif a == '-o' and i + 1 < len(argv):
             out = argv[i + 1]
             i += 1
+        elif a == '-m':
+            merge = True
         elif inp is None:
             inp = a
         i += 1
 
     if (tech is None and techfile is None) or inp is None:
-        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>] or rect2gds.py -cnf<layout.conf> [-i]<input.rect> [-o<output.gds>]")
+        raise SystemExit("Usage: rect2gds.py -T<tech> [-i]<input.rect> [-o<output.gds>] [-m] or rect2gds.py -cnf<layout.conf> [-i]<input.rect> [-o<output.gds>] [-m]")
     elif out is None:
         #assuming file name ends with ".rect"
         out = inp[:-5]+str(".gds")
@@ -322,7 +328,7 @@ def resolve_paths_from_Targ(argv):
     if not os.path.isdir(out_dir):
         raise SystemExit(f"Output directory does not exist: {out_dir}")
 
-    return layout, inp, out
+    return layout, inp, out, merge
 
 def add_box(component, x0, y0, x1, y1, layer):
     component.add_polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], layer=layer)
@@ -330,6 +336,22 @@ def add_box(component, x0, y0, x1, y1, layer):
 def add_pin(component, x0, y0, x1, y1, layer, direction):
     # so far pins are ignored, i dont know if gds has a notion of what a pin is, and gdsfactory has a non compatible notion of ports
     component.add_polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], layer=layer)
+
+def merge_polygons_by_layer(component):
+    """Merge touching or overlapping polygons without removing labels."""
+    for layer in list(component.layers):
+        layer_index = gf.get_layer(layer)
+        # save labels before clearing the layer.
+        labels = component.get_labels(layer=layer, recursive=False)
+        region = gf.kdb.Region(
+            component.kdb_cell.begin_shapes_rec(layer_index)
+        )
+        region.merge()
+        component.shapes(layer_index).clear()
+        component.shapes(layer_index).insert(region)
+        for label in labels:
+            component.shapes(layer_index).insert(label)
+    return component
 
 def middle_snap_grid(a: float, b: float) -> float:
     # snap to lower
@@ -465,13 +487,13 @@ def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_blo
                         c.add_label(
                             port_name,
                             position=center,
-                            layer=layer_text,
+                            layer=layer,
                         )
     return c
 
 
 if __name__ == '__main__':
-    path, inputfile, outputfile = resolve_paths_from_Targ(sys.argv)
+    path, inputfile, outputfile, merge = resolve_paths_from_Targ(sys.argv)
     scale, gds, materials, material_text, materials_bloat, metals, metal_pin, metal_text, metals_bloat, vias, via_text, vias_bloat, align = parse_conf_file(path)
     gds_object = parse_layout_file(filepath=inputfile, 
         gds=gds, materials=materials, 
@@ -487,4 +509,6 @@ if __name__ == '__main__':
         align=align,
         scale=scale
         )
+    if merge:
+        merge_polygons_by_layer(gds_object)
     gds_object.write_gds(outputfile, with_metadata=False)
