@@ -343,10 +343,13 @@ def merge_polygons_by_layer(component):
         layer_index = gf.get_layer(layer)
         # save labels before clearing the layer.
         labels = component.get_labels(layer=layer, recursive=False)
-        region = gf.kdb.Region(
+        source_region = gf.kdb.Region(
             component.kdb_cell.begin_shapes_rec(layer_index)
         )
-        region.merge()
+        source_region.merge()
+        # independent copy before clearing layer
+        region = gf.kdb.Region()
+        region.insert(source_region)
         component.shapes(layer_index).clear()
         component.shapes(layer_index).insert(region)
         for label in labels:
