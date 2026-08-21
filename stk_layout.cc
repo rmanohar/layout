@@ -3674,7 +3674,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
       Arraystep *as = vx->t->arrayInfo()->stepper();
       while (!as->isend()) {
 	if (vx->isPrimary (as->index())) {
-	  if (as->curProc() != instproc) {
+	  if (as->curProc() && as->curProc() != instproc) {
 	    instproc = as->curProc();
 	  }
 	  Array *x = as->toArray();
