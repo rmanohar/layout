@@ -175,6 +175,9 @@ int main (int argc, char **argv)
     fatal_error ("Could not find process `%s' in act file `%s'.\n",
 		 proc_name, argv[optind]);
   }
+  if (!p->isExpanded()) {
+    p = p->Expand (ActNamespace::Global(), p->CurScope(), 0, NULL);
+  }
 
   /*--- core passes ---*/
   ActCellPass *cp = new ActCellPass (a);
