@@ -2623,7 +2623,7 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 	InstType *xit;
 
 	do {
-	  if (r) {
+	  if (r && r->getArrayType()) {
 	    xit = r->getArrayType();
 	  }
 	  else {
@@ -2645,7 +2645,7 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
 	  FREE (tmpns);
 	  snprintf (buf+pos, bufln-pos, "::");
 	  pos += strlen (buf+pos);
-	  r->getArrayType()->sPrint (buf+pos, bufln-pos);
+	  xit->sPrint (buf+pos, bufln-pos);
 	  pos += strlen (buf+pos);
 	  snprintf (buf+pos, bufln-pos, " %s ", vx->getName());
 	  pos += strlen (buf+pos);
@@ -3994,7 +3994,12 @@ void ActStackLayout::_collectLocalStats(Process *p)
 	  sz = 1;
 	}
 	else {
-	  xit = r->getArrayType();
+	  if (r->getArrayType()) {
+	    xit = r->getArrayType();
+	  }
+	  else {
+	    xit = vx->t;
+	  }
 	  sz = r->getRangeSize();
 	}
 	Process *ip = dynamic_cast<Process *>(xit->BaseType());
