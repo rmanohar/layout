@@ -2045,6 +2045,7 @@ void ActStackLayout::_emitwelltaprect (int flavor)
   }
   b->PrintRect (tfp, &mat);
 
+
   if (_rect_wells) {
     for (int j=0; j < 2; j++) {
       long wllx, wlly, wurx, wury;
@@ -2058,6 +2059,73 @@ void ActStackLayout::_emitwelltaprect (int flavor)
   }
   fclose (tfp);
 }
+
+void ActStackLayout::_emit_weak_supplyrect (ActNetlistPass::shared_stat *ss,
+					    LayoutBlob *b)
+{
+  char buf[1024];
+  char name[1024];
+
+  nl->getSharedStatName (buf, 1024,
+			 ss->en ? ss->en->w : ss->ep->w,
+			 ss->ep ? ss->ep->l : 0,
+			 ss->en ? ss->en->l : 0);
+  
+  a->msnprintf (name, 1024, "%s", buf);
+
+  TransformMat mat;
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+      
+  /* emit rectangles */
+  strcat (name, ".rect");
+
+  FILE *tfp;
+
+  const char *outdir;
+  if (b->getRead()) {
+    outdir = _rect_outdir;
+  }
+  else {
+    outdir = _rect_outinitdir;
+  }
+  
+  if (outdir) {
+    char *outname;
+    int sz = strlen (name) + strlen (outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", outdir, name);
+    tfp = fopen (outname, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
+    }
+    FREE (outname);
+  }
+  else {
+    tfp = fopen (name, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", name);
+    }
+  }
+  b->PrintRect (tfp, &mat);
+
+  if (_rect_wells) {
+    int flavor;
+    flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
+      if (wllx < wurx && wlly < wury) {
+	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
+		 Technology::T->well[j][flavor]->getName(),
+		 wllx, wlly, wurx, wury);
+      }
+    }
+  }
+  fclose (tfp);
+}
+
 
 void layout_run (ActPass *_ap, Process *p)
 {
@@ -2502,6 +2570,19 @@ void ActStackLayout::runrec (int mode, UserDef *u)
     /* emitRect */
     for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
       _emitwelltaprect (i);
+    }
+
+    /* emit weak supply rect */
+    if (_weak_supplies) {
+      listitem_t *mi = list_first (nl->getSharedStatTypes());
+      for (listitem_t *li = list_first (_weak_supplies); li;
+	   li = list_next (li)) {
+	LayoutBlob *b = (LayoutBlob *) list_value (li);
+	ActNetlistPass::shared_stat *ss =
+	  (ActNetlistPass::shared_stat *) list_value (mi);
+	_emit_weak_supplyrect (ss, b);
+	mi = list_next (mi);
+      }
     }
   }
   else if (mode == 5) {
