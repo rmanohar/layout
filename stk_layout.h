@@ -60,6 +60,9 @@ public:
   struct pHashtable *getStats() { return _cellStats; }
   void _getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy);
 
+  list_t *getWeakSupplies () { return _weak_supplies; }
+  void _maxHeightlocal (LayoutBlob *b);
+  
  private:
   int _localdiffspace (Process *p);
 
@@ -111,6 +114,8 @@ public:
   LayoutBlob *_readweaksupply (ActNetlistPass::shared_stat *s);
   void _emitweaksupplyrect (ActNetlistPass::shared_stat *, LayoutBlob *);
   void _emitweaksupplylef (ActNetlistPass::shared_stat *, LayoutBlob *);
+  void _match_shared_stat (ActNetlistPass::shared_stat_inst *,
+			   listitem_t **, listitem_t **);
 
 
   /* compute aligned LEF boundary */

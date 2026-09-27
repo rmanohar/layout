@@ -1745,15 +1745,27 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
       p_in += _m_align_x->getPitch()*s_in;
     }
 
-    /*--- XXX: but this is not the end of the pins... ---*/
-
+    if (n->weak_supply_vdd > 0) {
+      int w = _pin_metal->getLEFWidth ();
+      pins->DrawMetalPin (_pin_layer,
+			  b_bbox.llx() + p_in,
+			  b_bbox.lly() + tedge - w, w, w, n->wvdd, 0);
+      p_in += _m_align_x->getPitch()*s_in;
+    }
     
+    if (n->weak_supply_gnd > 0) {
+      int w = _pin_metal->getLEFWidth ();
+      pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p_in,
+			  b_bbox.lly() + tedge - w, w, w, n->wgnd, 0);
+      p_in += _m_align_x->getPitch()*s_in;
+    }
+
     LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
     bl->appendBlob (BLOB, BLOB_MERGE);
     bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
     BLOB = bl;
   }
-
+  
   BLOB = LayoutBlob::delBBox (BLOB);
   if (BLOB) {
     BLOB = computeLEFBoundary (BLOB);
@@ -1763,533 +1775,533 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 }
 
 
-void layout_run (ActPass *_ap, Process *p)
-{
-  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
-  ActStackLayout *lp;
-  Assert (ap, "What?");
+  void layout_run (ActPass *_ap, Process *p)
+  {
+    ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+    ActStackLayout *lp;
+    Assert (ap, "What?");
 
-  lp = (ActStackLayout *)ap->getPtrParam ("raw");
-  lp->run_post (p);
-}
-
-void ActStackLayout::run_post (Process *top)
-{
-  if (!dummy_netlist) {
-    dummy_netlist = nl->getNL (top);
+    lp = (ActStackLayout *)ap->getPtrParam ("raw");
+    lp->run_post (p);
   }
+
+  void ActStackLayout::run_post (Process *top)
+  {
+    if (!dummy_netlist) {
+      dummy_netlist = nl->getNL (top);
+    }
     
-  if (!dummy_netlist) {
-    fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
-  }
-
-  /* create welltap cells */
-  int ntaps = config_get_table_size ("act.dev_flavors");
-  _wellplug_count = ntaps;
-  MALLOC (wellplugs, LayoutBlob *, ntaps);
-  for (int flavor=0; flavor < ntaps; flavor++) {
-    wellplugs[flavor] = _createwelltap (flavor);
-  }
-
-  /* create any shared staticizer cells */
-  _weak_supplies = NULL;
-  list_t *l = nl->getSharedStatTypes ();
-  if (l && !list_isempty (l)) {
-    _weak_supplies = list_new ();
-    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
-      LayoutBlob *b =
-	_createweaksupply ((ActNetlistPass::shared_stat *)list_value (li));
-      list_append (_weak_supplies, b);
+    if (!dummy_netlist) {
+      fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
     }
-  }
-}
 
-void ActStackLayout::_emitlocalRect (Process *p)
-{
-  LayoutBlob *blob = getLayout (p);
-
-  if (!blob) {
-    return;
-  }
-
-  Rectangle bloatbox;
-  bloatbox = blob->getBloatBBox ();
-
-  if (bloatbox.empty()) {
-    /* no layout */
-    return;
-  }
-
-  TransformMat mat;
-  mat.translate (-bloatbox.llx(), -bloatbox.lly());
-
-  FILE *fp;
-  char cname[10240];
-
-  if (p) {
-    a->msnprintfproc (cname, 10240, p);
-  }
-  else {
-    snprintf (cname, 10240, "toplevel");
-  }
-  int len = strlen (cname);
-  snprintf (cname + len, 10240-len, ".rect");
-
-
-  const char *outdir;
-  if (blob->getRead()) {
-    outdir = _rect_outdir;
-  }
-  else {
-    outdir = _rect_outinitdir;
-  }
-
-  if (outdir) {
-    char *outname;
-    int sz = strlen (cname) + strlen (outdir) + 2;
-    MALLOC (outname, char, sz);
-    snprintf (outname, sz, "%s/%s", outdir, cname);
-    fp = fopen (outname, "w");
-    if (!fp) {
-      fatal_error ("Could not open file `%s' for writing", outname);
+    /* create welltap cells */
+    int ntaps = config_get_table_size ("act.dev_flavors");
+    _wellplug_count = ntaps;
+    MALLOC (wellplugs, LayoutBlob *, ntaps);
+    for (int flavor=0; flavor < ntaps; flavor++) {
+      wellplugs[flavor] = _createwelltap (flavor);
     }
-    FREE (outname);
-  }
-  else {
-    fp = fopen (cname, "w");
-    if (!fp) {
-      fatal_error ("Could not open file `%s' for writing", cname);
-    }
-  }
-  blob->PrintRect (fp, &mat);
 
-  if (_rect_wells) {
-
-    for (int i=0; i < Technology::T->num_devs; i++) {
-      for (int j=0; j < 2; j++) {
-	long wllx, wlly, wurx, wury;
-	_computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
-	if (wllx < wurx && wlly < wury) {
-	  fprintf (fp, "rect # %s %ld %ld %ld %ld\n",
-		   Technology::T->well[j][i]->getName(),
-		   wllx, wlly, wurx, wury);
-	}
+    /* create any shared staticizer cells */
+    _weak_supplies = NULL;
+    list_t *l = nl->getSharedStatTypes ();
+    if (l && !list_isempty (l)) {
+      _weak_supplies = list_new ();
+      for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+	LayoutBlob *b =
+	  _createweaksupply ((ActNetlistPass::shared_stat *)list_value (li));
+	list_append (_weak_supplies, b);
       }
     }
   }
-  
-  fclose (fp);
-}
 
-static void emit_header (FILE *fp, const char *name, const char *lefclass,
-			 LayoutBlob *blob)
-{
-  double scale = Technology::T->scale/1000.0;
-  
-  fprintf (fp, "MACRO %s\n", name);
-  fprintf (fp, "    CLASS %s ;\n", lefclass);
-  fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
-  fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
+  void ActStackLayout::_emitlocalRect (Process *p)
+  {
+    LayoutBlob *blob = getLayout (p);
 
-  Rectangle bloatbox;
-  bloatbox = blob->getBloatBBox ();
-
-#if 0  
-  printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
-#endif
-  
-  fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
-	   bloatbox.wx()*scale, bloatbox.wy()*scale);
-  fprintf (fp, "    SYMMETRY X Y ;\n");
-  fprintf (fp, "    SITE CoreSite ;\n");
-}
-
-
-static void emit_footer (FILE *fp, const char *name)
-{
-  fprintf (fp, "END %s\n\n", name);
-}
-
-static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
-			      int num_io = 0)
-{
-  double scale = Technology::T->scale/1000.0;
-  listitem_t *tli;
-  int emit_obs = 0;
-
-  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-    listitem_t *xi;
-    Layer *lprev = NULL;
-
-    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-      Layer *lname = (Layer *) list_value (xi);
-      xi = list_next (xi);
-      Assert (xi, "Hmm");
-
-      if (!lname->isMetal()) {
-	continue;
-      }
-
-      list_t *actual_tiles = (list_t *) list_value (xi);
-      listitem_t *ti;
-      int first = 1;
-      
-      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	long tllx, tlly, turx, tury;
-	Tile *tmp = (Tile *) list_value (ti);
-
-	if (tmp->getNet()) {
-	  int k;
-	  for (k=0; k < num_io; k++) {
-	    if (tmp->getNet() == io[k])
-	      break;
-	  }
-	  if (k != num_io) {
-	    /* skip! */
-	    continue;
-	  }
-	}
-
-	if (first) {
-	  if (!emit_obs && io != NULL) {
-	    fprintf (fp, "    OBS\n");
-	    emit_obs = 1;
-	  }
-	  if (lname == lprev) {
-	    fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
-	  }
-	  else {
-	    fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
-	  }
-	}
-	first = 0;
-	
-	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-
-	if (tllx > turx) {
-	  long x = tllx;
-	  tllx = turx;
-	  turx = x;
-	}
-	  
-	if (tlly > tury) {
-	  long x = tlly;
-	  tlly = tury;
-	  tury = x;
-	}
-	
-	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
-		 scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
-      }
-      lprev = lname;
-    }
-  }
-  return emit_obs;
-}
-
-static void emit_antenna_area (FILE *fp, list_t *tiles)
-{
-  double scale = Technology::T->scale/1000.0;
-  listitem_t *tli;
-  double ant_area = 0.0;
-  double ant_diffarea = 0.0;
-
-  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-    listitem_t *xi;
-
-    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-      Layer *lname = (Layer *) list_value (xi);
-      xi = list_next (xi);
-      Assert (xi, "Hmm");
-
-      if (lname->isMetal()) {
-	continue;
-      }
-
-      list_t *actual_tiles = (list_t *) list_value (xi);
-      listitem_t *ti;
-      int first = 1;
-      
-      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	long tllx, tlly, turx, tury;
-	Tile *tmp = (Tile *) list_value (ti);
-
-	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-	
-	if (tllx > turx) {
-	  long x = tllx;
-	  tllx = turx;
-	  turx = x;
-	}
-
-	if (tlly > tury) {
-	  long x = tlly;
-	  tlly = tury;
-	  tury = x;
-	}
-	
-	if (tmp->isFet()) {
-	  ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
-	}
-	else if (tmp->isDiff()) {
-	  ant_diffarea += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
-	}
-      }
-    }
-  }
-  if (ant_area > 0) {
-    fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
-  }
-  if (ant_diffarea > 0) {
-    fprintf (fp, "        ANTENNADIFFAREA %.6f ;\n", ant_diffarea);
-  }
-}  
-
-
-static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
-			  const char *sigtype, LayoutBlob *blob,
-			  node_t *signode)
-{
-  double scale = Technology::T->scale/1000.0;
-
-  Rectangle bloatbox = blob->getBloatBBox ();
-  
-  fprintf (fp, "    PIN ");
-  a->mfprintf (fp, "%s\n", name);
-  
-  //printf ("pin %s [node 0x%lx]\n", name, (unsigned long)signode);
-
-  fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
-  fprintf (fp, "        USE %s ;\n", sigtype);
-
-  fprintf (fp, "        PORT\n");
-
-  /* -- find all pins of this name! -- */
-  TransformMat mat;
-  mat.translate (-bloatbox.llx(), -bloatbox.lly());
-  list_t *tiles = blob->search (signode, &mat);
-  emit_layer_rects (fp, tiles);
-
-  fprintf (fp, "        END\n");
-
-  // now we emit just the fet area for antennas
-  emit_antenna_area (fp, tiles);
-
-  LayoutBlob::searchFree (tiles);
-
-  fprintf (fp, "    END ");
-  a->mfprintf (fp, "%s", name);
-  fprintf (fp, "\n");
-}
-
-
-void ActStackLayout::_getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy)
-{
-  long bllx, blly, burx, bury;
-
-  if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
-    *dx = 0;
-    *dy = 0;
-  }
-  else {
-    *dx = (burx - bllx + 1);
-    *dy = (bury - blly + 1);
-  }
-}
-
-void ActStackLayout::_getNetDetails (Process *p, unsigned long *ncount,
-				     unsigned long *ecount,
-				     unsigned long *ekeeper)
-{
-  LayoutBlob *blob = getLayout (p);
-
-  *ncount = 0;
-  *ecount = 0;
-  *ekeeper = 0;
-  
-  if (blob) {
-    netlist_t *mynl = nl->getNL (p);
-    node_t *n;
-
-    for (n = mynl->hd; n; n = n->next) {
-      (*ncount) = (*ncount) + 1;
-      listitem_t *li;
-      edge_t *e;
-      for (li = list_first (n->e); li; li = list_next (li)) {
-	e = (edge_t *) list_value (li);
-	if (e->keeper) {
-	  (*ekeeper) = (*ekeeper) + 1;
-	}
-	else {
-	  (*ecount) = (*ecount) + 1;
-	}
-      }
-    }
-    *ecount /= 2;
-    *ekeeper /= 2;
-  }
-}
-
-void ActStackLayout::runrec (int mode, UserDef *u)
-{
-  if (mode == 1) {
-    /* emitLEF */
-    
-    /*-- emit lef for the welltap cells --*/
-    double scale = Technology::T->scale/1000.0;
-    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-      _emitwelltaplef (i);
-    }
-    /* emit weak supply lef */
-    if (_weak_supplies) {
-      listitem_t *mi = list_first (nl->getSharedStatTypes());
-      for (listitem_t *li = list_first (_weak_supplies); li;
-	   li = list_next (li)) {
-	LayoutBlob *b = (LayoutBlob *) list_value (li);
-	ActNetlistPass::shared_stat *ss =
-	  (ActNetlistPass::shared_stat *) list_value (mi);
-	_emitweaksupplylef (ss, b);
-	mi = list_next (mi);
-      }
-    }
-
-    /* done with LEF */
-    _lef_header = 0;
-    _cell_header = 0;
-  }
-  else if (mode == 2) {
-    /* nothing */
-  }
-  else if (mode == 3) {
-    _maxht = _ymax - _ymin + 1;
-  }
-  else if (mode == 4) {
-    /* emitRect */
-    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-      _emitwelltaprect (i);
-    }
-
-    /* emit weak supply rect */
-    if (_weak_supplies) {
-      listitem_t *mi = list_first (nl->getSharedStatTypes());
-      for (listitem_t *li = list_first (_weak_supplies); li;
-	   li = list_next (li)) {
-	LayoutBlob *b = (LayoutBlob *) list_value (li);
-	ActNetlistPass::shared_stat *ss =
-	  (ActNetlistPass::shared_stat *) list_value (mi);
-	_emitweaksupplyrect (ss, b);
-	mi = list_next (mi);
-      }
-    }
-  }
-  else if (mode == 5) {
-    /* emitDEF */
-    FILE *fp;
-    Process *p = dynamic_cast<Process *> (u);
-    double area_mult;
-    double aspect_ratio;
-    double bb_x;
-    double bb_y;
-    double bb_llx = 0;
-    double bb_lly = 0;
-    int is_bb = 0;
-    int do_pins;
-    ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
-    if (!p || !dp) {
+    if (!blob) {
       return;
     }
 
-    dp->run_recursive (p, 3);
-    dp->setParam ("cell_maxheight", _maxht);
-    
-    fp = (FILE *) dp->getPtrParam ("def_file");
-    do_pins = dp->getIntParam ("do_pins");
-    if (dp->hasParam("is_bb")) {
-      is_bb = dp->getIntParam ("is_bb");
+    Rectangle bloatbox;
+    bloatbox = blob->getBloatBBox ();
+
+    if (bloatbox.empty()) {
+      /* no layout */
+      return;
     }
-    if (is_bb) {
-      bb_x = dp->getRealParam ("bb_x");
-      bb_y = dp->getRealParam ("bb_y");
-      if (dp->hasParam ("bb_llx")) {
-        bb_llx = dp->getRealParam ("bb_llx");
-      }
-      if (dp->hasParam ("bb_lly")) {
-        bb_lly = dp->getRealParam ("bb_lly");
-      }
-      emitDEF (fp, p, bb_x, bb_y, do_pins, true, bb_llx, bb_lly);
+
+    TransformMat mat;
+    mat.translate (-bloatbox.llx(), -bloatbox.lly());
+
+    FILE *fp;
+    char cname[10240];
+
+    if (p) {
+      a->msnprintfproc (cname, 10240, p);
     }
     else {
-      area_mult = dp->getRealParam ("area_mult");
-      aspect_ratio = dp->getRealParam ("aspect_ratio");
-      emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
+      snprintf (cname, 10240, "toplevel");
     }
-    
-    dp->setParam ("total_area", _total_area);
-    dp->setParam ("stdcell_area", _total_stdcell_area);
-  }
-}
+    int len = strlen (cname);
+    snprintf (cname + len, 10240-len, ".rect");
 
 
-struct report_info {
-  char *str;
-  double metric;
-};
+    const char *outdir;
+    if (blob->getRead()) {
+      outdir = _rect_outdir;
+    }
+    else {
+      outdir = _rect_outinitdir;
+    }
 
-L_A_DECL(report_info, _report);
-static void _init_report ()
-{
-  A_INIT (_report);
-}
+    if (outdir) {
+      char *outname;
+      int sz = strlen (cname) + strlen (outdir) + 2;
+      MALLOC (outname, char, sz);
+      snprintf (outname, sz, "%s/%s", outdir, cname);
+      fp = fopen (outname, "w");
+      if (!fp) {
+	fatal_error ("Could not open file `%s' for writing", outname);
+      }
+      FREE (outname);
+    }
+    else {
+      fp = fopen (cname, "w");
+      if (!fp) {
+	fatal_error ("Could not open file `%s' for writing", cname);
+      }
+    }
+    blob->PrintRect (fp, &mat);
 
-static void _add_report (char *s, double metric)
-{
-  A_NEW (_report, report_info);
-  A_NEXT (_report).str = Strdup (s);
-  A_NEXT (_report).metric = metric;
-  A_INC (_report);
-}
+    if (_rect_wells) {
 
-
-// condition to swap
-static int mycmpfn (char *a, char *b)
-{
-  report_info *ra = (report_info *) a;
-  report_info *rb = (report_info *) b;
-  if (ra->metric < rb->metric) return 1;
-  return 0;
-}
-
-static void _print_report (FILE *fp)
-{
-  mygenmergesort ((char *)_report, sizeof (report_info), A_LEN (_report),
-		  mycmpfn);
+      for (int i=0; i < Technology::T->num_devs; i++) {
+	for (int j=0; j < 2; j++) {
+	  long wllx, wlly, wurx, wury;
+	  _computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
+	  if (wllx < wurx && wlly < wury) {
+	    fprintf (fp, "rect # %s %ld %ld %ld %ld\n",
+		     Technology::T->well[j][i]->getName(),
+		     wllx, wlly, wurx, wury);
+	  }
+	}
+      }
+    }
   
-  for (int i=0; i < A_LEN (_report); i++) {
-    fprintf (fp, "  %s\n", _report[i].str);
-    FREE (_report[i].str);
+    fclose (fp);
   }
-  A_FREE (_report);
-}
 
-void layout_recursive (ActPass *_ap, UserDef *u, int mode)
-{
-  ActDynamicPass *dp;
-  if (!_ap->completed()) {
-    return;
+  static void emit_header (FILE *fp, const char *name, const char *lefclass,
+			   LayoutBlob *blob)
+  {
+    double scale = Technology::T->scale/1000.0;
+  
+    fprintf (fp, "MACRO %s\n", name);
+    fprintf (fp, "    CLASS %s ;\n", lefclass);
+    fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
+    fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
+
+    Rectangle bloatbox;
+    bloatbox = blob->getBloatBBox ();
+
+#if 0  
+    printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
+#endif
+  
+    fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
+	     bloatbox.wx()*scale, bloatbox.wy()*scale);
+    fprintf (fp, "    SYMMETRY X Y ;\n");
+    fprintf (fp, "    SITE CoreSite ;\n");
   }
-  dp = dynamic_cast<ActDynamicPass *>(_ap);
-  Assert (dp, "What?");
-  ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
-  lp->runrec (mode, u);
-  if (mode == 2) {
-    dp->setParam ("area_collected", 1);
-    if (dp->hasParam ("hier_report")) {
-      phash_bucket_t *b;
-      phash_iter_t it;
+
+
+  static void emit_footer (FILE *fp, const char *name)
+  {
+    fprintf (fp, "END %s\n\n", name);
+  }
+
+  static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
+			       int num_io = 0)
+  {
+    double scale = Technology::T->scale/1000.0;
+    listitem_t *tli;
+    int emit_obs = 0;
+
+    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+      listitem_t *xi;
+      Layer *lprev = NULL;
+
+      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+	Layer *lname = (Layer *) list_value (xi);
+	xi = list_next (xi);
+	Assert (xi, "Hmm");
+
+	if (!lname->isMetal()) {
+	  continue;
+	}
+
+	list_t *actual_tiles = (list_t *) list_value (xi);
+	listitem_t *ti;
+	int first = 1;
+      
+	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	  long tllx, tlly, turx, tury;
+	  Tile *tmp = (Tile *) list_value (ti);
+
+	  if (tmp->getNet()) {
+	    int k;
+	    for (k=0; k < num_io; k++) {
+	      if (tmp->getNet() == io[k])
+		break;
+	    }
+	    if (k != num_io) {
+	      /* skip! */
+	      continue;
+	    }
+	  }
+
+	  if (first) {
+	    if (!emit_obs && io != NULL) {
+	      fprintf (fp, "    OBS\n");
+	      emit_obs = 1;
+	    }
+	    if (lname == lprev) {
+	      fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
+	    }
+	    else {
+	      fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
+	    }
+	  }
+	  first = 0;
+	
+	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	  if (tllx > turx) {
+	    long x = tllx;
+	    tllx = turx;
+	    turx = x;
+	  }
+	  
+	  if (tlly > tury) {
+	    long x = tlly;
+	    tlly = tury;
+	    tury = x;
+	  }
+	
+	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		   scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
+	}
+	lprev = lname;
+      }
+    }
+    return emit_obs;
+  }
+
+  static void emit_antenna_area (FILE *fp, list_t *tiles)
+  {
+    double scale = Technology::T->scale/1000.0;
+    listitem_t *tli;
+    double ant_area = 0.0;
+    double ant_diffarea = 0.0;
+
+    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+      listitem_t *xi;
+
+      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+	Layer *lname = (Layer *) list_value (xi);
+	xi = list_next (xi);
+	Assert (xi, "Hmm");
+
+	if (lname->isMetal()) {
+	  continue;
+	}
+
+	list_t *actual_tiles = (list_t *) list_value (xi);
+	listitem_t *ti;
+	int first = 1;
+      
+	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	  long tllx, tlly, turx, tury;
+	  Tile *tmp = (Tile *) list_value (ti);
+
+	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+	
+	  if (tllx > turx) {
+	    long x = tllx;
+	    tllx = turx;
+	    turx = x;
+	  }
+
+	  if (tlly > tury) {
+	    long x = tlly;
+	    tlly = tury;
+	    tury = x;
+	  }
+	
+	  if (tmp->isFet()) {
+	    ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	  }
+	  else if (tmp->isDiff()) {
+	    ant_diffarea += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	  }
+	}
+      }
+    }
+    if (ant_area > 0) {
+      fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
+    }
+    if (ant_diffarea > 0) {
+      fprintf (fp, "        ANTENNADIFFAREA %.6f ;\n", ant_diffarea);
+    }
+  }  
+
+
+  static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
+			    const char *sigtype, LayoutBlob *blob,
+			    node_t *signode)
+  {
+    double scale = Technology::T->scale/1000.0;
+
+    Rectangle bloatbox = blob->getBloatBBox ();
+  
+    fprintf (fp, "    PIN ");
+    a->mfprintf (fp, "%s\n", name);
+  
+    //printf ("pin %s [node 0x%lx]\n", name, (unsigned long)signode);
+
+    fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
+    fprintf (fp, "        USE %s ;\n", sigtype);
+
+    fprintf (fp, "        PORT\n");
+
+    /* -- find all pins of this name! -- */
+    TransformMat mat;
+    mat.translate (-bloatbox.llx(), -bloatbox.lly());
+    list_t *tiles = blob->search (signode, &mat);
+    emit_layer_rects (fp, tiles);
+
+    fprintf (fp, "        END\n");
+
+    // now we emit just the fet area for antennas
+    emit_antenna_area (fp, tiles);
+
+    LayoutBlob::searchFree (tiles);
+
+    fprintf (fp, "    END ");
+    a->mfprintf (fp, "%s", name);
+    fprintf (fp, "\n");
+  }
+
+
+  void ActStackLayout::_getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy)
+  {
+    long bllx, blly, burx, bury;
+
+    if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
+      *dx = 0;
+      *dy = 0;
+    }
+    else {
+      *dx = (burx - bllx + 1);
+      *dy = (bury - blly + 1);
+    }
+  }
+
+  void ActStackLayout::_getNetDetails (Process *p, unsigned long *ncount,
+				       unsigned long *ecount,
+				       unsigned long *ekeeper)
+  {
+    LayoutBlob *blob = getLayout (p);
+
+    *ncount = 0;
+    *ecount = 0;
+    *ekeeper = 0;
+  
+    if (blob) {
+      netlist_t *mynl = nl->getNL (p);
+      node_t *n;
+
+      for (n = mynl->hd; n; n = n->next) {
+	(*ncount) = (*ncount) + 1;
+	listitem_t *li;
+	edge_t *e;
+	for (li = list_first (n->e); li; li = list_next (li)) {
+	  e = (edge_t *) list_value (li);
+	  if (e->keeper) {
+	    (*ekeeper) = (*ekeeper) + 1;
+	  }
+	  else {
+	    (*ecount) = (*ecount) + 1;
+	  }
+	}
+      }
+      *ecount /= 2;
+      *ekeeper /= 2;
+    }
+  }
+
+  void ActStackLayout::runrec (int mode, UserDef *u)
+  {
+    if (mode == 1) {
+      /* emitLEF */
+    
+      /*-- emit lef for the welltap cells --*/
+      double scale = Technology::T->scale/1000.0;
+      for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+	_emitwelltaplef (i);
+      }
+      /* emit weak supply lef */
+      if (_weak_supplies) {
+	listitem_t *mi = list_first (nl->getSharedStatTypes());
+	for (listitem_t *li = list_first (_weak_supplies); li;
+	     li = list_next (li)) {
+	  LayoutBlob *b = (LayoutBlob *) list_value (li);
+	  ActNetlistPass::shared_stat *ss =
+	    (ActNetlistPass::shared_stat *) list_value (mi);
+	  _emitweaksupplylef (ss, b);
+	  mi = list_next (mi);
+	}
+      }
+
+      /* done with LEF */
+      _lef_header = 0;
+      _cell_header = 0;
+    }
+    else if (mode == 2) {
+      /* nothing */
+    }
+    else if (mode == 3) {
+      _maxht = _ymax - _ymin + 1;
+    }
+    else if (mode == 4) {
+      /* emitRect */
+      for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+	_emitwelltaprect (i);
+      }
+
+      /* emit weak supply rect */
+      if (_weak_supplies) {
+	listitem_t *mi = list_first (nl->getSharedStatTypes());
+	for (listitem_t *li = list_first (_weak_supplies); li;
+	     li = list_next (li)) {
+	  LayoutBlob *b = (LayoutBlob *) list_value (li);
+	  ActNetlistPass::shared_stat *ss =
+	    (ActNetlistPass::shared_stat *) list_value (mi);
+	  _emitweaksupplyrect (ss, b);
+	  mi = list_next (mi);
+	}
+      }
+    }
+    else if (mode == 5) {
+      /* emitDEF */
+      FILE *fp;
+      Process *p = dynamic_cast<Process *> (u);
+      double area_mult;
+      double aspect_ratio;
+      double bb_x;
+      double bb_y;
+      double bb_llx = 0;
+      double bb_lly = 0;
+      int is_bb = 0;
+      int do_pins;
+      ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
+      if (!p || !dp) {
+	return;
+      }
+
+      dp->run_recursive (p, 3);
+      dp->setParam ("cell_maxheight", _maxht);
+    
+      fp = (FILE *) dp->getPtrParam ("def_file");
+      do_pins = dp->getIntParam ("do_pins");
+      if (dp->hasParam("is_bb")) {
+	is_bb = dp->getIntParam ("is_bb");
+      }
+      if (is_bb) {
+	bb_x = dp->getRealParam ("bb_x");
+	bb_y = dp->getRealParam ("bb_y");
+	if (dp->hasParam ("bb_llx")) {
+	  bb_llx = dp->getRealParam ("bb_llx");
+	}
+	if (dp->hasParam ("bb_lly")) {
+	  bb_lly = dp->getRealParam ("bb_lly");
+	}
+	emitDEF (fp, p, bb_x, bb_y, do_pins, true, bb_llx, bb_lly);
+      }
+      else {
+	area_mult = dp->getRealParam ("area_mult");
+	aspect_ratio = dp->getRealParam ("aspect_ratio");
+	emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
+      }
+    
+      dp->setParam ("total_area", _total_area);
+      dp->setParam ("stdcell_area", _total_stdcell_area);
+    }
+  }
+
+
+  struct report_info {
+    char *str;
+    double metric;
+  };
+
+  L_A_DECL(report_info, _report);
+  static void _init_report ()
+  {
+    A_INIT (_report);
+  }
+
+  static void _add_report (char *s, double metric)
+  {
+    A_NEW (_report, report_info);
+    A_NEXT (_report).str = Strdup (s);
+    A_NEXT (_report).metric = metric;
+    A_INC (_report);
+  }
+
+
+  // condition to swap
+  static int mycmpfn (char *a, char *b)
+  {
+    report_info *ra = (report_info *) a;
+    report_info *rb = (report_info *) b;
+    if (ra->metric < rb->metric) return 1;
+    return 0;
+  }
+
+  static void _print_report (FILE *fp)
+  {
+    mygenmergesort ((char *)_report, sizeof (report_info), A_LEN (_report),
+		    mycmpfn);
+  
+    for (int i=0; i < A_LEN (_report); i++) {
+      fprintf (fp, "  %s\n", _report[i].str);
+      FREE (_report[i].str);
+    }
+    A_FREE (_report);
+  }
+
+  void layout_recursive (ActPass *_ap, UserDef *u, int mode)
+  {
+    ActDynamicPass *dp;
+    if (!_ap->completed()) {
+      return;
+    }
+    dp = dynamic_cast<ActDynamicPass *>(_ap);
+    Assert (dp, "What?");
+    ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
+    lp->runrec (mode, u);
+    if (mode == 2) {
+      dp->setParam ("area_collected", 1);
+      if (dp->hasParam ("hier_report")) {
+	phash_bucket_t *b;
+	phash_iter_t it;
       struct pHashtable *tab;
       const char *tmp = (const char *) dp->getPtrParam ("hier_report");
       Process *report;
@@ -2452,6 +2464,17 @@ void layout_recursive (ActPass *_ap, UserDef *u, int mode)
       }
       _print_report (stdout);
       FREE (buf);
+    }
+  }
+  else if (mode == 3) {
+    /* compute max height */
+    if (lp->getWeakSupplies()) {
+      /* update for the weak supply cells */
+      for (listitem_t *li = list_first (lp->getWeakSupplies()); li;
+	   li = list_next (li)) {
+	LayoutBlob *b = (LayoutBlob *) list_value (li);
+	lp->_maxHeightlocal (b);
+      }
     }
   }
 }
@@ -2645,6 +2668,19 @@ int ActStackLayout::_emitlocalLEF (Process *p)
       A_INC (iopins);
     }
   }
+
+  if (n->weak_supply_vdd > 0) {
+    char tmp[1024];
+    snprintf (tmp, 1024, "#%d", n->wvdd->i);
+    emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wvdd);
+  }
+
+  if (n->weak_supply_gnd > 0) {
+    char tmp[1024];
+    snprintf (tmp, 1024, "#%d", n->wgnd->i);
+    emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wgnd);
+  }
+
 
   /* read non-pin metal */
 
@@ -3216,7 +3252,6 @@ LayoutBlob *ActStackLayout::getLayout (Process *p)
 */
 void ActStackLayout::_maxHeightlocal (Process *p)
 {
-  LayoutBlob *b;
   long llx, lly, urx, ury;
 
   if (getBBox (p, &llx, &lly, &urx, &ury)) {
@@ -3226,6 +3261,18 @@ void ActStackLayout::_maxHeightlocal (Process *p)
     if (ury > _ymax) {
       _ymax = ury;
     }
+  }
+}
+
+void ActStackLayout::_maxHeightlocal (LayoutBlob *b)
+{
+  Rectangle r = b->getBBox();
+
+  if (r.lly() < _ymin) {
+    _ymin = r.lly();
+  }
+  if (r.ury() > _ymax) {
+    _ymax = r.ury();
   }
 }
 
@@ -3240,6 +3287,40 @@ static int _instcount;
 static double _areacount;
 static double _areastdcell;
 static int _maximum_height;
+static ActNetlistPass *_nlp;
+static list_t *_lp_weak_supplies;
+
+
+/* find matching shared staticizer type from instance */
+static void _match_shared_stat (ActNetlistPass::shared_stat_inst *si,
+				listitem_t **ss, listitem_t **blob)
+{
+  ActNetlistPass::shared_stat *st;
+  /* XXX: need to support flavors here! update netlist as well */
+  while (*ss) {
+    st = (ActNetlistPass::shared_stat *) list_value (*ss);
+    if ((!st->en || st->en->l == si->nl && st->en->w == si->w) &&
+	(!st->ep || st->ep->l == si->pl && st->ep->w == si->w)) {
+      return;
+    }
+    *ss = list_next (*ss);
+    *blob = list_next (*blob);
+  }
+  *ss = list_first (_nlp->getSharedStatTypes());
+  *blob = list_first (_lp_weak_supplies);
+  while (*ss) {
+    st = (ActNetlistPass::shared_stat *) list_value (*ss);
+    if ((!st->en || st->en->l == si->nl && st->en->w == si->w) &&
+	(!st->ep || st->ep->l == si->pl && st->ep->w == si->w)) {
+      return;
+    }
+    *ss = list_next (*ss);
+    *blob = list_next (*blob);
+  }
+}
+
+
+
 
 static void count_inst (void *x, ActId *prefix, UserDef *u)
 {
@@ -3256,7 +3337,6 @@ static void count_inst (void *x, ActId *prefix, UserDef *u)
   b = ap->getLayout (p);
   if (ap->getBBox (p, &llx, &lly, &urx, &ury)) {
     if ((llx > urx) || (lly > ury)) return;
-
     if (b) {
       b->incCount();
     }
@@ -3268,7 +3348,38 @@ static void count_inst (void *x, ActId *prefix, UserDef *u)
     _areacount += (urx - llx + 1)*(ury - lly + 1);
     _areastdcell += (urx - llx + 1)*_maximum_height;
   }
+
+  struct pHashtable *pH = _nlp->getSharedInsts();
+  phash_bucket_t *pb;
+  if (pH) {
+    pb = phash_lookup (pH, p);
+  }
+  else {
+    pb = NULL;
+  }
+  if (pb) {
+    ActNetlistPass::shared_stat_inst *si;
+    listitem_t *ss_type;
+    listitem_t *ss_blob;
+
+    ss_type = list_first (_nlp->getSharedStatTypes());
+    ss_blob = list_first (_lp_weak_supplies);
+    
+    list_t *l  = (list_t *) pb->v;
+    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+      ActNetlistPass::shared_stat_inst *si =
+	(ActNetlistPass::shared_stat_inst *) list_value (li);
+      _instcount++;
+      _match_shared_stat (si, &ss_type, &ss_blob);
+      Assert (ss_type, "What?!");
+      LayoutBlob *lb = (LayoutBlob *) list_value (ss_blob);
+      Rectangle r = lb->getBBox();
+      _areacount += (r.urx() - r.llx() + 1) * (r.ury() - r.lly() + 1);
+      _areastdcell += (r.urx() - r.llx() + 1) * _maximum_height;
+    }
+  }
 }
+
 
 /*
  * Flat instance dump
@@ -3287,19 +3398,56 @@ static void dump_inst (void *x, ActId *prefix, UserDef *u)
   if (!p) {
     return;
   }
-  
+
   if (_alp->getBBox (p, &llx, &lly, &urx, &ury)) {
     if ((llx > urx) || (lly > ury)) return;
 
     /* FORMAT: 
-         - inst2591 NAND4X2 ;
-         - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
+       - inst2591 NAND4X2 ;
+       - inst2591 NAND4X2 + PLACED ( 100000 71820 ) N ;   <- pre-placed
     */
     fprintf (fp, "- ");
     prefix->sPrint (buf, 10240);
     global_act->mfprintf (fp, "%s ", buf);
     global_act->mfprintfproc (fp, p);
     fprintf (fp, " ;\n");
+  }
+
+  struct pHashtable *pH = _nlp->getSharedInsts();
+  phash_bucket_t *pb;
+  if (pH) {
+    pb = phash_lookup (pH, p);
+  }
+  else {
+    pb = NULL;
+  }
+  if (pb) {
+    ActNetlistPass::shared_stat_inst *si;
+    
+    list_t *l  = (list_t *) pb->v;
+    int count = 0;
+    char tmpbuf[1024];
+    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+      ActNetlistPass::shared_stat_inst *si =
+	(ActNetlistPass::shared_stat_inst *) list_value (li);
+      _nlp->getSharedStatName (tmpbuf, 1024, si->w, si->pl, si->nl);
+
+      fprintf (fp, "- ");
+      int pos = 0;
+      if (prefix) {
+	prefix->sPrint (buf, 10240);
+	pos = strlen (buf);
+	snprintf (buf + pos, 10240 - pos, ".");
+	if (pos != 10240) {
+	  pos++;
+	}
+      }
+      do {
+	snprintf (buf + pos, 10240 - pos, "wk_stat_%d", count++);
+      } while (p->CurScope()->Lookup (buf+pos));
+      global_act->mfprintf (fp, "%s %s", buf, tmpbuf);
+      fprintf (fp, " ;\n");
+    }
   }
 }
 
@@ -3350,23 +3498,31 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
     //prefix->Print (fp);
     //fprintf (fp, ".");
   }
-  ActId *tmp = net->net->primary()->toid();
-  tmp->sPrint (buf, 10240);
-  global_act->mfprintf (fp, "%s", buf);
-  //tmp->Print (fp);
-  delete tmp;
+  if (ACT_NET_STRING_FLAG (net->net)) {
+    global_act->mfprintf (fp, "%s", ACT_NET_STRINGONLY (net->net));
+  }
+  else {
+    ActId *tmp = net->net->primary()->toid();
+    tmp->sPrint (buf, 10240);
+    delete tmp;
+    global_act->mfprintf (fp, "%s", buf);
+  }
 
   fprintf (fp, "\n  ");
 
   if (net->port) {
-    //fprintf (fp, " ( PIN top_iopin%d )", toplevel-1);
-    ActId *tmp = net->net->toid();
     fprintf (fp, " ( PIN ");
-    tmp->Print (fp);
+    if (ACT_NET_STRING_FLAG (net->net)) {
+      fprintf (fp, "%s", ACT_NET_STRINGONLY (net->net));
+    }
+    else {
+      ActId *tmp = net->net->toid();
+      tmp->Print (fp);
+      delete tmp;
+    }
     fprintf (fp, " )");
-    delete tmp;
   }
-  else if (net->net->isglobal() && pins) {
+  else if (!ACT_NET_STRING_FLAG (net->net) && net->net->isglobal() && pins) {
     _initglobals ();
     ActId *tmp = net->net->toid();
     if (_is_global_supply (tmp)) {
@@ -3384,12 +3540,22 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
       prefix->sPrint (buf, 10240);
       a->mfprintf (fp, "%s.", buf);
     }
-    net->pins[i].inst->sPrint (buf, 10240);
+    if (ACT_NET_STRING_FLAG (net->pins[i].inst)) {
+      snprintf (buf, 10240, "%s", ACT_NET_STRINGONLY (net->pins[i].inst));
+    }
+    else {
+      net->pins[i].inst->sPrint (buf, 10240);
+    }
     a->mfprintf (fp, "%s ", buf);
 
-    tmp = net->pins[i].pin->toid();
-    tmp->sPrint (buf, 10240);
-    delete tmp;
+    if (ACT_NET_STRING_FLAG (net->pins[i].pin)) {
+      snprintf (buf, 10240, "%s", ACT_NET_STRINGONLY (net->pins[i].pin));
+    }
+    else {
+      ActId *tmp = net->pins[i].pin->toid();
+      tmp->sPrint (buf, 10240);
+      delete tmp;
+    }
     a->mfprintf (fp, "%s ", buf);
     fprintf (fp, ")");
   }
@@ -3415,6 +3581,230 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
       netcount++;
     }
   }
+
+  /* print local weak power supply connections: */
+  phash_bucket_t *pb;
+  pb = phash_lookup (_nlp->getSharedInsts(), p);
+  if (pb) {
+
+#define FIX_STRING(x) (char *) (((unsigned long)(x)|1))
+    
+    char net[128];
+    char buf[64];
+    list_t *l = (list_t *) pb->v;
+    netlist_t *mynl = _nlp->getNL (p);
+    Assert (mynl, "hmm");
+    A_DECL (act_local_net_t, _weak);
+    A_INIT (_weak);
+    int count = 0;
+
+    auto find_weak_net = [&](int num) {
+      snprintf (net, 128, "_wknet_n%d", num);
+      for (int i=0; i < A_LEN (_weak); i++) {
+	if (strcmp (ACT_NET_STRINGONLY (_weak[i].net), net) == 0) {
+	  return i;
+	}
+      }
+      return -1;
+    };
+    
+    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+      ActNetlistPass::shared_stat_inst *si =
+	(ActNetlistPass::shared_stat_inst *) list_value (li);
+      do {
+	snprintf (buf, 64, "wk_stat_%d", count++);
+      } while (p->CurScope()->Lookup (buf));
+      /* we have the instance name! */
+      /* the net names are si->weak_vdd, si->weak_gnd */
+      if (si->weak_vdd) {
+	int netid = find_weak_net (si->weak_vdd->i);
+	if (netid == -1) {
+	  A_NEW (_weak, act_local_net_t);
+	  A_NEXT( _weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	  if (mynl->weak_supply_vdd > 0 && mynl->wvdd == si->weak_vdd) {
+	    A_NEXT (_weak).port = 1;
+	  }
+	  else {
+	    A_NEXT (_weak).port = 0;
+	  }
+	  A_NEXT (_weak).skip = 0;
+	  netid = A_LEN (_weak);
+	  A_INC (_weak);
+	  A_INIT (_weak[netid].pins);
+	}
+	A_NEW (_weak[netid].pins, act_local_pin_t);
+	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
+	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#2"));
+	A_INC (_weak[netid].pins);
+      }
+      if (si->weak_gnd) {
+	int netid = find_weak_net (si->weak_gnd->i);
+	if (netid == -1) {
+	  A_NEW (_weak, act_local_net_t);
+	  A_NEXT( _weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	  if (mynl->weak_supply_gnd > 0 && mynl->wgnd == si->weak_gnd) {
+	    A_NEXT (_weak).port = 1;
+	  }
+	  else {
+	    A_NEXT (_weak).port = 0;
+	  }
+	  A_NEXT (_weak).skip = 0;
+	  netid = A_LEN (_weak);
+	  A_INC (_weak);
+	  A_INIT (_weak[netid].pins);
+	}
+	A_NEW (_weak[netid].pins, act_local_pin_t);
+	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
+	if (si->weak_vdd) {
+	  A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#3"));
+	}
+	else {
+	  A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#2"));
+	}
+	A_INC (_weak[netid].pins);
+      }
+    }
+
+    /*
+      We have created all the nets with weak supplies.
+      Now we have to walk through any instance that has a weak supply
+      port and connect it up!
+    */
+    ActUniqProcInstiter i(p->CurScope());
+    int iweak = 0;
+    for (i = i.begin(); i != i.end(); i++) {
+      ValueIdx *vx = (*i);
+      ActId *newid;
+      ActId *cpy;
+      Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
+      netlist_t *inl;
+      int ports_exist;
+      newid = new ActId (vx->getName());
+      cpy = newid;
+      inl = _nlp->getNL (instproc);
+      Assert (inl, "What?");
+
+      ports_exist = 0;
+      for (int i=0; i < A_LEN (inl->bN->ports); i++) {
+	if (inl->bN->ports[i].omit == 0) {
+	  ports_exist = 1;
+	  break;
+	}
+      }
+
+      if (ports_exist) {
+	if (vx->t->arrayInfo()) {
+	  Arraystep *as = vx->t->arrayInfo()->stepper();
+	  while (!as->isend()) {
+	    if (vx->isPrimary (as->index())) {
+	      if (as->curProc() && as->curProc() != instproc) {
+		instproc = as->curProc();
+		inl = _nlp->getNL (instproc);
+		Assert (inl, "Hmm...");
+	      }
+	      Array *x = as->toArray();
+	      newid->setArray (x);
+	      /* XXX DEAL WITH THIS! */
+	      if (inl->weak_supply_vdd > 0) {
+		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+		int netid = find_weak_net (mynl->instport_weak[iweak]);
+		Assert (netid != -1, "Missing weak supply?");
+
+		A_NEW (_weak[netid].pins, act_local_pin_t);
+		char *tmp;
+		int len = strlen (vx->getName()) + 100;
+		MALLOC (tmp, char, len);
+		newid->sPrint (tmp, len);
+		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
+		snprintf (buf, 64, "#%d", inl->wvdd->i);
+		A_NEXT (_weak[netid].pins).pin = (act_connection *)
+		  FIX_STRING (Strdup (buf));
+		A_INC (_weak[netid].pins);
+		
+		iweak++;
+	      }
+	      if (inl->weak_supply_gnd > 0) {
+		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+		int netid = find_weak_net (mynl->instport_weak[iweak]);
+		Assert (netid != -1, "Missing weak supply?");
+
+		A_NEW (_weak[netid].pins, act_local_pin_t);
+		char *tmp;
+		int len = strlen (vx->getName()) + 100;
+		MALLOC (tmp, char, len);
+		newid->sPrint (tmp, len);
+		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
+		snprintf (buf, 64, "#%d", inl->wgnd->i);
+		A_NEXT (_weak[netid].pins).pin = (act_connection *)
+		  FIX_STRING (Strdup (buf));
+		A_INC (_weak[netid].pins);
+		
+		iweak++;
+	      }
+	      delete x;
+	      newid->setArray (NULL);
+	    }
+	    as->step();
+	  }
+	  delete as;
+	}
+	else {
+	  if (inl->weak_supply_vdd > 0) {
+	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+	    int netid = find_weak_net (mynl->instport_weak[iweak]);
+	    Assert (netid != -1, "Missing weak supply?");
+
+	    A_NEW (_weak[netid].pins, act_local_pin_t);
+	    char *tmp;
+	    int len = strlen (vx->getName()) + 100;
+	    MALLOC (tmp, char, len);
+	    newid->sPrint (tmp, len);
+	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
+	    snprintf (buf, 64, "#%d", inl->wvdd->i);
+	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
+	      FIX_STRING (Strdup (buf));
+	    A_INC (_weak[netid].pins);
+	    
+	    iweak++;
+	  }
+	  if (inl->weak_supply_gnd > 0) {
+	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+	    int netid = find_weak_net (mynl->instport_weak[iweak]);
+	    Assert (netid != -1, "Missing weak supply?");
+
+	    A_NEW (_weak[netid].pins, act_local_pin_t);
+	    char *tmp;
+	    int len = strlen (vx->getName()) + 100;
+	    MALLOC (tmp, char, len);
+	    newid->sPrint (tmp, len);
+	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
+	    snprintf (buf, 64, "#%d", inl->wgnd->i);
+	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
+	      FIX_STRING (Strdup (buf));
+	    A_INC (_weak[netid].pins);
+	    
+	    iweak++;
+	  }
+	}
+      }
+    }
+
+    for (int i=0; i < A_LEN (_weak); i++) {
+      if (print_net (a, fp, prefix, &_weak[i], prefix == NULL ? (i+1) : 0,
+		     do_pins)) {
+	netcount++;
+      }
+      for (int j=0; j < A_LEN (_weak[i].pins); j++) {
+	FREE (ACT_NET_STRINGONLY (_weak[i].pins[j].inst));
+	FREE (ACT_NET_STRINGONLY (_weak[i].pins[j].pin));
+      }
+      A_FREE (_weak[i].pins);
+      FREE (ACT_NET_STRINGONLY (_weak[i].net));
+    }
+    A_FREE (_weak);
+    
+  }
+#undef FIX_STRING
 
   ActUniqProcInstiter i(p->CurScope());
 
@@ -3478,9 +3868,10 @@ void ActStackLayout::emitDEFHeader (FILE *fp, Process *p)
   fprintf (fp, "\nUNITS DISTANCE MICRONS %d ;\n\n", _micron_conv);
 }
 
+
 void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
-				  double ratio, int do_pins, bool is_bounding_box,
-				  double bb_llx, double bb_lly)
+			      double ratio, int do_pins, bool is_bounding_box,
+			      double bb_llx, double bb_lly)
 {
   ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
   Assert (dp, "What?");
@@ -3497,11 +3888,22 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   _instcount = 0;
   _areacount = 0;
   _areastdcell = 0;
+  _nlp = nl;
+  _lp_weak_supplies = _weak_supplies;
   _maximum_height = dp->getIntParam ("cell_maxheight");
   ap->setCookie (this);
   ap->setInstFn (count_inst);
   ap->run (p);
   count_inst (this, NULL, p); // oops!
+
+  if (nl->getSharedInsts() && nl->getSharedInsts()->n > 0) {
+    /*
+      now count all the local supply cell instances, adding them to
+      the die area needed as well as the number of instances.
+    */
+    
+  }
+  
 
   _total_instances = _instcount;
   _total_area = _areacount;
@@ -3532,7 +3934,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
    the question here is, do we also skip the track snapping from below?
    for now no, but might be nessesary, margins are removed to not mess with floorplanning.
    */
-  if (is_bounding_box){
+  if (is_bounding_box) {
     sidex = pad;
     sidey = ratio;
     if (_total_area > sidex*sidey) {
@@ -3617,6 +4019,8 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
   global_act = a;
   _alp = this;
   ap->run (p);
+  dump_inst (fp, NULL, p); // oops!
+
   fprintf (fp, "END COMPONENTS\n\n");
 
 
@@ -3711,6 +4115,8 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     ;
   */
   _collect_emit_nets (a, NULL, p, fp, do_pins);
+
+  /*** XXX: add in the nets for the weak supply cells ***/
   
   fprintf (fp, "END NETS\n\n");
   fprintf (fp, "END DESIGN\n");
@@ -3807,6 +4213,10 @@ void ActStackLayout::_collectLocalStats(Process *p)
 	}
       } while (r);
     }
+
+    /*** XXX: add any weak supply cells to mytab here ***/
+
+    
     return;
   }
   if (bllx > burx || blly > bury) return;
@@ -4705,7 +5115,7 @@ void ActStackLayout::_emitwelltaplef (int flavor)
       }
     }
     fprintf (_fpcell, "   END VERSION\n");
-    fprintf (_fpcell, "END %s\n", name);
+    fprintf (_fpcell, "END %s\n\n", name);
   }
 }
 
@@ -4998,7 +5408,8 @@ void ActStackLayout::_emitweaksupplyrect (ActNetlistPass::shared_stat *ss,
 			 ss->ep ? ss->ep->l : 0,
 			 ss->en ? ss->en->l : 0);
   
-  a->msnprintf (name, 1024, "%s.rect", buf);
+  a->msnprintf (name, 1024, "%s", buf);
+  strcat (name, ".rect");
 
   TransformMat mat;
   Rectangle bloatbox;
@@ -5115,6 +5526,6 @@ void ActStackLayout::_emitweaksupplylef (ActNetlistPass::shared_stat *ss,
       }
     }
     fprintf (_fpcell, "   END VERSION\n");
-    fprintf (_fpcell, "END %s\n", name);
+    fprintf (_fpcell, "END %s\n\n", name);
   }
 }
