@@ -1763,370 +1763,6 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 }
 
 
-LayoutBlob *ActStackLayout::_readwelltap (int flavor)
-{
-  char cname[128];
-  char *tmpname;
-  
-  if (_rect_import == 0) {
-    return NULL;
-  }
-
-  snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
-
-  if (_rect_inpath) {
-    tmpname = path_open (_rect_inpath, cname, NULL);
-  }
-  else {
-    tmpname = NULL;
-  }
-
-  Rectangle file_bbox;
-  LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
-					dummy_netlist, file_bbox,
-					_rect_import);
-  if (tmpname) {
-    FREE (tmpname);
-  }
-  if (!b) {
-    return NULL;
-  }
-
-  /* now shift all the tiles to line up 0,0 in the middle of the
-     ppdiff/nndiff diffusion section */
-  DiffMat *d = NULL;
-  list_t *tiles = NULL;
-  int type;
-  long ymin, ymax;
-  long updiff, dndiff;
-  int set_diff = 0;
-
-  updiff = 0;
-  dndiff = 0;
-
-  
-  for (int j=0; j < 2; j++) {
-    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
-    if (list_isempty (tiles)) {
-      list_free (tiles);
-    }
-    else {
-      /* done! */
-      long xmin, xmax;
-      d = Technology::T->welldiff[j][flavor];
-      if (d) {
-	type = j;
-	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
-	/* calculate ymin, ymax */
-	LayoutBlob::searchFree (tiles);
-	set_diff++;
-	if (type == EDGE_PFET) {
-	  updiff = ymin;
-	}
-	else {
-	  dndiff = ymax;
-	}
-      }
-    }
-  }
-  if (d == NULL) {
-    warning ("Read %s; no well diffusion found?", cname);
-  }
-  else {
-    /* 
-       We align this so that y-coordinate of 0 can be used
-       to consistently align the wells, with the p-diff region on 
-       top and the n-diff region on the bottom.
-    */
-    
-    int diffspace = d->getOppDiffSpacing (flavor);
-
-    if (set_diff == 2) {
-      if ((updiff - dndiff) != diffspace) {
-	warning ("welltap_%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", act_dev_value_to_string (flavor), diffspace, updiff-dndiff);
-	diffspace = updiff - dndiff;
-      }
-    }
-    
-    int p = +diffspace/2;
-    int n = p - diffspace;
-    int xlate;
-
-    if (type == EDGE_NFET) {
-      xlate = n - ymax;
-    }
-    else {
-      xlate = p - ymin;
-    }
-    if (xlate != 0) {
-      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
-      tmp->appendBlob (b, BLOB_VERT, xlate);
-      b = tmp;
-    }
-  }
-  b = computeLEFBoundary (b);
-  if (_rect_import == 4 || _rect_import == 5) {
-    if (b->getBBox() != file_bbox) {
-      warning ("welltap_%s: boundary was changed.",
-	       act_dev_value_to_string (flavor));
-      fprintf (stderr, "file: ");
-      file_bbox.print(stderr);
-      fprintf (stderr, "; computed: ");
-      b->getBBox().print(stderr);
-      fprintf (stderr, "\n");
-    }
-  }
-  b->markRead ();
-  
-  return b;
-}
-
-
-LayoutBlob *ActStackLayout::_createwelltap (int flavor)
-{
-  Layout *l;
-  DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
-  DiffMat *pplusdiff = Technology::T->welldiff[EDGE_PFET][flavor];
-  LayoutBlob *BLOB;
-
-  BLOB = _readwelltap (flavor);
-  if (BLOB) {
-    return BLOB;
-  }
-  
-  if (_rect_import > 1) {
-    fatal_error ("welltap_%s: could not read local .rect file",
-		 act_dev_value_to_string (flavor));
-  }
-
-  /* no well tap */
-  if (!nplusdiff && !pplusdiff) {
-    return NULL;
-  }
-    
-  int diffspace;
-  
-  if (nplusdiff) {
-    diffspace = nplusdiff->getOppDiffSpacing(flavor);
-  }
-  else {
-    diffspace = pplusdiff->getOppDiffSpacing(flavor);
-  }
-  
-  int p = +diffspace/2;
-  int n = p - diffspace;
-
-  l = new Layout (dummy_netlist);
-
-  if (nplusdiff) {
-    int mina = nplusdiff->minArea ();
-    WellMat *w;
-    if (mina > 0) {
-      mina = (mina + nplusdiff->minWidth() - 1)/ nplusdiff->minWidth();
-    }
-    if (mina < nplusdiff->minWidth()) {
-      mina = nplusdiff->minWidth();
-    }
-    w = Technology::T->well[EDGE_NFET][flavor];
-    if (w) {
-      if (w->getOverhangWelldiff() > p) {
-	p = w->getOverhangWelldiff();
-      }
-    }
-    l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->minWidth (),
-		     mina, dummy_netlist->nsc);
-  }
-  if (pplusdiff) {
-    WellMat *w;
-    int mina = pplusdiff->minArea ();
-    if (mina > 0) {
-      mina = (mina + pplusdiff->minWidth() - 1)/ pplusdiff->minWidth();
-    }
-    if (mina < pplusdiff->minWidth()) {
-      mina = pplusdiff->minWidth();
-    }
-    w = Technology::T->well[EDGE_PFET][flavor];
-    if (w) {
-      if (w->getOverhangWelldiff() > -n) {
-	n = -w->getOverhangWelldiff();
-      }
-    }
-    l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina + 1,
-		     pplusdiff->minWidth(), mina, dummy_netlist->psc);
-  }
-
-  BLOB = new LayoutBlob (BLOB_BASE, l);
-
-  BLOB = computeLEFBoundary (BLOB);
-
-  /* add pins */
-  Rectangle b_bbox;
-  b_bbox = BLOB->getBBox ();
-
-  int tedge;
-  tedge = snap_up_y (b_bbox.ury() - b_bbox.lly() + 1);
-
-  while (tedge - _pin_metal->getLEFWidth() <=
-	 _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
-	 _pin_metal->minSpacing())
-    {
-      tedge += _m_align_y->getPitch();
-    }
-
-  p = _m_align_x->getPitch();
-  Layout *pins = new Layout (dummy_netlist);
-  int w = _pin_metal->getLEFWidth();
-  pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p,
-		      b_bbox.lly() + tedge - w, w, w,
-		      dummy_netlist->nsc, 0);
-    
-  pins->DrawMetalPin (_pin_layer,
-		      b_bbox.llx() + p,
-		      b_bbox.lly() + _m_align_y->getPitch(), w, w,
-		      dummy_netlist->psc, 0);
-
-  LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
-  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
-  bl->appendBlob (BLOB, BLOB_MERGE);
-
-  bl = LayoutBlob::delBBox (bl);
-
-  BLOB = computeLEFBoundary (bl);
-
-  return BLOB;
-}
-
-
-void ActStackLayout::_emitwelltaprect (int flavor)
-{
-  if (!wellplugs[flavor]) {
-    return;
-  }
-    
-  LayoutBlob *b = wellplugs[flavor];
-  char name[1024];
-
-  snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (flavor));
-
-  TransformMat mat;
-  Rectangle bloatbox;
-  bloatbox = b->getBloatBBox ();
-  mat.translate (-bloatbox.llx(), -bloatbox.lly());
-      
-  /* emit rectangles */
-  strcat (name, ".rect");
-
-  FILE *tfp;
-
-  const char *outdir;
-  if (b->getRead()) {
-    outdir = _rect_outdir;
-  }
-  else {
-    outdir = _rect_outinitdir;
-  }
-  
-  if (outdir) {
-    char *outname;
-    int sz = strlen (name) + strlen (outdir) + 2;
-    MALLOC (outname, char, sz);
-    snprintf (outname, sz, "%s/%s", outdir, name);
-    tfp = fopen (outname, "w");
-    if (!tfp) {
-      fatal_error ("Could not open file `%s' for writing", outname);
-    }
-    FREE (outname);
-  }
-  else {
-    tfp = fopen (name, "w");
-    if (!tfp) {
-      fatal_error ("Could not open file `%s' for writing", name);
-    }
-  }
-  b->PrintRect (tfp, &mat);
-
-
-  if (_rect_wells) {
-    for (int j=0; j < 2; j++) {
-      long wllx, wlly, wurx, wury;
-      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
-      if (wllx < wurx && wlly < wury) {
-	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
-		 Technology::T->well[j][flavor]->getName(),
-		 wllx, wlly, wurx, wury);
-      }
-    }
-  }
-  fclose (tfp);
-}
-
-void ActStackLayout::_emit_weak_supplyrect (ActNetlistPass::shared_stat *ss,
-					    LayoutBlob *b)
-{
-  char buf[1024];
-  char name[1024];
-
-  nl->getSharedStatName (buf, 1024,
-			 ss->en ? ss->en->w : ss->ep->w,
-			 ss->ep ? ss->ep->l : 0,
-			 ss->en ? ss->en->l : 0);
-  
-  a->msnprintf (name, 1024, "%s", buf);
-
-  TransformMat mat;
-  Rectangle bloatbox;
-  bloatbox = b->getBloatBBox ();
-  mat.translate (-bloatbox.llx(), -bloatbox.lly());
-      
-  /* emit rectangles */
-  strcat (name, ".rect");
-
-  FILE *tfp;
-
-  const char *outdir;
-  if (b->getRead()) {
-    outdir = _rect_outdir;
-  }
-  else {
-    outdir = _rect_outinitdir;
-  }
-  
-  if (outdir) {
-    char *outname;
-    int sz = strlen (name) + strlen (outdir) + 2;
-    MALLOC (outname, char, sz);
-    snprintf (outname, sz, "%s/%s", outdir, name);
-    tfp = fopen (outname, "w");
-    if (!tfp) {
-      fatal_error ("Could not open file `%s' for writing", outname);
-    }
-    FREE (outname);
-  }
-  else {
-    tfp = fopen (name, "w");
-    if (!tfp) {
-      fatal_error ("Could not open file `%s' for writing", name);
-    }
-  }
-  b->PrintRect (tfp, &mat);
-
-  if (_rect_wells) {
-    int flavor;
-    flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
-    for (int j=0; j < 2; j++) {
-      long wllx, wlly, wurx, wury;
-      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
-      if (wllx < wurx && wlly < wury) {
-	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
-		 Technology::T->well[j][flavor]->getName(),
-		 wllx, wlly, wurx, wury);
-      }
-    }
-  }
-  fclose (tfp);
-}
-
-
 void layout_run (ActPass *_ap, Process *p)
 {
   ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
@@ -2162,7 +1798,7 @@ void ActStackLayout::run_post (Process *top)
     _weak_supplies = list_new ();
     for (listitem_t *li = list_first (l); li; li = list_next (li)) {
       LayoutBlob *b =
-	_create_weaksupply ((ActNetlistPass::shared_stat *)list_value (li));
+	_createweaksupply ((ActNetlistPass::shared_stat *)list_value (li));
       list_append (_weak_supplies, b);
     }
   }
@@ -2506,53 +2142,18 @@ void ActStackLayout::runrec (int mode, UserDef *u)
     /*-- emit lef for the welltap cells --*/
     double scale = Technology::T->scale/1000.0;
     for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-      if (wellplugs[i]) {
-	LayoutBlob *b = wellplugs[i];
-	char name[1024], nodename[1024];
-
-	snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (i));
-	emit_header (_fp, name, "CORE WELLTAP", b);
-
-	ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-				   dummy_netlist->nsc);
-	emit_one_pin (a, _fp, nodename, 1, "POWER", b, dummy_netlist->nsc);
-
-	ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-				     dummy_netlist->psc);
-	emit_one_pin (a, _fp, nodename, 1, "GROUND", b, dummy_netlist->psc);
-	
-	emit_footer (_fp, name);
-
-	TransformMat mat;
-	Rectangle bloatbox;
-	bloatbox = b->getBloatBBox ();
-	mat.translate (-bloatbox.llx(), -bloatbox.lly());
-
-	if (_fpcell) {
-	  /* emit local well lef */
-	  WellMat *w;
-	  DiffMat *d;
-	
-	  int adjust = Technology::T->welltap_adjust;
-
-	  fprintf (_fpcell, "MACRO %s\n", name);
-	  fprintf (_fpcell, "   VERSION %s\n", name);
-	  fprintf (_fpcell, "   PLUG\n");
-
-	  for (int j=0; j < 2; j++) {
-	    long wllx, wlly, wurx, wury;
-	    _computeWell (b, i, j, &wllx, &wlly, &wurx, &wury, 1);
-
-	    if (wllx < wurx && wlly < wury) {
-	      fprintf (_fpcell, "   LAYER %s ;\n", Technology::T->well[j][i]->getName());
-	      fprintf (_fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
-		       wllx*scale, wlly*scale, wurx*scale, wury*scale);
-	      fprintf (_fpcell, "   END\n");
-	    }
-	  }
-	  fprintf (_fpcell, "   END VERSION\n");
-	  fprintf (_fpcell, "END %s\n", name);
-	}
+      _emitwelltaplef (i);
+    }
+    /* emit weak supply lef */
+    if (_weak_supplies) {
+      listitem_t *mi = list_first (nl->getSharedStatTypes());
+      for (listitem_t *li = list_first (_weak_supplies); li;
+	   li = list_next (li)) {
+	LayoutBlob *b = (LayoutBlob *) list_value (li);
+	ActNetlistPass::shared_stat *ss =
+	  (ActNetlistPass::shared_stat *) list_value (mi);
+	_emitweaksupplylef (ss, b);
+	mi = list_next (mi);
       }
     }
 
@@ -2580,7 +2181,7 @@ void ActStackLayout::runrec (int mode, UserDef *u)
 	LayoutBlob *b = (LayoutBlob *) list_value (li);
 	ActNetlistPass::shared_stat *ss =
 	  (ActNetlistPass::shared_stat *) list_value (mi);
-	_emit_weak_supplyrect (ss, b);
+	_emitweaksupplyrect (ss, b);
 	mi = list_next (mi);
       }
     }
@@ -3090,7 +2691,8 @@ int ActStackLayout::_emitlocalLEF (Process *p)
 
 
 void ActStackLayout::_computeWell (LayoutBlob *blob, int flavor, int type,
-				       long *llx, long *lly, long *urx, long *ury, int is_welltap)
+				   long *llx, long *lly, long *urx, long *ury,
+				   int is_welltap)
 {
   TransformMat mat;
 
@@ -4691,7 +4293,569 @@ int layout_runcmd (ActPass *_ap, const char *name)
 }
 
 
-LayoutBlob *ActStackLayout::_create_weaksupply (ActNetlistPass::shared_stat *s)
+void ActStackLayout::reportDirs (FILE *fp)
+{
+  fprintf (fp, "  .rect file directories:\n");
+  fprintf (fp, "    inpath:");
+  if (_rect_inpath) {
+    struct actual_pathlist {
+      char *path;
+      struct actual_pathlist *next;
+    };
+    struct actual_path_info {
+      actual_pathlist *hd, *tl;
+    };
+    actual_pathlist *ac = ((actual_path_info *) _rect_inpath)->hd;
+    while (ac) {
+      fprintf (fp, " %s", ac->path);
+      ac = ac->next;
+    }
+  }
+  else {
+    fprintf (fp, " none");
+  }
+  fprintf (fp, "\n");
+
+  fprintf (fp, "    outinitdir: %s\n", _rect_outinitdir ? _rect_outinitdir : "none");
+  fprintf (fp, "    outdir: %s\n", _rect_outdir ? _rect_outdir : "none");
+}
+
+
+
+
+
+/*
+ *
+ *  Generators for auxillary cells used for the layout. These are:
+ *
+ *  - Well taps
+ *  - Weak power supply cells
+ *
+ */
+
+
+
+/*========================================================================
+ *
+ * Welltap methods
+ *
+ *========================================================================
+ */
+
+
+/*------------------------------------------------------------------------
+ *
+ * Read welltap layout from a file
+ *
+ *------------------------------------------------------------------------
+ */
+LayoutBlob *ActStackLayout::_readwelltap (int flavor)
+{
+  char cname[128];
+  char *tmpname;
+  
+  if (_rect_import == 0) {
+    return NULL;
+  }
+
+  snprintf (cname, 128, "welltap_%s.rect", act_dev_value_to_string (flavor));
+
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, cname, NULL);
+  }
+  else {
+    tmpname = NULL;
+  }
+
+  Rectangle file_bbox;
+  LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : cname,
+					dummy_netlist, file_bbox,
+					_rect_import);
+  if (tmpname) {
+    FREE (tmpname);
+  }
+  if (!b) {
+    return NULL;
+  }
+
+  /* now shift all the tiles to line up 0,0 in the middle of the
+     ppdiff/nndiff diffusion section */
+  DiffMat *d = NULL;
+  list_t *tiles = NULL;
+  int type;
+  long ymin, ymax;
+  long updiff, dndiff;
+  int set_diff = 0;
+
+  updiff = 0;
+  dndiff = 0;
+
+  
+  for (int j=0; j < 2; j++) {
+    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
+    if (list_isempty (tiles)) {
+      list_free (tiles);
+    }
+    else {
+      /* done! */
+      long xmin, xmax;
+      d = Technology::T->welldiff[j][flavor];
+      if (d) {
+	type = j;
+	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+	/* calculate ymin, ymax */
+	LayoutBlob::searchFree (tiles);
+	set_diff++;
+	if (type == EDGE_PFET) {
+	  updiff = ymin;
+	}
+	else {
+	  dndiff = ymax;
+	}
+      }
+    }
+  }
+  if (d == NULL) {
+    warning ("Read %s; no well diffusion found?", cname);
+  }
+  else {
+    /* 
+       We align this so that y-coordinate of 0 can be used
+       to consistently align the wells, with the p-diff region on 
+       top and the n-diff region on the bottom.
+    */
+    
+    int diffspace = d->getOppDiffSpacing (flavor);
+
+    if (set_diff == 2) {
+      if ((updiff - dndiff) != diffspace) {
+	warning ("welltap_%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", act_dev_value_to_string (flavor), diffspace, updiff-dndiff);
+	diffspace = updiff - dndiff;
+      }
+    }
+    
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    int xlate;
+
+    if (type == EDGE_NFET) {
+      xlate = n - ymax;
+    }
+    else {
+      xlate = p - ymin;
+    }
+    if (xlate != 0) {
+      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
+      tmp->appendBlob (b, BLOB_VERT, xlate);
+      b = tmp;
+    }
+  }
+  b = computeLEFBoundary (b);
+  if (_rect_import == 4 || _rect_import == 5) {
+    if (b->getBBox() != file_bbox) {
+      warning ("welltap_%s: boundary was changed.",
+	       act_dev_value_to_string (flavor));
+      fprintf (stderr, "file: ");
+      file_bbox.print(stderr);
+      fprintf (stderr, "; computed: ");
+      b->getBBox().print(stderr);
+      fprintf (stderr, "\n");
+    }
+  }
+  b->markRead ();
+  
+  return b;
+}
+
+
+/*------------------------------------------------------------------------
+ *
+ * Create initial unwired welltap layout
+ *
+ *------------------------------------------------------------------------
+ */
+LayoutBlob *ActStackLayout::_createwelltap (int flavor)
+{
+  Layout *l;
+  DiffMat *nplusdiff = Technology::T->welldiff[EDGE_NFET][flavor];
+  DiffMat *pplusdiff = Technology::T->welldiff[EDGE_PFET][flavor];
+  LayoutBlob *BLOB;
+
+  BLOB = _readwelltap (flavor);
+  if (BLOB) {
+    return BLOB;
+  }
+  
+  if (_rect_import > 1) {
+    fatal_error ("welltap_%s: could not read local .rect file",
+		 act_dev_value_to_string (flavor));
+  }
+
+  /* no well tap */
+  if (!nplusdiff && !pplusdiff) {
+    return NULL;
+  }
+    
+  int diffspace;
+  
+  if (nplusdiff) {
+    diffspace = nplusdiff->getOppDiffSpacing(flavor);
+  }
+  else {
+    diffspace = pplusdiff->getOppDiffSpacing(flavor);
+  }
+  
+  int p = +diffspace/2;
+  int n = p - diffspace;
+
+  l = new Layout (dummy_netlist);
+
+  if (nplusdiff) {
+    int mina = nplusdiff->minArea ();
+    WellMat *w;
+    if (mina > 0) {
+      mina = (mina + nplusdiff->minWidth() - 1)/ nplusdiff->minWidth();
+    }
+    if (mina < nplusdiff->minWidth()) {
+      mina = nplusdiff->minWidth();
+    }
+    w = Technology::T->well[EDGE_NFET][flavor];
+    if (w) {
+      if (w->getOverhangWelldiff() > p) {
+	p = w->getOverhangWelldiff();
+      }
+    }
+    l->DrawWellDiff (flavor, EDGE_PFET, 0, p, nplusdiff->minWidth (),
+		     mina, dummy_netlist->nsc);
+  }
+  if (pplusdiff) {
+    WellMat *w;
+    int mina = pplusdiff->minArea ();
+    if (mina > 0) {
+      mina = (mina + pplusdiff->minWidth() - 1)/ pplusdiff->minWidth();
+    }
+    if (mina < pplusdiff->minWidth()) {
+      mina = pplusdiff->minWidth();
+    }
+    w = Technology::T->well[EDGE_PFET][flavor];
+    if (w) {
+      if (w->getOverhangWelldiff() > -n) {
+	n = -w->getOverhangWelldiff();
+      }
+    }
+    l->DrawWellDiff (flavor, EDGE_NFET, 0, n - mina + 1,
+		     pplusdiff->minWidth(), mina, dummy_netlist->psc);
+  }
+
+  BLOB = new LayoutBlob (BLOB_BASE, l);
+
+  BLOB = computeLEFBoundary (BLOB);
+
+  /* add pins */
+  Rectangle b_bbox;
+  b_bbox = BLOB->getBBox ();
+
+  int tedge;
+  tedge = snap_up_y (b_bbox.ury() - b_bbox.lly() + 1);
+
+  while (tedge - _pin_metal->getLEFWidth() <=
+	 _m_align_y->getPitch() + _pin_metal->getLEFWidth() +
+	 _pin_metal->minSpacing())
+    {
+      tedge += _m_align_y->getPitch();
+    }
+
+  p = _m_align_x->getPitch();
+  Layout *pins = new Layout (dummy_netlist);
+  int w = _pin_metal->getLEFWidth();
+  pins->DrawMetalPin (_pin_layer, b_bbox.llx() + p,
+		      b_bbox.lly() + tedge - w, w, w,
+		      dummy_netlist->nsc, 0);
+    
+  pins->DrawMetalPin (_pin_layer,
+		      b_bbox.llx() + p,
+		      b_bbox.lly() + _m_align_y->getPitch(), w, w,
+		      dummy_netlist->psc, 0);
+
+  LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
+  bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
+  bl->appendBlob (BLOB, BLOB_MERGE);
+
+  bl = LayoutBlob::delBBox (bl);
+
+  BLOB = computeLEFBoundary (bl);
+
+  return BLOB;
+}
+
+
+/*------------------------------------------------------------------------
+ *
+ * Write the .rect files for a welltap
+ *
+ *------------------------------------------------------------------------
+ */
+void ActStackLayout::_emitwelltaprect (int flavor)
+{
+  if (!wellplugs[flavor]) {
+    return;
+  }
+    
+  LayoutBlob *b = wellplugs[flavor];
+  char name[1024];
+
+  snprintf (name, 1019, "welltap_%s", act_dev_value_to_string (flavor));
+
+  TransformMat mat;
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+      
+  /* emit rectangles */
+  strcat (name, ".rect");
+
+  FILE *tfp;
+
+  const char *outdir;
+  if (b->getRead()) {
+    outdir = _rect_outdir;
+  }
+  else {
+    outdir = _rect_outinitdir;
+  }
+  
+  if (outdir) {
+    char *outname;
+    int sz = strlen (name) + strlen (outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", outdir, name);
+    tfp = fopen (outname, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
+    }
+    FREE (outname);
+  }
+  else {
+    tfp = fopen (name, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", name);
+    }
+  }
+  b->PrintRect (tfp, &mat);
+
+
+  if (_rect_wells) {
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
+      if (wllx < wurx && wlly < wury) {
+	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
+		 Technology::T->well[j][flavor]->getName(),
+		 wllx, wlly, wurx, wury);
+      }
+    }
+  }
+  fclose (tfp);
+}
+
+void ActStackLayout::_emitwelltaplef (int flavor)
+{
+  /*-- emit lef for the welltap cells --*/
+  double scale = Technology::T->scale/1000.0;
+  if (!wellplugs[flavor]) return;
+  
+  LayoutBlob *b = wellplugs[flavor];
+  char name[1024], nodename[1024];
+
+  snprintf (name, 1024, "welltap_%s", act_dev_value_to_string (flavor));
+  emit_header (_fp, name, "CORE WELLTAP", b);
+
+  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+			       dummy_netlist->nsc);
+  emit_one_pin (a, _fp, nodename, 1, "POWER", b, dummy_netlist->nsc);
+
+  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+			       dummy_netlist->psc);
+  emit_one_pin (a, _fp, nodename, 1, "GROUND", b, dummy_netlist->psc);
+	
+  emit_footer (_fp, name);
+
+  TransformMat mat;
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+
+  if (_fpcell) {
+    /* emit local well lef */
+    WellMat *w;
+    DiffMat *d;
+	
+    fprintf (_fpcell, "MACRO %s\n", name);
+    fprintf (_fpcell, "   VERSION %s\n", name);
+    fprintf (_fpcell, "   PLUG\n");
+
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury, 1);
+      if (wllx < wurx && wlly < wury) {
+	fprintf (_fpcell, "   LAYER %s ;\n", Technology::T->well[j][flavor]->getName());
+	fprintf (_fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
+		 wllx*scale, wlly*scale, wurx*scale, wury*scale);
+	fprintf (_fpcell, "   END\n");
+      }
+    }
+    fprintf (_fpcell, "   END VERSION\n");
+    fprintf (_fpcell, "END %s\n", name);
+  }
+}
+
+/*========================================================================
+ *
+ * Weak power supply methods
+ *
+ *========================================================================
+ */
+
+/*------------------------------------------------------------------------
+ *
+ * Read weak supply layout from file
+ *
+ *------------------------------------------------------------------------
+ */
+LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
+{
+  char *tmpname;
+  
+  if (_rect_import == 0) {
+    return NULL;
+  }
+
+  char buf[1024];
+  char name[1024];
+
+  nl->getSharedStatName (buf, 1024,
+			 ss->en ? ss->en->w : ss->ep->w,
+			 ss->ep ? ss->ep->l : 0,
+			 ss->en ? ss->en->l : 0);
+  
+  a->msnprintf (name, 1024, "%s.rect", buf);
+  
+  if (_rect_inpath) {
+    tmpname = path_open (_rect_inpath, name, NULL);
+  }
+  else {
+    tmpname = NULL;
+  }
+
+  Rectangle file_bbox;
+  LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : name,
+					dummy_netlist, file_bbox,
+					_rect_import);
+  if (tmpname) {
+    FREE (tmpname);
+  }
+  if (!b) {
+    return NULL;
+  }
+
+  /* now shift all the tiles to line up 0,0 in the middle of the
+     ppdiff/nndiff diffusion section */
+  DiffMat *d = NULL;
+  list_t *tiles = NULL;
+  int type;
+  long ymin, ymax;
+  long updiff, dndiff;
+  int set_diff = 0;
+
+  updiff = 0;
+  dndiff = 0;
+
+  int flavor;
+  flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
+  
+  for (int j=0; j < 2; j++) {
+    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
+    if (list_isempty (tiles)) {
+      list_free (tiles);
+    }
+    else {
+      /* done! */
+      long xmin, xmax;
+      d = Technology::T->welldiff[j][flavor];
+      if (d) {
+	type = j;
+	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+	/* calculate ymin, ymax */
+	LayoutBlob::searchFree (tiles);
+	set_diff++;
+	if (type == EDGE_PFET) {
+	  updiff = ymin;
+	}
+	else {
+	  dndiff = ymax;
+	}
+      }
+    }
+  }
+  if (d == NULL) {
+    warning ("Read %s; no well diffusion found?", name);
+  }
+  else {
+    /* 
+       We align this so that y-coordinate of 0 can be used
+       to consistently align the wells, with the p-diff region on 
+       top and the n-diff region on the bottom.
+    */
+    
+    int diffspace = d->getOppDiffSpacing (flavor);
+
+    if (set_diff == 2) {
+      if ((updiff - dndiff) != diffspace) {
+	warning ("welltap_%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", act_dev_value_to_string (flavor), diffspace, updiff-dndiff);
+	diffspace = updiff - dndiff;
+      }
+    }
+    
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    int xlate;
+
+    if (type == EDGE_NFET) {
+      xlate = n - ymax;
+    }
+    else {
+      xlate = p - ymin;
+    }
+    if (xlate != 0) {
+      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
+      tmp->appendBlob (b, BLOB_VERT, xlate);
+      b = tmp;
+    }
+  }
+  b = computeLEFBoundary (b);
+  if (_rect_import == 4 || _rect_import == 5) {
+    if (b->getBBox() != file_bbox) {
+      warning ("%s: boundary was changed.", buf);
+      fprintf (stderr, "file: ");
+      file_bbox.print(stderr);
+      fprintf (stderr, "; computed: ");
+      b->getBBox().print(stderr);
+      fprintf (stderr, "\n");
+    }
+  }
+  b->markRead ();
+  
+  return b;
+}
+
+
+/*------------------------------------------------------------------------
+ *
+ * Create initial unwired layout for weak supply
+ *
+ *------------------------------------------------------------------------
+ */
+LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
 {
   BBox b;
 
@@ -4817,29 +4981,140 @@ LayoutBlob *ActStackLayout::_create_weaksupply (ActNetlistPass::shared_stat *s)
 }
 
 
-void ActStackLayout::reportDirs (FILE *fp)
+/*------------------------------------------------------------------------
+ *
+ * Write weak supply layout to file
+ *
+ *------------------------------------------------------------------------
+ */
+void ActStackLayout::_emitweaksupplyrect (ActNetlistPass::shared_stat *ss,
+					    LayoutBlob *b)
 {
-  fprintf (fp, "  .rect file directories:\n");
-  fprintf (fp, "    inpath:");
-  if (_rect_inpath) {
-    struct actual_pathlist {
-      char *path;
-      struct actual_pathlist *next;
-    };
-    struct actual_path_info {
-      actual_pathlist *hd, *tl;
-    };
-    actual_pathlist *ac = ((actual_path_info *) _rect_inpath)->hd;
-    while (ac) {
-      fprintf (fp, " %s", ac->path);
-      ac = ac->next;
-    }
+  char buf[1024];
+  char name[1024];
+
+  nl->getSharedStatName (buf, 1024,
+			 ss->en ? ss->en->w : ss->ep->w,
+			 ss->ep ? ss->ep->l : 0,
+			 ss->en ? ss->en->l : 0);
+  
+  a->msnprintf (name, 1024, "%s.rect", buf);
+
+  TransformMat mat;
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+      
+  /* emit rectangles */
+  FILE *tfp;
+
+  const char *outdir;
+  if (b->getRead()) {
+    outdir = _rect_outdir;
   }
   else {
-    fprintf (fp, " none");
+    outdir = _rect_outinitdir;
   }
-  fprintf (fp, "\n");
+  
+  if (outdir) {
+    char *outname;
+    int sz = strlen (name) + strlen (outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", outdir, name);
+    tfp = fopen (outname, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
+    }
+    FREE (outname);
+  }
+  else {
+    tfp = fopen (name, "w");
+    if (!tfp) {
+      fatal_error ("Could not open file `%s' for writing", name);
+    }
+  }
+  b->PrintRect (tfp, &mat);
 
-  fprintf (fp, "    outinitdir: %s\n", _rect_outinitdir ? _rect_outinitdir : "none");
-  fprintf (fp, "    outdir: %s\n", _rect_outdir ? _rect_outdir : "none");
+  if (_rect_wells) {
+    int flavor;
+    flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury);
+      if (wllx < wurx && wlly < wury) {
+	fprintf (tfp, "rect # %s %ld %ld %ld %ld\n",
+		 Technology::T->well[j][flavor]->getName(),
+		 wllx, wlly, wurx, wury);
+      }
+    }
+  }
+  fclose (tfp);
+}
+
+
+void ActStackLayout::_emitweaksupplylef (ActNetlistPass::shared_stat *ss,
+					 LayoutBlob *b)
+{
+  /*-- emit lef for the welltap cells --*/
+  double scale = Technology::T->scale/1000.0;
+  char buf[1024];
+  char name[1024], nodename[1024];
+
+  nl->getSharedStatName (buf, 1024,
+			 ss->en ? ss->en->w : ss->ep->w,
+			 ss->ep ? ss->ep->l : 0,
+			 ss->en ? ss->en->l : 0);
+  
+  a->msnprintf (name, 1024, "%s", buf);
+  emit_header (_fp, name, "CORE", b);
+
+  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+			       dummy_netlist->Vdd);
+  emit_one_pin (a, _fp, nodename, 1, "POWER", b, dummy_netlist->Vdd);
+
+  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
+			       dummy_netlist->GND);
+  emit_one_pin (a, _fp, nodename, 1, "GROUND", b, dummy_netlist->GND);
+
+  if (ss->en) {
+    ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist, ss->en->b);
+    emit_one_pin (a, _fp, nodename, 0, "SIGNAL", b, ss->en->b);
+  }
+  if (ss->ep) {
+    ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist, ss->ep->b);
+    emit_one_pin (a, _fp, nodename, 0, "SIGNAL", b, ss->ep->b);
+  }
+	
+  emit_footer (_fp, name);
+
+  TransformMat mat;
+  Rectangle bloatbox;
+  bloatbox = b->getBloatBBox ();
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+
+  if (_fpcell) {
+    /* emit local well lef */
+    WellMat *w;
+    DiffMat *d;
+    int flavor;
+    flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
+	
+    fprintf (_fpcell, "MACRO %s\n", name);
+    fprintf (_fpcell, "   VERSION %s\n", name);
+    fprintf (_fpcell, "   PLUG\n");
+
+    for (int j=0; j < 2; j++) {
+      long wllx, wlly, wurx, wury;
+      _computeWell (b, flavor, j, &wllx, &wlly, &wurx, &wury);
+
+      if (wllx < wurx && wlly < wury) {
+	fprintf (_fpcell, "   LAYER %s ;\n", Technology::T->well[j][flavor]->getName());
+	fprintf (_fpcell, "   RECT %.6f %.6f %.6f %.6f\n",
+		 wllx*scale, wlly*scale, wurx*scale, wury*scale);
+	fprintf (_fpcell, "   END\n");
+      }
+    }
+    fprintf (_fpcell, "   END VERSION\n");
+    fprintf (_fpcell, "END %s\n", name);
+  }
 }
