@@ -71,6 +71,10 @@ public:
   /* mode 0 */
   LayoutBlob *_createlocallayout (Process *p);
 
+  /* does the actual work of the method above */
+  LayoutBlob *_createlocallayout_stk (netlist_t *n,
+				      list_t *stks, int diffspace);
+
   /* mode 1 */
   int _lef_header;
   int _cell_header;

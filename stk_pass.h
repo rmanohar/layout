@@ -36,6 +36,17 @@ struct node_pair {
 };
 
 struct gate_pairs {
+  void init() {
+    basepair = 1;
+    visited = 0;
+    share = 0;
+    n_start = 0;
+    p_start = 0;
+    n_fold = 0;
+    p_fold = 0;
+    nodeshare = 0;
+  }
+		  
   struct node_pair l, r;
   union {
     list_t *gp;		     // gate pair list
@@ -77,6 +88,8 @@ public:
   void setNL (ActNetlistPass *_nl) { nl = _nl; }
   void *getMap (Process *p) { return me->getMap (p); }
   ActPass *getPass () { return me; }
+
+  ActNetlistPass *getNLPass () { return nl; }
 
 private:
   ActNetlistPass *nl;

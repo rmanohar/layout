@@ -677,52 +677,19 @@ void stk_init (ActPass *a)
   _sp->setNL (nl);
   dp->setParam ("raw", (void *)_sp);
 }
-  
-void stk_run (ActPass *ap, Process *p)
+
+/*
+ *
+ * This does the real work: converting the netlist into the stacks for
+ * transistor-level placement
+ *
+ */
+static list_t *_create_stacks_from_nl (netlist_t *N)
 {
-  /* nothing to do */
-}
-
-void stk_recursive (ActPass *ap, Process *p, int mode)
-{
-  /* nothing extra */
-}
-
-
-void *stk_proc (ActPass *_ap, Process *p, int mode)
-{
-  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
-  RawActStackPass *_sp = (RawActStackPass *)ap->getPtrParam ("raw");
-  Assert (_sp, "What?");
-  
-  netlist_t *N = _sp->getNL (p);
-  Assert (N, "What?");
-
   node_t *n;
   list_t *pnodes, *nnodes;
   listitem_t *li, *mi;
   int maxedges;
-
-  /* check we have already handled this process */
-#if 0
-  printf ("--------------------------------------------\n");
-  printf ("creating stacks for: %s\n", p->getName());
-#endif  
-
-  if (!ActNetlistPass::emptyNetlist (N)) {
-    Scope *sc;
-    if (p) {
-      sc = p->CurScope();
-    }
-    else {
-      sc = ActNamespace::Global()->CurScope();
-    }
-    ActUniqProcInstiter i(sc);
-    if (i.begin() != i.end()) {
-      warning ("Process `%s': contains local circuits + subcircuits.",
-	       p ? p->getName() : "-toplevel-");
-    }
-  }
 
   /* nodes to be processed */
   pnodes = list_new ();
@@ -1141,6 +1108,61 @@ void *stk_proc (ActPass *_ap, Process *p, int mode)
   list_append (retlist, stk_p);
 
   return retlist;
+}
+
+void stk_run (ActPass *_ap, Process *p)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  RawActStackPass *_sp = (RawActStackPass *)ap->getPtrParam ("raw");
+  Assert (_sp, "What?");
+  
+  /* now check for shared staticizers and convert those stacks */
+  ActNetlistPass *nl = _sp->getNLPass();
+  list_t *l = nl->getSharedStatTypes ();
+  for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+    ActNetlistPass::shared_stat *ss =
+      (ActNetlistPass::shared_stat *) list_value (li);
+    Assert (ss->extra1 == NULL, "What?");
+    ss->extra1 = _create_stacks_from_nl (ss->nl);
+  }
+}
+
+void stk_recursive (ActPass *ap, Process *p, int mode)
+{
+  /* nothing extra */
+}
+
+
+void *stk_proc (ActPass *_ap, Process *p, int mode)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  RawActStackPass *_sp = (RawActStackPass *)ap->getPtrParam ("raw");
+  Assert (_sp, "What?");
+  
+  netlist_t *N = _sp->getNL (p);
+  Assert (N, "What?");
+
+  /* check we have already handled this process */
+#if 0
+  printf ("--------------------------------------------\n");
+  printf ("creating stacks for: %s\n", p->getName());
+#endif  
+
+  if (!ActNetlistPass::emptyNetlist (N)) {
+    Scope *sc;
+    if (p) {
+      sc = p->CurScope();
+    }
+    else {
+      sc = ActNamespace::Global()->CurScope();
+    }
+    ActUniqProcInstiter i(sc);
+    if (i.begin() != i.end()) {
+      warning ("Process `%s': contains local circuits + subcircuits.",
+	       p ? p->getName() : "-toplevel-");
+    }
+  }
+  return _create_stacks_from_nl (N);
 }
 
 void *stk_data (ActPass *ap, Data *d, int mode)

@@ -534,7 +534,6 @@ static int locate_fetedge (Layout *L, int dx,
     spc = MAX (MAX (spc, f->getSpacing (getlength (e, la))),
 	       p->getSpacing (getlength (e, la)));
   }
-  
 
   rect = 0;
   if (flags & EDGE_FLAGS_LEFT) {
@@ -1373,12 +1372,9 @@ static bool _empty_stacks (list_t *l)
 LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 {
   list_t *stks;
-  BBox b;
   LayoutBlob *BLOB;
 
   Assert (stk, "What?");
-
-  act_languages *lang = p->getlang();
 
   if (p->isBlackBox() || p->isLowLevelBlackBox()) {
     netlist_t *n = nl->getNL (p);
@@ -1391,7 +1387,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     }
     return BLOB;
   }
- 
+  
   stks = (list_t *) stk->getMap (p);
 
   if (!stks || _empty_stacks (stks)) {
@@ -1407,6 +1403,19 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
     fatal_error ("Process %s: could not read local .rect file", p->getName());
   }
 
+  int diffspace = _localdiffspace (p);
+  netlist_t *n = nl->getNL (p);
+
+  return _createlocallayout_stk (n, stks, diffspace);
+}
+
+LayoutBlob *ActStackLayout::_createlocallayout_stk (netlist_t *n,
+						    list_t *stks,
+						    int diffspace)
+{
+  BBox b;
+  LayoutBlob *BLOB;
+
   b.n.llx = 0;
   b.n.lly = 0;
   b.n.urx = 0;
@@ -1420,11 +1429,8 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
   BLOB = new LayoutBlob (BLOB_LIST);
 
-  int diffspace = _localdiffspace (p);
-
   int has_both_types = 0;
 
-  //printf ("Creating local layout: %s\n", p->getName());
 
   if (list_length (stklist) > 0) {
     /* dual stacks */
@@ -1432,7 +1438,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       struct gate_pairs *gp;
-      Layout *l = new Layout(nl->getNL (p));
+      Layout *l = new Layout(n);
       gp = (struct gate_pairs *) list_value (si);
       has_both_types = 1;
 
@@ -1466,7 +1472,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       list_t *sl = (list_t *) list_value (si);
-      Layout *l = new Layout (nl->getNL (p));
+      Layout *l = new Layout (n);
 
       b = print_singlestack (l, sl, diffspace, nxpos);
       
@@ -1495,7 +1501,7 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
     for (si = list_first (stklist); si; si = list_next (si)) {
       list_t *sl = (list_t *) list_value (si);
-      Layout *l = new Layout (nl->getNL (p));
+      Layout *l = new Layout (n);
 
       b = print_singlestack (l, sl, diffspace, pxpos);
       
@@ -1531,9 +1537,12 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 
   BLOB = computeLEFBoundary (BLOB);
 
-  /* --- add pins --- */
-  netlist_t *n = nl->getNL (p);
+  if (!n->bN) {
+    // pins are not here, so we exit early
+    return BLOB;
+  }
 
+  /* --- add pins --- */
   if (!dummy_netlist && n->psc && n->nsc) {
     dummy_netlist = n;
   }
@@ -1775,533 +1784,533 @@ LayoutBlob *ActStackLayout::_createlocallayout (Process *p)
 }
 
 
-  void layout_run (ActPass *_ap, Process *p)
-  {
-    ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
-    ActStackLayout *lp;
-    Assert (ap, "What?");
+void layout_run (ActPass *_ap, Process *p)
+{
+  ActDynamicPass *ap = dynamic_cast<ActDynamicPass *> (_ap);
+  ActStackLayout *lp;
+  Assert (ap, "What?");
 
-    lp = (ActStackLayout *)ap->getPtrParam ("raw");
-    lp->run_post (p);
+  lp = (ActStackLayout *)ap->getPtrParam ("raw");
+  lp->run_post (p);
+}
+
+void ActStackLayout::run_post (Process *top)
+{
+  if (!dummy_netlist) {
+    dummy_netlist = nl->getNL (top);
   }
-
-  void ActStackLayout::run_post (Process *top)
-  {
-    if (!dummy_netlist) {
-      dummy_netlist = nl->getNL (top);
-    }
     
-    if (!dummy_netlist) {
-      fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
-    }
-
-    /* create welltap cells */
-    int ntaps = config_get_table_size ("act.dev_flavors");
-    _wellplug_count = ntaps;
-    MALLOC (wellplugs, LayoutBlob *, ntaps);
-    for (int flavor=0; flavor < ntaps; flavor++) {
-      wellplugs[flavor] = _createwelltap (flavor);
-    }
-
-    /* create any shared staticizer cells */
-    _weak_supplies = NULL;
-    list_t *l = nl->getSharedStatTypes ();
-    if (l && !list_isempty (l)) {
-      _weak_supplies = list_new ();
-      for (listitem_t *li = list_first (l); li; li = list_next (li)) {
-	LayoutBlob *b =
-	  _createweaksupply ((ActNetlistPass::shared_stat *)list_value (li));
-	list_append (_weak_supplies, b);
-      }
-    }
+  if (!dummy_netlist) {
+    fatal_error ("Layout generation: could not find both power supplies for substrate contacts!");
   }
 
-  void ActStackLayout::_emitlocalRect (Process *p)
-  {
-    LayoutBlob *blob = getLayout (p);
+  /* create welltap cells */
+  int ntaps = config_get_table_size ("act.dev_flavors");
+  _wellplug_count = ntaps;
+  MALLOC (wellplugs, LayoutBlob *, ntaps);
+  for (int flavor=0; flavor < ntaps; flavor++) {
+    wellplugs[flavor] = _createwelltap (flavor);
+  }
 
-    if (!blob) {
-      return;
+  /* create any shared staticizer cells */
+  _weak_supplies = NULL;
+  list_t *l = nl->getSharedStatTypes ();
+  if (l && !list_isempty (l)) {
+    _weak_supplies = list_new ();
+    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
+      LayoutBlob *b =
+	_createweaksupply ((ActNetlistPass::shared_stat *)list_value (li));
+      list_append (_weak_supplies, b);
     }
+  }
+}
 
-    Rectangle bloatbox;
-    bloatbox = blob->getBloatBBox ();
+void ActStackLayout::_emitlocalRect (Process *p)
+{
+  LayoutBlob *blob = getLayout (p);
 
-    if (bloatbox.empty()) {
-      /* no layout */
-      return;
+  if (!blob) {
+    return;
+  }
+
+  Rectangle bloatbox;
+  bloatbox = blob->getBloatBBox ();
+
+  if (bloatbox.empty()) {
+    /* no layout */
+    return;
+  }
+
+  TransformMat mat;
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+
+  FILE *fp;
+  char cname[10240];
+
+  if (p) {
+    a->msnprintfproc (cname, 10240, p);
+  }
+  else {
+    snprintf (cname, 10240, "toplevel");
+  }
+  int len = strlen (cname);
+  snprintf (cname + len, 10240-len, ".rect");
+
+
+  const char *outdir;
+  if (blob->getRead()) {
+    outdir = _rect_outdir;
+  }
+  else {
+    outdir = _rect_outinitdir;
+  }
+
+  if (outdir) {
+    char *outname;
+    int sz = strlen (cname) + strlen (outdir) + 2;
+    MALLOC (outname, char, sz);
+    snprintf (outname, sz, "%s/%s", outdir, cname);
+    fp = fopen (outname, "w");
+    if (!fp) {
+      fatal_error ("Could not open file `%s' for writing", outname);
     }
-
-    TransformMat mat;
-    mat.translate (-bloatbox.llx(), -bloatbox.lly());
-
-    FILE *fp;
-    char cname[10240];
-
-    if (p) {
-      a->msnprintfproc (cname, 10240, p);
+    FREE (outname);
+  }
+  else {
+    fp = fopen (cname, "w");
+    if (!fp) {
+      fatal_error ("Could not open file `%s' for writing", cname);
     }
-    else {
-      snprintf (cname, 10240, "toplevel");
-    }
-    int len = strlen (cname);
-    snprintf (cname + len, 10240-len, ".rect");
+  }
+  blob->PrintRect (fp, &mat);
 
+  if (_rect_wells) {
 
-    const char *outdir;
-    if (blob->getRead()) {
-      outdir = _rect_outdir;
-    }
-    else {
-      outdir = _rect_outinitdir;
-    }
-
-    if (outdir) {
-      char *outname;
-      int sz = strlen (cname) + strlen (outdir) + 2;
-      MALLOC (outname, char, sz);
-      snprintf (outname, sz, "%s/%s", outdir, cname);
-      fp = fopen (outname, "w");
-      if (!fp) {
-	fatal_error ("Could not open file `%s' for writing", outname);
-      }
-      FREE (outname);
-    }
-    else {
-      fp = fopen (cname, "w");
-      if (!fp) {
-	fatal_error ("Could not open file `%s' for writing", cname);
-      }
-    }
-    blob->PrintRect (fp, &mat);
-
-    if (_rect_wells) {
-
-      for (int i=0; i < Technology::T->num_devs; i++) {
-	for (int j=0; j < 2; j++) {
-	  long wllx, wlly, wurx, wury;
-	  _computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
-	  if (wllx < wurx && wlly < wury) {
-	    fprintf (fp, "rect # %s %ld %ld %ld %ld\n",
-		     Technology::T->well[j][i]->getName(),
-		     wllx, wlly, wurx, wury);
-	  }
+    for (int i=0; i < Technology::T->num_devs; i++) {
+      for (int j=0; j < 2; j++) {
+	long wllx, wlly, wurx, wury;
+	_computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
+	if (wllx < wurx && wlly < wury) {
+	  fprintf (fp, "rect # %s %ld %ld %ld %ld\n",
+		   Technology::T->well[j][i]->getName(),
+		   wllx, wlly, wurx, wury);
 	}
       }
     }
-  
-    fclose (fp);
   }
-
-  static void emit_header (FILE *fp, const char *name, const char *lefclass,
-			   LayoutBlob *blob)
-  {
-    double scale = Technology::T->scale/1000.0;
   
-    fprintf (fp, "MACRO %s\n", name);
-    fprintf (fp, "    CLASS %s ;\n", lefclass);
-    fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
-    fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
+  fclose (fp);
+}
 
-    Rectangle bloatbox;
-    bloatbox = blob->getBloatBBox ();
+static void emit_header (FILE *fp, const char *name, const char *lefclass,
+			 LayoutBlob *blob)
+{
+  double scale = Technology::T->scale/1000.0;
+  
+  fprintf (fp, "MACRO %s\n", name);
+  fprintf (fp, "    CLASS %s ;\n", lefclass);
+  fprintf (fp, "    FOREIGN %s %.6f %.6f ;\n", name, 0.0, 0.0);
+  fprintf (fp, "    ORIGIN %.6f %.6f ;\n", 0.0, 0.0);
+
+  Rectangle bloatbox;
+  bloatbox = blob->getBloatBBox ();
 
 #if 0  
-    printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
+  printf ("SIZE: %ld x %ld\n", burx - bllx + 1, bury - blly + 1);
 #endif
   
-    fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
-	     bloatbox.wx()*scale, bloatbox.wy()*scale);
-    fprintf (fp, "    SYMMETRY X Y ;\n");
-    fprintf (fp, "    SITE CoreSite ;\n");
-  }
+  fprintf (fp, "    SIZE %.6f BY %.6f ;\n",
+	   bloatbox.wx()*scale, bloatbox.wy()*scale);
+  fprintf (fp, "    SYMMETRY X Y ;\n");
+  fprintf (fp, "    SITE CoreSite ;\n");
+}
 
 
-  static void emit_footer (FILE *fp, const char *name)
-  {
-    fprintf (fp, "END %s\n\n", name);
-  }
+static void emit_footer (FILE *fp, const char *name)
+{
+  fprintf (fp, "END %s\n\n", name);
+}
 
-  static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
-			       int num_io = 0)
-  {
-    double scale = Technology::T->scale/1000.0;
-    listitem_t *tli;
-    int emit_obs = 0;
+static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
+			     int num_io = 0)
+{
+  double scale = Technology::T->scale/1000.0;
+  listitem_t *tli;
+  int emit_obs = 0;
 
-    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-      listitem_t *xi;
-      Layer *lprev = NULL;
+  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+    listitem_t *xi;
+    Layer *lprev = NULL;
 
-      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-	Layer *lname = (Layer *) list_value (xi);
-	xi = list_next (xi);
-	Assert (xi, "Hmm");
+    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+      Layer *lname = (Layer *) list_value (xi);
+      xi = list_next (xi);
+      Assert (xi, "Hmm");
 
-	if (!lname->isMetal()) {
-	  continue;
-	}
-
-	list_t *actual_tiles = (list_t *) list_value (xi);
-	listitem_t *ti;
-	int first = 1;
-      
-	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	  long tllx, tlly, turx, tury;
-	  Tile *tmp = (Tile *) list_value (ti);
-
-	  if (tmp->getNet()) {
-	    int k;
-	    for (k=0; k < num_io; k++) {
-	      if (tmp->getNet() == io[k])
-		break;
-	    }
-	    if (k != num_io) {
-	      /* skip! */
-	      continue;
-	    }
-	  }
-
-	  if (first) {
-	    if (!emit_obs && io != NULL) {
-	      fprintf (fp, "    OBS\n");
-	      emit_obs = 1;
-	    }
-	    if (lname == lprev) {
-	      fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
-	    }
-	    else {
-	      fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
-	    }
-	  }
-	  first = 0;
-	
-	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-
-	  if (tllx > turx) {
-	    long x = tllx;
-	    tllx = turx;
-	    turx = x;
-	  }
-	  
-	  if (tlly > tury) {
-	    long x = tlly;
-	    tlly = tury;
-	    tury = x;
-	  }
-	
-	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
-		   scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
-	}
-	lprev = lname;
+      if (!lname->isMetal()) {
+	continue;
       }
-    }
-    return emit_obs;
-  }
 
-  static void emit_antenna_area (FILE *fp, list_t *tiles)
-  {
-    double scale = Technology::T->scale/1000.0;
-    listitem_t *tli;
-    double ant_area = 0.0;
-    double ant_diffarea = 0.0;
-
-    for (tli = list_first (tiles); tli; tli = list_next (tli)) {
-      struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
-      listitem_t *xi;
-
-      for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
-	Layer *lname = (Layer *) list_value (xi);
-	xi = list_next (xi);
-	Assert (xi, "Hmm");
-
-	if (lname->isMetal()) {
-	  continue;
-	}
-
-	list_t *actual_tiles = (list_t *) list_value (xi);
-	listitem_t *ti;
-	int first = 1;
+      list_t *actual_tiles = (list_t *) list_value (xi);
+      listitem_t *ti;
+      int first = 1;
       
-	for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
-	  long tllx, tlly, turx, tury;
-	  Tile *tmp = (Tile *) list_value (ti);
+      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	long tllx, tlly, turx, tury;
+	Tile *tmp = (Tile *) list_value (ti);
 
-	  tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
-	  tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
-	
-	  if (tllx > turx) {
-	    long x = tllx;
-	    tllx = turx;
-	    turx = x;
+	if (tmp->getNet()) {
+	  int k;
+	  for (k=0; k < num_io; k++) {
+	    if (tmp->getNet() == io[k])
+	      break;
 	  }
-
-	  if (tlly > tury) {
-	    long x = tlly;
-	    tlly = tury;
-	    tury = x;
-	  }
-	
-	  if (tmp->isFet()) {
-	    ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
-	  }
-	  else if (tmp->isDiff()) {
-	    ant_diffarea += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	  if (k != num_io) {
+	    /* skip! */
+	    continue;
 	  }
 	}
-      }
-    }
-    if (ant_area > 0) {
-      fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
-    }
-    if (ant_diffarea > 0) {
-      fprintf (fp, "        ANTENNADIFFAREA %.6f ;\n", ant_diffarea);
-    }
-  }  
 
-
-  static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
-			    const char *sigtype, LayoutBlob *blob,
-			    node_t *signode)
-  {
-    double scale = Technology::T->scale/1000.0;
-
-    Rectangle bloatbox = blob->getBloatBBox ();
-  
-    fprintf (fp, "    PIN ");
-    a->mfprintf (fp, "%s\n", name);
-  
-    //printf ("pin %s [node 0x%lx]\n", name, (unsigned long)signode);
-
-    fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
-    fprintf (fp, "        USE %s ;\n", sigtype);
-
-    fprintf (fp, "        PORT\n");
-
-    /* -- find all pins of this name! -- */
-    TransformMat mat;
-    mat.translate (-bloatbox.llx(), -bloatbox.lly());
-    list_t *tiles = blob->search (signode, &mat);
-    emit_layer_rects (fp, tiles);
-
-    fprintf (fp, "        END\n");
-
-    // now we emit just the fet area for antennas
-    emit_antenna_area (fp, tiles);
-
-    LayoutBlob::searchFree (tiles);
-
-    fprintf (fp, "    END ");
-    a->mfprintf (fp, "%s", name);
-    fprintf (fp, "\n");
-  }
-
-
-  void ActStackLayout::_getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy)
-  {
-    long bllx, blly, burx, bury;
-
-    if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
-      *dx = 0;
-      *dy = 0;
-    }
-    else {
-      *dx = (burx - bllx + 1);
-      *dy = (bury - blly + 1);
-    }
-  }
-
-  void ActStackLayout::_getNetDetails (Process *p, unsigned long *ncount,
-				       unsigned long *ecount,
-				       unsigned long *ekeeper)
-  {
-    LayoutBlob *blob = getLayout (p);
-
-    *ncount = 0;
-    *ecount = 0;
-    *ekeeper = 0;
-  
-    if (blob) {
-      netlist_t *mynl = nl->getNL (p);
-      node_t *n;
-
-      for (n = mynl->hd; n; n = n->next) {
-	(*ncount) = (*ncount) + 1;
-	listitem_t *li;
-	edge_t *e;
-	for (li = list_first (n->e); li; li = list_next (li)) {
-	  e = (edge_t *) list_value (li);
-	  if (e->keeper) {
-	    (*ekeeper) = (*ekeeper) + 1;
+	if (first) {
+	  if (!emit_obs && io != NULL) {
+	    fprintf (fp, "    OBS\n");
+	    emit_obs = 1;
+	  }
+	  if (lname == lprev) {
+	    fprintf (fp, "        LAYER %s ;\n", lname->getViaName());
 	  }
 	  else {
-	    (*ecount) = (*ecount) + 1;
+	    fprintf (fp, "        LAYER %s ;\n", lname->getRouteName());
 	  }
 	}
+	first = 0;
+	
+	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+
+	if (tllx > turx) {
+	  long x = tllx;
+	  tllx = turx;
+	  turx = x;
+	}
+	  
+	if (tlly > tury) {
+	  long x = tlly;
+	  tlly = tury;
+	  tury = x;
+	}
+	
+	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		 scale*tllx, scale*tlly, scale*(1+turx), scale*(1+tury));
       }
-      *ecount /= 2;
-      *ekeeper /= 2;
+      lprev = lname;
     }
   }
+  return emit_obs;
+}
 
-  void ActStackLayout::runrec (int mode, UserDef *u)
-  {
-    if (mode == 1) {
-      /* emitLEF */
-    
-      /*-- emit lef for the welltap cells --*/
-      double scale = Technology::T->scale/1000.0;
-      for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-	_emitwelltaplef (i);
+static void emit_antenna_area (FILE *fp, list_t *tiles)
+{
+  double scale = Technology::T->scale/1000.0;
+  listitem_t *tli;
+  double ant_area = 0.0;
+  double ant_diffarea = 0.0;
+
+  for (tli = list_first (tiles); tli; tli = list_next (tli)) {
+    struct tile_listentry *tle = (struct tile_listentry *) list_value (tli);
+    listitem_t *xi;
+
+    for (xi = list_first (tle->tiles); xi; xi = list_next (xi)) {
+      Layer *lname = (Layer *) list_value (xi);
+      xi = list_next (xi);
+      Assert (xi, "Hmm");
+
+      if (lname->isMetal()) {
+	continue;
       }
-      /* emit weak supply lef */
-      if (_weak_supplies) {
-	listitem_t *mi = list_first (nl->getSharedStatTypes());
-	for (listitem_t *li = list_first (_weak_supplies); li;
-	     li = list_next (li)) {
-	  LayoutBlob *b = (LayoutBlob *) list_value (li);
-	  ActNetlistPass::shared_stat *ss =
-	    (ActNetlistPass::shared_stat *) list_value (mi);
-	  _emitweaksupplylef (ss, b);
-	  mi = list_next (mi);
+
+      list_t *actual_tiles = (list_t *) list_value (xi);
+      listitem_t *ti;
+      int first = 1;
+      
+      for (ti = list_first (actual_tiles); ti; ti = list_next (ti)) {
+	long tllx, tlly, turx, tury;
+	Tile *tmp = (Tile *) list_value (ti);
+
+	tle->m.apply (tmp->getllx(), tmp->getlly(), &tllx, &tlly);
+	tle->m.apply (tmp->geturx(), tmp->getury(), &turx, &tury);
+	
+	if (tllx > turx) {
+	  long x = tllx;
+	  tllx = turx;
+	  turx = x;
+	}
+
+	if (tlly > tury) {
+	  long x = tlly;
+	  tlly = tury;
+	  tury = x;
+	}
+	
+	if (tmp->isFet()) {
+	  ant_area += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
+	}
+	else if (tmp->isDiff()) {
+	  ant_diffarea += (turx-tllx+1)*scale*(tury-tlly+1)*scale;
 	}
       }
-
-      /* done with LEF */
-      _lef_header = 0;
-      _cell_header = 0;
-    }
-    else if (mode == 2) {
-      /* nothing */
-    }
-    else if (mode == 3) {
-      _maxht = _ymax - _ymin + 1;
-    }
-    else if (mode == 4) {
-      /* emitRect */
-      for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
-	_emitwelltaprect (i);
-      }
-
-      /* emit weak supply rect */
-      if (_weak_supplies) {
-	listitem_t *mi = list_first (nl->getSharedStatTypes());
-	for (listitem_t *li = list_first (_weak_supplies); li;
-	     li = list_next (li)) {
-	  LayoutBlob *b = (LayoutBlob *) list_value (li);
-	  ActNetlistPass::shared_stat *ss =
-	    (ActNetlistPass::shared_stat *) list_value (mi);
-	  _emitweaksupplyrect (ss, b);
-	  mi = list_next (mi);
-	}
-      }
-    }
-    else if (mode == 5) {
-      /* emitDEF */
-      FILE *fp;
-      Process *p = dynamic_cast<Process *> (u);
-      double area_mult;
-      double aspect_ratio;
-      double bb_x;
-      double bb_y;
-      double bb_llx = 0;
-      double bb_lly = 0;
-      int is_bb = 0;
-      int do_pins;
-      ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
-      if (!p || !dp) {
-	return;
-      }
-
-      dp->run_recursive (p, 3);
-      dp->setParam ("cell_maxheight", _maxht);
-    
-      fp = (FILE *) dp->getPtrParam ("def_file");
-      do_pins = dp->getIntParam ("do_pins");
-      if (dp->hasParam("is_bb")) {
-	is_bb = dp->getIntParam ("is_bb");
-      }
-      if (is_bb) {
-	bb_x = dp->getRealParam ("bb_x");
-	bb_y = dp->getRealParam ("bb_y");
-	if (dp->hasParam ("bb_llx")) {
-	  bb_llx = dp->getRealParam ("bb_llx");
-	}
-	if (dp->hasParam ("bb_lly")) {
-	  bb_lly = dp->getRealParam ("bb_lly");
-	}
-	emitDEF (fp, p, bb_x, bb_y, do_pins, true, bb_llx, bb_lly);
-      }
-      else {
-	area_mult = dp->getRealParam ("area_mult");
-	aspect_ratio = dp->getRealParam ("aspect_ratio");
-	emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
-      }
-    
-      dp->setParam ("total_area", _total_area);
-      dp->setParam ("stdcell_area", _total_stdcell_area);
     }
   }
-
-
-  struct report_info {
-    char *str;
-    double metric;
-  };
-
-  L_A_DECL(report_info, _report);
-  static void _init_report ()
-  {
-    A_INIT (_report);
+  if (ant_area > 0) {
+    fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
   }
-
-  static void _add_report (char *s, double metric)
-  {
-    A_NEW (_report, report_info);
-    A_NEXT (_report).str = Strdup (s);
-    A_NEXT (_report).metric = metric;
-    A_INC (_report);
+  if (ant_diffarea > 0) {
+    fprintf (fp, "        ANTENNADIFFAREA %.6f ;\n", ant_diffarea);
   }
+}  
 
 
-  // condition to swap
-  static int mycmpfn (char *a, char *b)
-  {
-    report_info *ra = (report_info *) a;
-    report_info *rb = (report_info *) b;
-    if (ra->metric < rb->metric) return 1;
-    return 0;
-  }
+static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
+			  const char *sigtype, LayoutBlob *blob,
+			  node_t *signode)
+{
+  double scale = Technology::T->scale/1000.0;
 
-  static void _print_report (FILE *fp)
-  {
-    mygenmergesort ((char *)_report, sizeof (report_info), A_LEN (_report),
-		    mycmpfn);
+  Rectangle bloatbox = blob->getBloatBBox ();
   
-    for (int i=0; i < A_LEN (_report); i++) {
-      fprintf (fp, "  %s\n", _report[i].str);
-      FREE (_report[i].str);
-    }
-    A_FREE (_report);
-  }
+  fprintf (fp, "    PIN ");
+  a->mfprintf (fp, "%s\n", name);
+  
+  //printf ("pin %s [node 0x%lx]\n", name, (unsigned long)signode);
 
-  void layout_recursive (ActPass *_ap, UserDef *u, int mode)
-  {
-    ActDynamicPass *dp;
-    if (!_ap->completed()) {
+  fprintf (fp, "        DIRECTION %s ;\n", isinput ? "INPUT" : "OUTPUT");
+  fprintf (fp, "        USE %s ;\n", sigtype);
+
+  fprintf (fp, "        PORT\n");
+
+  /* -- find all pins of this name! -- */
+  TransformMat mat;
+  mat.translate (-bloatbox.llx(), -bloatbox.lly());
+  list_t *tiles = blob->search (signode, &mat);
+  emit_layer_rects (fp, tiles);
+
+  fprintf (fp, "        END\n");
+
+  // now we emit just the fet area for antennas
+  emit_antenna_area (fp, tiles);
+
+  LayoutBlob::searchFree (tiles);
+
+  fprintf (fp, "    END ");
+  a->mfprintf (fp, "%s", name);
+  fprintf (fp, "\n");
+}
+
+
+void ActStackLayout::_getAreaInfo (Process *p, unsigned long *dx, unsigned long *dy)
+{
+  long bllx, blly, burx, bury;
+
+  if (!getBBox (p, &bllx, &blly, &burx, &bury)) {
+    *dx = 0;
+    *dy = 0;
+  }
+  else {
+    *dx = (burx - bllx + 1);
+    *dy = (bury - blly + 1);
+  }
+}
+
+void ActStackLayout::_getNetDetails (Process *p, unsigned long *ncount,
+				     unsigned long *ecount,
+				     unsigned long *ekeeper)
+{
+  LayoutBlob *blob = getLayout (p);
+
+  *ncount = 0;
+  *ecount = 0;
+  *ekeeper = 0;
+  
+  if (blob) {
+    netlist_t *mynl = nl->getNL (p);
+    node_t *n;
+
+    for (n = mynl->hd; n; n = n->next) {
+      (*ncount) = (*ncount) + 1;
+      listitem_t *li;
+      edge_t *e;
+      for (li = list_first (n->e); li; li = list_next (li)) {
+	e = (edge_t *) list_value (li);
+	if (e->keeper) {
+	  (*ekeeper) = (*ekeeper) + 1;
+	}
+	else {
+	  (*ecount) = (*ecount) + 1;
+	}
+      }
+    }
+    *ecount /= 2;
+    *ekeeper /= 2;
+  }
+}
+
+void ActStackLayout::runrec (int mode, UserDef *u)
+{
+  if (mode == 1) {
+    /* emitLEF */
+    
+    /*-- emit lef for the welltap cells --*/
+    double scale = Technology::T->scale/1000.0;
+    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+      _emitwelltaplef (i);
+    }
+    /* emit weak supply lef */
+    if (_weak_supplies) {
+      listitem_t *mi = list_first (nl->getSharedStatTypes());
+      for (listitem_t *li = list_first (_weak_supplies); li;
+	   li = list_next (li)) {
+	LayoutBlob *b = (LayoutBlob *) list_value (li);
+	ActNetlistPass::shared_stat *ss =
+	  (ActNetlistPass::shared_stat *) list_value (mi);
+	_emitweaksupplylef (ss, b);
+	mi = list_next (mi);
+      }
+    }
+
+    /* done with LEF */
+    _lef_header = 0;
+    _cell_header = 0;
+  }
+  else if (mode == 2) {
+    /* nothing */
+  }
+  else if (mode == 3) {
+    _maxht = _ymax - _ymin + 1;
+  }
+  else if (mode == 4) {
+    /* emitRect */
+    for (int i=0; i < config_get_table_size ("act.dev_flavors"); i++) {
+      _emitwelltaprect (i);
+    }
+
+    /* emit weak supply rect */
+    if (_weak_supplies) {
+      listitem_t *mi = list_first (nl->getSharedStatTypes());
+      for (listitem_t *li = list_first (_weak_supplies); li;
+	   li = list_next (li)) {
+	LayoutBlob *b = (LayoutBlob *) list_value (li);
+	ActNetlistPass::shared_stat *ss =
+	  (ActNetlistPass::shared_stat *) list_value (mi);
+	_emitweaksupplyrect (ss, b);
+	mi = list_next (mi);
+      }
+    }
+  }
+  else if (mode == 5) {
+    /* emitDEF */
+    FILE *fp;
+    Process *p = dynamic_cast<Process *> (u);
+    double area_mult;
+    double aspect_ratio;
+    double bb_x;
+    double bb_y;
+    double bb_llx = 0;
+    double bb_lly = 0;
+    int is_bb = 0;
+    int do_pins;
+    ActDynamicPass *dp = dynamic_cast<ActDynamicPass *>(me);
+    if (!p || !dp) {
       return;
     }
-    dp = dynamic_cast<ActDynamicPass *>(_ap);
-    Assert (dp, "What?");
-    ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
-    lp->runrec (mode, u);
-    if (mode == 2) {
-      dp->setParam ("area_collected", 1);
-      if (dp->hasParam ("hier_report")) {
-	phash_bucket_t *b;
-	phash_iter_t it;
+
+    dp->run_recursive (p, 3);
+    dp->setParam ("cell_maxheight", _maxht);
+    
+    fp = (FILE *) dp->getPtrParam ("def_file");
+    do_pins = dp->getIntParam ("do_pins");
+    if (dp->hasParam("is_bb")) {
+      is_bb = dp->getIntParam ("is_bb");
+    }
+    if (is_bb) {
+      bb_x = dp->getRealParam ("bb_x");
+      bb_y = dp->getRealParam ("bb_y");
+      if (dp->hasParam ("bb_llx")) {
+	bb_llx = dp->getRealParam ("bb_llx");
+      }
+      if (dp->hasParam ("bb_lly")) {
+	bb_lly = dp->getRealParam ("bb_lly");
+      }
+      emitDEF (fp, p, bb_x, bb_y, do_pins, true, bb_llx, bb_lly);
+    }
+    else {
+      area_mult = dp->getRealParam ("area_mult");
+      aspect_ratio = dp->getRealParam ("aspect_ratio");
+      emitDEF (fp, p, area_mult, aspect_ratio, do_pins, false);
+    }
+    
+    dp->setParam ("total_area", _total_area);
+    dp->setParam ("stdcell_area", _total_stdcell_area);
+  }
+}
+
+
+struct report_info {
+  char *str;
+  double metric;
+};
+
+L_A_DECL(report_info, _report);
+static void _init_report ()
+{
+  A_INIT (_report);
+}
+
+static void _add_report (char *s, double metric)
+{
+  A_NEW (_report, report_info);
+  A_NEXT (_report).str = Strdup (s);
+  A_NEXT (_report).metric = metric;
+  A_INC (_report);
+}
+
+
+// condition to swap
+static int mycmpfn (char *a, char *b)
+{
+  report_info *ra = (report_info *) a;
+  report_info *rb = (report_info *) b;
+  if (ra->metric < rb->metric) return 1;
+  return 0;
+}
+
+static void _print_report (FILE *fp)
+{
+  mygenmergesort ((char *)_report, sizeof (report_info), A_LEN (_report),
+		  mycmpfn);
+  
+  for (int i=0; i < A_LEN (_report); i++) {
+    fprintf (fp, "  %s\n", _report[i].str);
+    FREE (_report[i].str);
+  }
+  A_FREE (_report);
+}
+
+void layout_recursive (ActPass *_ap, UserDef *u, int mode)
+{
+  ActDynamicPass *dp;
+  if (!_ap->completed()) {
+    return;
+  }
+  dp = dynamic_cast<ActDynamicPass *>(_ap);
+  Assert (dp, "What?");
+  ActStackLayout *lp = (ActStackLayout *)dp->getPtrParam ("raw");
+  lp->runrec (mode, u);
+  if (mode == 2) {
+    dp->setParam ("area_collected", 1);
+    if (dp->hasParam ("hier_report")) {
+      phash_bucket_t *b;
+      phash_iter_t it;
       struct pHashtable *tab;
       const char *tmp = (const char *) dp->getPtrParam ("hier_report");
       Process *report;
@@ -2651,9 +2660,9 @@ int ActStackLayout::_emitlocalLEF (Process *p)
       emit_one_pin (a, fp, config_get_string ("net.global_vdd"),
 		    1, "POWER", blob, n->Vdd);
 
-    A_NEW (iopins, node_t *);
-    A_NEXT (iopins) = n->Vdd;
-    A_INC (iopins);
+      A_NEW (iopins, node_t *);
+      A_NEXT (iopins) = n->Vdd;
+      A_INC (iopins);
     }
   }
 
@@ -2838,34 +2847,34 @@ void ActStackLayout::_emitLocalWellLEF (FILE *fp, Process *p)
   fprintf (fp, "\n");
 
   /*for (int lef=0; lef < 2; lef++)*/ {
-  int lef = 0;
-  fprintf (fp, "    VERSION ");
-  a->mfprintfproc (fp, p);
-  if (lef == 1) {
-    fprintf (fp, "_plug");
-  }
-  fprintf (fp, "\n");
-  if (lef == 0) {
-    fprintf (fp, "        UNPLUG\n");
-  }
-  else {
-    fprintf (fp, "        PLUG\n");
-  }
+    int lef = 0;
+    fprintf (fp, "    VERSION ");
+    a->mfprintfproc (fp, p);
+    if (lef == 1) {
+      fprintf (fp, "_plug");
+    }
+    fprintf (fp, "\n");
+    if (lef == 0) {
+      fprintf (fp, "        UNPLUG\n");
+    }
+    else {
+      fprintf (fp, "        PLUG\n");
+    }
 
-  for (int i=0; i < Technology::T->num_devs; i++) {
-    for (int j=0; j < 2; j++) {
-      long wllx, wlly, wurx, wury;
-      _computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
+    for (int i=0; i < Technology::T->num_devs; i++) {
+      for (int j=0; j < 2; j++) {
+	long wllx, wlly, wurx, wury;
+	_computeWell (blob, i, j, &wllx, &wlly, &wurx, &wury);
 
-      if (wllx < wurx && wlly < wury) {
-	fprintf (fp, "        LAYER %s ;\n", Technology::T->well[j][i]->getName());
-	fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
-		 scale*wllx, scale*wlly, scale*wurx, scale*wury);
-	fprintf (fp, "        END\n");
+	if (wllx < wurx && wlly < wury) {
+	  fprintf (fp, "        LAYER %s ;\n", Technology::T->well[j][i]->getName());
+	  fprintf (fp, "        RECT %.6f %.6f %.6f %.6f ;\n",
+		   scale*wllx, scale*wlly, scale*wurx, scale*wury);
+	  fprintf (fp, "        END\n");
+	}
       }
     }
-  }
-  fprintf (fp, "    END VERSION\n");
+    fprintf (fp, "    END VERSION\n");
   }
   
   fprintf (fp, "END ");
@@ -3929,11 +3938,11 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
   track_gap = pitchy * TRACK_HEIGHT;
 
-   /* 
-   make it able to specify the area as a bounding box instead of a ratio and densety
-   the question here is, do we also skip the track snapping from below?
-   for now no, but might be nessesary, margins are removed to not mess with floorplanning.
-   */
+  /* 
+     make it able to specify the area as a bounding box instead of a ratio and densety
+     the question here is, do we also skip the track snapping from below?
+     for now no, but might be nessesary, margins are removed to not mess with floorplanning.
+  */
   if (is_bounding_box) {
     sidex = pad;
     sidey = ratio;
@@ -3964,8 +3973,8 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     ny = (sidey + track_gap - 1)/track_gap;
 
     fprintf (fp, "DIEAREA ( %d %d ) ( %d %d ) ;\n",
-      10*pitchx, track_gap,
-      (10+nx)*pitchx, (1+ny)*track_gap);
+	     10*pitchx, track_gap,
+	     (10+nx)*pitchx, (1+ny)*track_gap);
   }
   
   //  fprintf (fp, "\nROW CORE_ROW_0 CoreSite %d %d N DO %d BY 1 STEP %d 0 ;\n\n",
@@ -3982,29 +3991,29 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     int ntracksy = (track_gap*ny)/pitchxy;
 
     /* if a bounding box is specified we dont add a margin to keep inside the bb, 
-    the top level floorplanning is responcible for the margins*/
+       the top level floorplanning is responcible for the margins*/
     if (is_bounding_box) {
       /* vertical tracks */
       if (ntracksx > 0) {
         fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
-          startxy, ntracksx, pitchxy, mx->getLEFName());
+		 startxy, ntracksx, pitchxy, mx->getLEFName());
       }
       /* horizontal tracks */
       if (ntracksy > 0) {
         fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
-          startxy, ntracksy, pitchxy, mx->getLEFName());
+		 startxy, ntracksy, pitchxy, mx->getLEFName());
       }
     }
     else {
       /* vertical tracks */
       if (ntracksx > 0) {
         fprintf (fp, "TRACKS X %d DO %d STEP %d LAYER %s ;\n",
-          10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
+		 10*pitchx + startxy, ntracksx, pitchxy, mx->getLEFName());
       }
       /* horizontal tracks */
       if (ntracksy > 0) {
         fprintf (fp, "TRACKS Y %d DO %d STEP %d LAYER %s ;\n",
-          track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
+		 track_gap + startxy, ntracksy, pitchxy, mx->getLEFName());
       }
     }
   
@@ -4040,7 +4049,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
       num_pins++;
     }
 
-        /* gloal nets */
+    /* gloal nets */
     for (int i=0; i < A_LEN (act_bnl->nets); i++) {
       if (act_bnl->nets[i].net->isglobal()) {
 	ActId *tmp = act_bnl->nets[i].net->toid();
@@ -5267,21 +5276,6 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
  */
 LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
 {
-  BBox b;
-
-  b.n.llx = 0;
-  b.n.lly = 0;
-  b.n.urx = 0;
-  b.n.ury = 0;
-  b.p = b.n;
-
-  Layout *l = new Layout (s->nl);
-
-  // everything needs a contact!
-  for (node_t *n = s->nl->hd; n; n = n->next) {
-    n->contact = 1;
-  }
-
   // XXX: compute the diffspace here. This is much simpler because
   // there are no notches/etc.
 
@@ -5290,70 +5284,18 @@ LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
   diffspace = MAX(diffspace,
 		  Technology::T->diff[EDGE_PFET][s->en->flavor]->getOppDiffSpacing (s->en->flavor));
 
-  if (s->en && s->ep) {
-    struct gate_pairs gp;
-    gp.basepair = 1;
-    gp.visited = 0;
-    gp.share = 1;
-    gp.n_start = 0;
-    gp.p_start = 0;
-    gp.n_fold = 0;
-    gp.p_fold = 0;
-    gp.nodeshare = 0;
+  Assert (s->extra2 == NULL, "What?");
+  Assert (s->extra1 != NULL, "What?");
+  LayoutBlob *b = _createlocallayout_stk (s->nl, (list_t *) s->extra1, diffspace);
 
-    gp.l.n = s->en->a;
-    gp.l.p = s->ep->a;
-    gp.r.n = s->en->b;
-    gp.r.p = s->ep->b;
-    gp.u.e.n = s->en;
-    gp.u.e.p = s->ep;
-
-    diffspace = MAX(diffspace,
-		    Technology::T->poly->getOverhang (getlength (gp.u.e.n, 0)));
-
-    b = print_dualstack (l, &gp, diffspace);
-    
-    l->DrawDiffBBox (b.flavor, EDGE_PFET, b.p.llx, b.p.lly,
-		     b.p.urx - b.p.llx, b.p.ury - b.p.lly);
-    l->DrawDiffBBox (b.flavor, EDGE_NFET, b.n.llx, b.n.lly,
-		     b.n.urx - b.n.llx, b.n.ury - b.n.lly);
-  }
-  else if (s->en) {
-    list_t *onestk = list_new ();
-    list_append (onestk, s->en->a);
-    list_append (onestk, s->en);
-    list_append (onestk, (void *)(long)0);
-    list_append (onestk, s->en->b);
-    list_t *stk = list_new ();
-    list_append (stk, onestk);
-    
-    b = print_singlestack (l, stk, diffspace, 0);
-    
-    list_free (onestk);
-    list_free (stk);
-  }
-  else {
-    list_t *onestk = list_new ();
-    list_append (onestk, s->en->a);
-    list_append (onestk, s->en);
-    list_append (onestk, (void *)(long)0);
-    list_append (onestk, s->en->b);
-    list_t *stk = list_new ();
-    list_append (stk, onestk);
-    
-    b = print_singlestack (l, stk, diffspace, 0);
-    
-    list_free (onestk);
-    list_free (stk);
-  }
-  LayoutBlob *BLOB = new LayoutBlob (BLOB_BASE, l);
-  BLOB = computeLEFBoundary (BLOB);
-
-  /* add pins */
+  /* now we manually add our special pins */
   Rectangle b_bbox;
-  b_bbox = BLOB->getBBox ();
-
+  b_bbox = b->getBBox ();
   int tedge;
+
+  /* we have either 3 or 4 pins */
+  int npins = s->en && s->ep ? 4 : 3;
+
   tedge = snap_up_y (b_bbox.ury() - b_bbox.lly() + 1);
 
   while (tedge - _pin_metal->getLEFWidth() <=
@@ -5375,19 +5317,21 @@ LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
 
   if (s->ep) {
     pins->DrawMetalPin (_pin_layer,
-			b_bbox.llx() + p,
-			b_bbox.lly() + _m_align_y->getPitch(), w, w,
-			s->ep->b, 0);
+                       b_bbox.llx() + p,
+                       b_bbox.lly() + _m_align_y->getPitch(), w, w,
+                       s->ep->b, 0);
   }
 
   LayoutBlob *bl = new LayoutBlob (BLOB_LIST);
   bl->appendBlob (new LayoutBlob (BLOB_BASE, pins), BLOB_MERGE);
-  bl->appendBlob (BLOB, BLOB_MERGE);
+  bl->appendBlob (b, BLOB_MERGE);
 
   bl = LayoutBlob::delBBox (bl);
-  BLOB = computeLEFBoundary (bl);
+  b = computeLEFBoundary (bl);
 
-  return BLOB;
+  s->extra2 = b;
+
+  return b;
 }
 
 
@@ -5398,7 +5342,7 @@ LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
  *------------------------------------------------------------------------
  */
 void ActStackLayout::_emitweaksupplyrect (ActNetlistPass::shared_stat *ss,
-					    LayoutBlob *b)
+					  LayoutBlob *b)
 {
   char buf[1024];
   char name[1024];
