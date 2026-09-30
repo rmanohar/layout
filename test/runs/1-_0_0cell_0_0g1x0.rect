@@ -1,7 +1,7 @@
 bbox 0 0 96 40
-rect #7 pdiff 87 22 92 27 right
+rect #fb7# pdiff 87 22 92 27 right
 rect # polysilicon 83 27 87 29
-rect #7 ndiff 87 7 92 10 right
+rect #fb7# ndiff 87 7 92 10 right
 rect # ptransistor 83 22 87 27
 rect # polysilicon 83 5 87 7
 rect # ntransistor 83 7 87 10
@@ -29,8 +29,8 @@ rect out pdiff 64 22 67 25 right
 rect # polysilicon 62 25 64 27
 rect # polysilicon 62 5 64 7
 rect # ntransistor 62 7 64 10
-rect #7 polysilicon 62 10 64 12
-rect #7 polysilicon 62 20 64 22
+rect #fb7# polysilicon 62 10 64 12
+rect #fb7# polysilicon 62 20 64 22
 rect # ptransistor 62 22 64 25
 rect # ndiff 59 7 62 10
 rect # pdiff 31 22 62 25
