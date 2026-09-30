@@ -2680,13 +2680,13 @@ int ActStackLayout::_emitlocalLEF (Process *p)
 
   if (n->weak_supply_vdd > 0) {
     char tmp[1024];
-    snprintf (tmp, 1024, "#%d", n->wvdd->i);
+    snprintf (tmp, 1024, "_hash_%d", n->wvdd->i);
     emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wvdd);
   }
 
   if (n->weak_supply_gnd > 0) {
     char tmp[1024];
-    snprintf (tmp, 1024, "#%d", n->wgnd->i);
+    snprintf (tmp, 1024, "_hash_%d", n->wgnd->i);
     emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wgnd);
   }
 
@@ -5423,20 +5423,18 @@ void ActStackLayout::_emitweaksupplylef (ActNetlistPass::shared_stat *ss,
   a->msnprintf (name, 1024, "%s", buf);
   emit_header (_fp, name, "CORE", b);
 
-  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-			       dummy_netlist->Vdd);
-  emit_one_pin (a, _fp, nodename, 1, "POWER", b, dummy_netlist->Vdd);
+  ActNetlistPass::sprint_node (nodename, 1024, ss->nl, ss->nl->Vdd);
+  emit_one_pin (a, _fp, nodename, 1, "POWER", b, ss->nl->Vdd);
 
-  ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist,
-			       dummy_netlist->GND);
-  emit_one_pin (a, _fp, nodename, 1, "GROUND", b, dummy_netlist->GND);
+  ActNetlistPass::sprint_node (nodename, 1024, ss->nl, ss->nl->GND);
+  emit_one_pin (a, _fp, nodename, 1, "GROUND", b, ss->nl->GND);
 
   if (ss->en) {
-    ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist, ss->en->b);
+    ActNetlistPass::sprint_node (nodename, 1024, ss->nl, ss->en->b);
     emit_one_pin (a, _fp, nodename, 0, "SIGNAL", b, ss->en->b);
   }
   if (ss->ep) {
-    ActNetlistPass::sprint_node (nodename, 1024, dummy_netlist, ss->ep->b);
+    ActNetlistPass::sprint_node (nodename, 1024, ss->nl, ss->ep->b);
     emit_one_pin (a, _fp, nodename, 0, "SIGNAL", b, ss->ep->b);
   }
 	

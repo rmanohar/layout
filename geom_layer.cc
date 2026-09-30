@@ -220,15 +220,9 @@ static void dump_node (FILE *fp, netlist_t *N, node_t *n)
     delete tmp;
   }
   else {
-    if (n == N->Vdd) {
-      fprintf (fp, "Vdd");
-    }
-    else if (n == N->GND) {
-      fprintf (fp, "GND");
-    }
-    else {
-      fprintf (fp, "#%d", n->i);
-    }
+    char buf[1024];
+    ActNetlistPass::sprint_node (buf, 1024, N, n);
+    fprintf (fp, "%s", buf);
   }
 }
 
