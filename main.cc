@@ -45,7 +45,7 @@ void usage (char *name)
   fprintf (stderr, " -B <w,h>: emit a snapped bounding-box DIEAREA; width/height use layout units (bb_x/bb_y)\n");
   fprintf (stderr, " -X <llx>, -Y <lly>: bounding-box lower-left in DEF database units (default 0,0)\n");
   fprintf (stderr, " -c <cell>: Read in the <cell> ACT file as a starting point for cells,\n\toverwriting it with an updated version with any new cells\n");
-  fprintf (stderr, " -S : share staticizers\n");
+//  fprintf (stderr, " -S : share staticizers\n");
   //fprintf (stderr, " -A : report area\n");
   fprintf (stderr, " -R : generate report\n");
   fprintf (stderr, "\n");
@@ -67,7 +67,7 @@ int main (int argc, char **argv)
   double area_multiplier;
   double aspect_ratio;
   int report = 0;
-  int share_staticizers = 0;
+//  int share_staticizers = 0;
   int use_bounding_box = 0;
   int bounding_box_dimensions_specified = 0;
   int bounding_box_origin_specified = 0;
@@ -94,11 +94,13 @@ int main (int argc, char **argv)
   }
 #endif
 
-  while ((ch = getopt (argc, argv, "c:p:o:sSPRa:r:B:X:Y:")) != -1) {
+  while ((ch = getopt (argc, argv, "c:p:o:sPRa:r:B:X:Y:")) != -1) {
     switch (ch) {
+#if 0
     case 'S':
       share_staticizers = 1;
       break;
+#endif
       
     case 'R':
       report = 1;
@@ -219,10 +221,11 @@ int main (int argc, char **argv)
 
   ActNetlistPass *netinfo;
   netinfo = dynamic_cast<ActNetlistPass *>(a->pass_find ("prs2net"));
-
+#if 0
   if (share_staticizers) {
     netinfo->enableSharedStat();
   }
+#endif
   netinfo->run (p);
 
   /* --- emit SPICE netlist, if requested --- */
