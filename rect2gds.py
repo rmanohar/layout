@@ -48,7 +48,7 @@ from pprint import pprint
 # for grid snapping
 from fractions import Fraction
 from decimal import Decimal
-from math import gcd
+from math import gcd, ceil, floor
 
 def find_in_stack(stack, name):
     try:
@@ -368,6 +368,11 @@ def middle_snap_grid(a: float, b: float) -> float:
     mid = (A + B) / 2
     q = mid / step
     k = q.numerator // q.denominator
+    k_min = ceil(A / step)
+    k_max = floor(B / step)
+    if k_min > k_max:
+        return float(mid)
+    k = min(max(k, k_min), k_max)
     return float(step * k)
 
 def parse_layout_file(filepath: str, gds, materials, vias, metals, materials_bloat, vias_bloat, metals_bloat, material_text, via_text, metal_text, metal_pin, align, scale: float = 1.0):
