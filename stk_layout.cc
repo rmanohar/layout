@@ -2680,13 +2680,13 @@ int ActStackLayout::_emitlocalLEF (Process *p)
 
   if (n->weak_supply_vdd > 0) {
     char tmp[1024];
-    snprintf (tmp, 1024, "_hash_%d", n->wvdd->i);
+    ActNetlistPass::sprint_node (tmp, 1024, n, n->wvdd);
     emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wvdd);
   }
 
   if (n->weak_supply_gnd > 0) {
     char tmp[1024];
-    snprintf (tmp, 1024, "_hash_%d", n->wgnd->i);
+    ActNetlistPass::sprint_node (tmp, 1024, n, n->wgnd);
     emit_one_pin (a, fp, tmp, 1, "SIGNAL", blob, n->wgnd);
   }
 
@@ -3643,7 +3643,8 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	}
 	A_NEW (_weak[netid].pins, act_local_pin_t);
 	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#2"));
+	ActNetlistPass::sprint_wk_supply (buf, 64, si->weak_vdd);
+	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf));
 	A_INC (_weak[netid].pins);
       }
       if (si->weak_gnd) {
@@ -3664,12 +3665,8 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	}
 	A_NEW (_weak[netid].pins, act_local_pin_t);
 	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	if (si->weak_vdd) {
-	  A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#3"));
-	}
-	else {
-	  A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup ("#2"));
-	}
+	ActNetlistPass::sprint_wk_supply (buf, 64, si->weak_gnd);
+	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf));
 	A_INC (_weak[netid].pins);
       }
     }
@@ -3716,7 +3713,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	      /* XXX DEAL WITH THIS! */
 	      if (inl->weak_supply_vdd > 0) {
 		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-		int netid = find_weak_net (mynl->instport_weak[iweak]);
+		int netid = find_weak_net (mynl->instport_weak[iweak]->i);
 		Assert (netid != -1, "Missing weak supply?");
 
 		A_NEW (_weak[netid].pins, act_local_pin_t);
@@ -3725,7 +3722,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 		MALLOC (tmp, char, len);
 		newid->sPrint (tmp, len);
 		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-		snprintf (buf, 64, "#%d", inl->wvdd->i);
+		ActNetlistPass::sprint_node (buf, 64, inl, inl->wvdd);
 		A_NEXT (_weak[netid].pins).pin = (act_connection *)
 		  FIX_STRING (Strdup (buf));
 		A_INC (_weak[netid].pins);
@@ -3734,7 +3731,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	      }
 	      if (inl->weak_supply_gnd > 0) {
 		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-		int netid = find_weak_net (mynl->instport_weak[iweak]);
+		int netid = find_weak_net (mynl->instport_weak[iweak]->i);
 		Assert (netid != -1, "Missing weak supply?");
 
 		A_NEW (_weak[netid].pins, act_local_pin_t);
@@ -3743,7 +3740,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 		MALLOC (tmp, char, len);
 		newid->sPrint (tmp, len);
 		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-		snprintf (buf, 64, "#%d", inl->wgnd->i);
+		ActNetlistPass::sprint_node (buf, 64, inl, inl->wgnd);
 		A_NEXT (_weak[netid].pins).pin = (act_connection *)
 		  FIX_STRING (Strdup (buf));
 		A_INC (_weak[netid].pins);
@@ -3760,7 +3757,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	else {
 	  if (inl->weak_supply_vdd > 0) {
 	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-	    int netid = find_weak_net (mynl->instport_weak[iweak]);
+	    int netid = find_weak_net (mynl->instport_weak[iweak]->i);
 	    Assert (netid != -1, "Missing weak supply?");
 
 	    A_NEW (_weak[netid].pins, act_local_pin_t);
@@ -3769,7 +3766,7 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	    MALLOC (tmp, char, len);
 	    newid->sPrint (tmp, len);
 	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-	    snprintf (buf, 64, "#%d", inl->wvdd->i);
+	    ActNetlistPass::sprint_node (buf, 64, inl, inl->wvdd);
 	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
 	      FIX_STRING (Strdup (buf));
 	    A_INC (_weak[netid].pins);
@@ -3778,16 +3775,16 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 	  }
 	  if (inl->weak_supply_gnd > 0) {
 	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-	    int netid = find_weak_net (mynl->instport_weak[iweak]);
+	    int netid = find_weak_net (mynl->instport_weak[iweak]->i);
 	    Assert (netid != -1, "Missing weak supply?");
-
+	    
 	    A_NEW (_weak[netid].pins, act_local_pin_t);
 	    char *tmp;
 	    int len = strlen (vx->getName()) + 100;
 	    MALLOC (tmp, char, len);
 	    newid->sPrint (tmp, len);
 	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-	    snprintf (buf, 64, "#%d", inl->wgnd->i);
+	    ActNetlistPass::sprint_node (buf, 64, inl, inl->wgnd);
 	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
 	      FIX_STRING (Strdup (buf));
 	    A_INC (_weak[netid].pins);
