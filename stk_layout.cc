@@ -3526,7 +3526,8 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
     }
     else {
       ActId *tmp = net->net->toid();
-      tmp->Print (fp);
+      tmp->sPrint (buf, 10240);
+      a->mfprintf (fp, "%s", buf);
       delete tmp;
     }
     fprintf (fp, " )");
@@ -3538,7 +3539,9 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
       /* omit */
     }
     else {
-      fprintf (fp, " ( PIN %s )", buf);
+      fprintf (fp, " ( PIN ");
+      a->mfprintf (fp, "%s", buf);
+      fprintf (fp, " )");
     }
     delete tmp;
   }
@@ -4062,6 +4065,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
 
     fprintf (fp, "PINS %d ;\n", num_pins);
     num_pins = 0;
+    char buf[10240];
     for (int i=0; i < A_LEN (act_bnl->ports); i++) {
       if (act_bnl->ports[i].omit) continue;
       Assert (act_bnl->ports[i].netid != -1, "What?");
@@ -4069,9 +4073,12 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
       //fprintf (fp, "- top_iopin%d + NET ", act_bnl->ports[i].netid);
       // we can use the port name here! no weird numbers now!
       fprintf (fp, "- ");
-      tmp->Print (fp);
+      tmp->sPrint (buf, 10240);
+      a->mfprintf (fp, "%s", buf);
+      //tmp->Print (fp);
       fprintf (fp, " + NET ");
-      tmp->Print (fp);
+      a->mfprintf (fp, "%s", buf);
+      //tmp->Print (fp);
       delete tmp;
       if (act_bnl->ports[i].input) {
 	fprintf (fp, " + DIRECTION INPUT + USE SIGNAL ");
