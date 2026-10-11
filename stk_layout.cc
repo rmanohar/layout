@@ -5083,9 +5083,7 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
 
   char buf[1024];
   char name[1024];
-  int len;
   nl->getSharedStatName (buf, 1024, ss);
-  len = strlen (buf);
   a->msnprintf (name, 1024, "%s.rect", buf);
 
   if (_rect_inpath) {
