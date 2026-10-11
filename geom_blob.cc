@@ -1022,19 +1022,9 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
   int rtype = 0;
   int offset;
   char *net;
-  Process *p;
   Layout *L;
 
   bbox.clear ();
-
-  /* the process */
-  if (nl) {
-    p = nl->bN->p;
-    Assert (p->isExpanded(), "What?");
-  }
-  else {
-    p = NULL;
-  }
 
   fp = fopen (file, "r");
   if (!fp) {

@@ -5148,7 +5148,7 @@ void ActStackLayout::_emitwelltaplef (int flavor)
 LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
 {
   char *tmpname;
-  
+
   if (_rect_import == 0) {
     return NULL;
   }
@@ -5156,13 +5156,9 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
   char buf[1024];
   char name[1024];
 
-  nl->getSharedStatName (buf, 1024,
-			 ss->en ? ss->en->w : ss->ep->w,
-			 ss->ep ? ss->ep->l : 0,
-			 ss->en ? ss->en->l : 0);
-  
+  nl->getSharedStatName (buf, 1024, ss);
   a->msnprintf (name, 1024, "%s.rect", buf);
-  
+
   if (_rect_inpath) {
     tmpname = path_open (_rect_inpath, name, NULL);
   }
@@ -5172,8 +5168,7 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
 
   Rectangle file_bbox;
   LayoutBlob *b = LayoutBlob::ReadRect (tmpname ? tmpname : name,
-					dummy_netlist, file_bbox,
-					_rect_import);
+					ss->nl, file_bbox, _rect_import);
   if (tmpname) {
     FREE (tmpname);
   }
@@ -5280,8 +5275,20 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
  */
 LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
 {
+  LayoutBlob *b;
   // XXX: compute the diffspace here. This is much simpler because
   // there are no notches/etc.
+
+  b = _readweaksupply (s);
+  if (b) {
+    return b;
+  }
+
+  if (_rect_import > 1) {
+    char buf[1024];
+    nl->getSharedStatName (buf, 1024, s);
+    fatal_error ("%s: could not read local .rect file", buf);
+  }
 
   int diffspace;
   diffspace = Technology::T->diff[EDGE_NFET][s->en->flavor]->getOppDiffSpacing (s->en->flavor);
@@ -5290,7 +5297,7 @@ LayoutBlob *ActStackLayout::_createweaksupply (ActNetlistPass::shared_stat *s)
 
   Assert (s->extra2 == NULL, "What?");
   Assert (s->extra1 != NULL, "What?");
-  LayoutBlob *b = _createlocallayout_stk (s->nl, (list_t *) s->extra1, diffspace);
+  b = _createlocallayout_stk (s->nl, (list_t *) s->extra1, diffspace);
 
   /* now we manually add our special pins */
   Rectangle b_bbox;
@@ -5351,11 +5358,7 @@ void ActStackLayout::_emitweaksupplyrect (ActNetlistPass::shared_stat *ss,
   char buf[1024];
   char name[1024];
 
-  nl->getSharedStatName (buf, 1024,
-			 ss->en ? ss->en->w : ss->ep->w,
-			 ss->ep ? ss->ep->l : 0,
-			 ss->en ? ss->en->l : 0);
-  
+  nl->getSharedStatName (buf, 1024, ss);
   a->msnprintf (name, 1024, "%s", buf);
   strcat (name, ".rect");
 
@@ -5419,11 +5422,7 @@ void ActStackLayout::_emitweaksupplylef (ActNetlistPass::shared_stat *ss,
   char buf[1024];
   char name[1024], nodename[1024];
 
-  nl->getSharedStatName (buf, 1024,
-			 ss->en ? ss->en->w : ss->ep->w,
-			 ss->ep ? ss->ep->l : 0,
-			 ss->en ? ss->en->l : 0);
-  
+  nl->getSharedStatName (buf, 1024, ss);
   a->msnprintf (name, 1024, "%s", buf);
   emit_header (_fp, name, "CORE", b);
 
