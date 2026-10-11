@@ -1258,79 +1258,7 @@ LayoutBlob *ActStackLayout::_readlocalRect (Process *p)
     return NULL;
   }
 
-  /* now shift all the tiles to line up 0,0 in the middle of the
-     diffusion section */
-  DiffMat *d = NULL;
-  list_t *tiles = NULL;
-  int type, flavor;
-  long ymin, ymax;
-  long updiff, dndiff;
-  int set_diff = 0;
-  
-  for (int i=0; i < Technology::T->num_devs; i++) {
-    for (int j=0; j < 2; j++) {
-      tiles = b->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET));
-      if (list_isempty (tiles)) {
-	list_free (tiles);
-      }
-      else {
-	/* done! */
-	long xmin, xmax;
-	d = Technology::T->diff[j][i];
-	type = j;
-	flavor = i;
-	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
-	/* calculate ymin, ymax */
-	LayoutBlob::searchFree (tiles);
-	set_diff++;
-	if (type == EDGE_PFET) {
-	  updiff = ymin;
-	}
-	else {
-	  dndiff = ymax;
-	}
-      }
-    }
-    if (set_diff > 0) {
-      break;
-    }
-  }
-  if (set_diff == 0) {
-    warning ("Read %s; no diffusion found?", cname);
-  }
-  else {
-    /* 
-       We align this so that y-coordinate of 0 can be used
-       to consistently align the wells, with the p-diff region on 
-       top and the n-diff region on the bottom.
-    */
-
-    //int diffspace = d->getOppDiffSpacing (flavor);
-    int diffspace = _localdiffspace (p);
-
-    if (set_diff == 2) {
-      if ((updiff - dndiff) != diffspace) {
-	warning ("%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", p->getName(), diffspace, updiff-dndiff);
-	diffspace = updiff - dndiff;
-      }
-    }
-    
-    int p = +diffspace/2;
-    int n = p - diffspace;
-    int xlate;
-
-    if (type == EDGE_NFET) {
-      xlate = n - ymax;
-    }
-    else {
-      xlate = p - ymin;
-    }
-    if (xlate != 0) {
-      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
-      tmp->appendBlob (b, BLOB_VERT, xlate);
-      b = tmp;
-    }
-  }
+  b = snapWells (b, p->getName(), p);
   b = computeLEFBoundary (b);
   b->markRead ();
 
@@ -4378,7 +4306,7 @@ int ActStackLayout::_localdiffspace (Process *p)
 #if 0
   printf ("computing local diffspace for %s...\n", p->getName());
 #endif
-  
+
   spc_default = 0;
   poly_overhang = 0;
 
@@ -5155,8 +5083,9 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
 
   char buf[1024];
   char name[1024];
-
+  int len;
   nl->getSharedStatName (buf, 1024, ss);
+  len = strlen (buf);
   a->msnprintf (name, 1024, "%s.rect", buf);
 
   if (_rect_inpath) {
@@ -5176,81 +5105,10 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
     return NULL;
   }
 
-  /* now shift all the tiles to line up 0,0 in the middle of the
-     ppdiff/nndiff diffusion section */
-  DiffMat *d = NULL;
-  list_t *tiles = NULL;
-  int type;
-  long ymin, ymax;
-  long updiff, dndiff;
-  int set_diff = 0;
-
-  updiff = 0;
-  dndiff = 0;
-
-  int flavor;
-  flavor = ss->ep ? ss->ep->flavor : ss->en->flavor;
-  
-  for (int j=0; j < 2; j++) {
-    tiles = b->search (TILE_FLGS_TO_ATTR(flavor,j,WDIFF_OFFSET));
-    if (list_isempty (tiles)) {
-      list_free (tiles);
-    }
-    else {
-      /* done! */
-      long xmin, xmax;
-      d = Technology::T->welldiff[j][flavor];
-      if (d) {
-	type = j;
-	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
-	/* calculate ymin, ymax */
-	LayoutBlob::searchFree (tiles);
-	set_diff++;
-	if (type == EDGE_PFET) {
-	  updiff = ymin;
-	}
-	else {
-	  dndiff = ymax;
-	}
-      }
-    }
-  }
-  if (d == NULL) {
-    warning ("Read %s; no well diffusion found?", name);
-  }
-  else {
-    /* 
-       We align this so that y-coordinate of 0 can be used
-       to consistently align the wells, with the p-diff region on 
-       top and the n-diff region on the bottom.
-    */
-    
-    int diffspace = d->getOppDiffSpacing (flavor);
-
-    if (set_diff == 2) {
-      if ((updiff - dndiff) != diffspace) {
-	warning ("welltap_%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", act_dev_value_to_string (flavor), diffspace, updiff-dndiff);
-	diffspace = updiff - dndiff;
-      }
-    }
-    
-    int p = +diffspace/2;
-    int n = p - diffspace;
-    int xlate;
-
-    if (type == EDGE_NFET) {
-      xlate = n - ymax;
-    }
-    else {
-      xlate = p - ymin;
-    }
-    if (xlate != 0) {
-      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
-      tmp->appendBlob (b, BLOB_VERT, xlate);
-      b = tmp;
-    }
-  }
+  b = snapWells (b, buf, NULL);
   b = computeLEFBoundary (b);
+  b->markRead ();
+
   if (_rect_import == 4 || _rect_import == 5) {
     if (b->getBBox() != file_bbox) {
       warning ("%s: boundary was changed.", buf);
@@ -5261,7 +5119,6 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
       fprintf (stderr, "\n");
     }
   }
-  b->markRead ();
   
   return b;
 }
@@ -5473,4 +5330,92 @@ void ActStackLayout::_emitweaksupplylef (ActNetlistPass::shared_stat *ss,
     fprintf (_fpcell, "   END VERSION\n");
     fprintf (_fpcell, "END %s\n\n", name);
   }
+}
+
+
+LayoutBlob *ActStackLayout::snapWells (LayoutBlob *b, const char *name,
+				       Process *p)
+{
+  /* now shift all the tiles to line up 0,0 in the middle of the
+     diffusion section */
+  DiffMat *d = NULL;
+  list_t *tiles = NULL;
+  int type, flavor;
+  long ymin, ymax;
+  long updiff, dndiff;
+  int set_diff = 0;
+
+  for (int i=0; i < Technology::T->num_devs; i++) {
+    for (int j=0; j < 2; j++) {
+      tiles = b->search (TILE_FLGS_TO_ATTR(i,j,DIFF_OFFSET));
+      if (list_isempty (tiles)) {
+	list_free (tiles);
+      }
+      else {
+	/* done! */
+	long xmin, xmax;
+	d = Technology::T->diff[j][i];
+	type = j;
+	flavor = i;
+	LayoutBlob::searchBBox (tiles, &xmin, &ymin, &xmax, &ymax);
+	/* calculate ymin, ymax */
+	LayoutBlob::searchFree (tiles);
+	set_diff++;
+	if (type == EDGE_PFET) {
+	  updiff = ymin;
+	}
+	else {
+	  dndiff = ymax;
+	}
+      }
+    }
+    if (set_diff > 0) {
+      break;
+    }
+  }
+  if (set_diff == 0) {
+    warning ("In %s; no diffusion found?", name);
+  }
+  else {
+    /*
+       We align this so that y-coordinate of 0 can be used
+       to consistently align the wells, with the p-diff region on
+       top and the n-diff region on the bottom.
+    */
+
+    //int diffspace = d->getOppDiffSpacing (flavor);
+    int diffspace;
+
+    if (p) {
+      diffspace = _localdiffspace (p);
+    }
+    else {
+      diffspace = d->getOppDiffSpacing (flavor);
+    }
+
+    if (set_diff == 2) {
+      if ((updiff - dndiff) != diffspace) {
+	warning ("%s: center diffusion spacing asjusted (orig: %d; .rect: %d); using .rect file value", name, diffspace, updiff-dndiff);
+	diffspace = updiff - dndiff;
+      }
+    }
+
+    int p = +diffspace/2;
+    int n = p - diffspace;
+    int xlate;
+
+    if (type == EDGE_NFET) {
+      xlate = n - ymax;
+    }
+    else {
+      xlate = p - ymin;
+    }
+    if (xlate != 0) {
+      LayoutBlob *tmp = new LayoutBlob (BLOB_LIST);
+      tmp->appendBlob (b, BLOB_VERT, xlate);
+      b = tmp;
+    }
+  }
+
+  return b;
 }

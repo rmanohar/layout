@@ -123,6 +123,8 @@ public:
 
 
   /* compute aligned LEF boundary */
+  LayoutBlob *snapWells (LayoutBlob *b, const char *name = "-?-",
+			 Process *p = NULL);
   LayoutBlob *computeLEFBoundary (LayoutBlob *b);
 
   ActDynamicPass *stk;
