@@ -1148,7 +1148,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
     if (net && nl && (strcmp (material, "$align") != 0)) {
       n = ActNetlistPass::string_to_node (nl, net);
       if (!n) {
-	warning ("Could not find signal `%s' in netlist!", net);
+	warning ("%s: Could not find signal `%s' in netlist; ignoring label!",
+		 file, net);
       }
       //printf ("signal %s [node 0x%lx]\n", net, (unsigned long)n);
     }
@@ -1162,8 +1163,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 #endif
 
     if ((rllx >= rurx || rlly >= rury) && !( strcmp (material, "$align") == 0 && (rllx == rurx || rlly == rury))) {
-      warning ("[%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
-	       material, rllx, rlly, rurx, rury);
+      warning ("%s: [%s] Empty rectangle (%ld,%ld) -> (%ld,%ld); skipped",
+	       file, material, rllx, rlly, rurx, rury);
       continue;
     }
 
@@ -1177,15 +1178,15 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 #endif
 
       if (l < 1 || l > Technology::T->nmetals) {
-	warning ("Technology has %d metal layers; found `%s'; skipped",
-		 Technology::T->nmetals, material);
+	warning ("%s: Technology has %d metal layers; found `%s'; skipped",
+		 file, Technology::T->nmetals, material);
       }
       else {
 	/*--- draw metal ---*/
 	l--;
 	if (!L->DrawMetal (l, rllx, rlly, rurx - rllx, rury - rlly, n)) {
-	  warning ("Skipped rect: metal%d @ (%ld,%ld) -> (%ld,%ld)",
-		   l+1, rllx, rlly, rurx, rury);
+	  warning ("%s: Skipped rect: metal%d @ (%ld,%ld) -> (%ld,%ld)",
+		   file, l+1, rllx, rlly, rurx, rury);
 	}
       }
     }
@@ -1196,8 +1197,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 #endif
       /*--- draw poly ---*/
       if (!L->DrawPoly (rllx, rlly, rurx - rllx, rury - rlly, n)) {
-	warning ("Skipped rect: poly @ (%ld,%ld) -> (%ld,%ld)",
-		 rllx, rlly, rurx, rury);
+	warning ("%s: Skipped rect: poly @ (%ld,%ld) -> (%ld,%ld)",
+		 file, rllx, rlly, rurx, rury);
       }
     }
     else if (strcmp (material, "$align") == 0) {
@@ -1214,7 +1215,7 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
       }
       else if (strncmp (net, "$l:", 3) == 0) {
 	      l->name = Strdup (net+3);
-        #if 1
+        #if 0
         printf("new marker %s left: %ld\n",l->name, rlly);
         #endif	
 	      l->offset = rlly; // left alignment: lower left corner y coord
@@ -1270,7 +1271,8 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 #endif
       }
       else {
-	warning ("Invalid alignment layer directive: `%s'; skipped", net);
+	warning ("%s: Invalid alignment layer directive: `%s'; skipped",
+		 file, net);
       }
       FREE (l); // don't free name: that gets used by the merge
     }
@@ -1332,16 +1334,16 @@ LayoutBlob *LayoutBlob::ReadRect (const char *file, netlist_t *nl,
 	  break;
 	  
 	default:
-	  fatal_error ("Unknown lmap lcase %d?", lm->lcase);
+	  fatal_error ("%s: Unknown lmap lcase %d?", file, lm->lcase);
 	  break;
 	}
 	if (errname) {
-	  warning ("Skipped rect %s: (%ld,%ld) -> (%ld,%ld)",
-		   errname, rllx, rlly, rurx, rury);
+	  warning ("%s: Skipped rect %s: (%ld,%ld) -> (%ld,%ld)",
+		   file, errname, rllx, rlly, rurx, rury);
 	}
       }
       else {
-	warning ("Unknown material `%s'; skipped", material);
+	warning ("%s: Unknown material `%s'; skipped", file, material);
       }
 #if 0      
       else {
