@@ -340,12 +340,18 @@ ActStackLayout::ActStackLayout (ActPass *ap)
   _wellplug_count = 0;
   dummy_netlist = NULL;
   _weak_supplies = NULL;
+  _wknets = NULL;
 
   _lef_header = 0;
   _cell_header = 0;
   _fp = NULL;
   _fpcell = NULL;
 }
+
+
+struct _extra_wk_nets {
+  A_DECL (act_local_net_t, weak);
+};
 
 /**
  * Drop caches and outputs derived from the current ACT design before pass
@@ -371,6 +377,29 @@ void ActStackLayout::resetForDesignRefresh ()
     }
     list_free (_weak_supplies);
     _weak_supplies = NULL;
+  }
+
+  if (_wknets) {
+    phash_iter_t it;
+    phash_bucket_t *b;
+    phash_iter_init (_wknets, &it);
+    while ((b = phash_iter_next (_wknets, &it))) {
+      _extra_wk_nets *x = (_extra_wk_nets *) b->v;
+      for (int i=0; i < A_LEN (x->weak); i++) {
+	for (int j=0; j < A_LEN (x->weak[i].pins); j++) {
+          if (ACT_NET_STRINGONLY (x->weak[i].pins[j].inst)) {
+   	     FREE (ACT_NET_STRINGONLY (x->weak[i].pins[j].inst));
+          }
+	  FREE (ACT_NET_STRINGONLY (x->weak[i].pins[j].pin));
+	}
+	A_FREE (x->weak[i].pins);
+	FREE (ACT_NET_STRINGONLY (x->weak[i].net));
+      }
+      A_FREE (x->weak);
+      FREE (x);
+    }
+    phash_free (_wknets);
+    _wknets = NULL;
   }
 
   if (_cellStats) {
@@ -1191,6 +1220,7 @@ void *ActStackLayout::localop (ActPass *ap, Process *p, int mode)
   }
   else if (mode == 3) {
     _maxHeightlocal (p);
+    addWeakNets (p);
   }
   else if (mode == 4) {
     _emitlocalRect (p);
@@ -3507,6 +3537,7 @@ static int print_net (Act *a, FILE *fp, ActId *prefix, act_local_net_t *net,
 static unsigned long netcount;
 
 static ActBooleanizePass *boolinfo;
+static ActStackLayout *_lp;
 
 void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pins)
 {
@@ -3524,224 +3555,17 @@ void _collect_emit_nets (Act *a, ActId *prefix, Process *p, FILE *fp, int do_pin
 
   /* print local weak power supply connections: */
   phash_bucket_t *pb;
-  pb = phash_lookup (_nlp->getSharedInsts(), p);
+
+  pb = _lp->getWeakNets (p);
   if (pb) {
-
-#define FIX_STRING(x) (char *) (((unsigned long)(x)|1))
-    
-    char net[128];
-    char buf[64];
-    list_t *l = (list_t *) pb->v;
-    netlist_t *mynl = _nlp->getNL (p);
-    Assert (mynl, "hmm");
-    A_DECL (act_local_net_t, _weak);
-    A_INIT (_weak);
-    int count = 0;
-
-    auto find_weak_net = [&](int num) {
-      snprintf (net, 128, "_wknet_n%d", num);
-      for (int i=0; i < A_LEN (_weak); i++) {
-	if (strcmp (ACT_NET_STRINGONLY (_weak[i].net), net) == 0) {
-	  return i;
-	}
-      }
-      return -1;
-    };
-    
-    for (listitem_t *li = list_first (l); li; li = list_next (li)) {
-      ActNetlistPass::shared_stat_inst *si =
-	(ActNetlistPass::shared_stat_inst *) list_value (li);
-      do {
-	snprintf (buf, 64, "wk_stat_%d", count++);
-      } while (p->CurScope()->Lookup (buf));
-      /* we have the instance name! */
-      /* the net names are si->weak_vdd, si->weak_gnd */
-      if (si->weak_vdd) {
-	int netid = find_weak_net (si->weak_vdd->i);
-	if (netid == -1) {
-	  A_NEW (_weak, act_local_net_t);
-	  A_NEXT( _weak).net = (act_connection *) FIX_STRING (Strdup (net));
-	  if (mynl->weak_supply_vdd > 0 && mynl->wvdd == si->weak_vdd) {
-	    A_NEXT (_weak).port = 1;
-	  }
-	  else {
-	    A_NEXT (_weak).port = 0;
-	  }
-	  A_NEXT (_weak).skip = 0;
-	  netid = A_LEN (_weak);
-	  A_INC (_weak);
-	  A_INIT (_weak[netid].pins);
-	}
-	A_NEW (_weak[netid].pins, act_local_pin_t);
-	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	ActNetlistPass::sprint_wk_supply (buf, 64, si->weak_vdd);
-	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf));
-	A_INC (_weak[netid].pins);
-      }
-      if (si->weak_gnd) {
-	int netid = find_weak_net (si->weak_gnd->i);
-	if (netid == -1) {
-	  A_NEW (_weak, act_local_net_t);
-	  A_NEXT( _weak).net = (act_connection *) FIX_STRING (Strdup (net));
-	  if (mynl->weak_supply_gnd > 0 && mynl->wgnd == si->weak_gnd) {
-	    A_NEXT (_weak).port = 1;
-	  }
-	  else {
-	    A_NEXT (_weak).port = 0;
-	  }
-	  A_NEXT (_weak).skip = 0;
-	  netid = A_LEN (_weak);
-	  A_INC (_weak);
-	  A_INIT (_weak[netid].pins);
-	}
-	A_NEW (_weak[netid].pins, act_local_pin_t);
-	A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	ActNetlistPass::sprint_wk_supply (buf, 64, si->weak_gnd);
-	A_NEXT (_weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf));
-	A_INC (_weak[netid].pins);
-      }
-    }
-
-    /*
-      We have created all the nets with weak supplies.
-      Now we have to walk through any instance that has a weak supply
-      port and connect it up!
-    */
-    ActUniqProcInstiter i(p->CurScope());
-    int iweak = 0;
-    for (i = i.begin(); i != i.end(); i++) {
-      ValueIdx *vx = (*i);
-      ActId *newid;
-      ActId *cpy;
-      Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
-      netlist_t *inl;
-      int ports_exist;
-      newid = new ActId (vx->getName());
-      cpy = newid;
-      inl = _nlp->getNL (instproc);
-      Assert (inl, "What?");
-
-      ports_exist = 0;
-      for (int i=0; i < A_LEN (inl->bN->ports); i++) {
-	if (inl->bN->ports[i].omit == 0) {
-	  ports_exist = 1;
-	  break;
-	}
-      }
-
-      if (ports_exist) {
-	if (vx->t->arrayInfo()) {
-	  Arraystep *as = vx->t->arrayInfo()->stepper();
-	  while (!as->isend()) {
-	    if (vx->isPrimary (as->index())) {
-	      if (as->curProc() && as->curProc() != instproc) {
-		instproc = as->curProc();
-		inl = _nlp->getNL (instproc);
-		Assert (inl, "Hmm...");
-	      }
-	      Array *x = as->toArray();
-	      newid->setArray (x);
-	      /* XXX DEAL WITH THIS! */
-	      if (inl->weak_supply_vdd > 0) {
-		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-		int netid = find_weak_net (mynl->instport_weak[iweak]->i);
-		Assert (netid != -1, "Missing weak supply?");
-
-		A_NEW (_weak[netid].pins, act_local_pin_t);
-		char *tmp;
-		int len = strlen (vx->getName()) + 100;
-		MALLOC (tmp, char, len);
-		newid->sPrint (tmp, len);
-		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-		ActNetlistPass::sprint_node (buf, 64, inl, inl->wvdd);
-		A_NEXT (_weak[netid].pins).pin = (act_connection *)
-		  FIX_STRING (Strdup (buf));
-		A_INC (_weak[netid].pins);
-		
-		iweak++;
-	      }
-	      if (inl->weak_supply_gnd > 0) {
-		Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-		int netid = find_weak_net (mynl->instport_weak[iweak]->i);
-		Assert (netid != -1, "Missing weak supply?");
-
-		A_NEW (_weak[netid].pins, act_local_pin_t);
-		char *tmp;
-		int len = strlen (vx->getName()) + 100;
-		MALLOC (tmp, char, len);
-		newid->sPrint (tmp, len);
-		A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-		ActNetlistPass::sprint_node (buf, 64, inl, inl->wgnd);
-		A_NEXT (_weak[netid].pins).pin = (act_connection *)
-		  FIX_STRING (Strdup (buf));
-		A_INC (_weak[netid].pins);
-		
-		iweak++;
-	      }
-	      delete x;
-	      newid->setArray (NULL);
-	    }
-	    as->step();
-	  }
-	  delete as;
-	}
-	else {
-	  if (inl->weak_supply_vdd > 0) {
-	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-	    int netid = find_weak_net (mynl->instport_weak[iweak]->i);
-	    Assert (netid != -1, "Missing weak supply?");
-
-	    A_NEW (_weak[netid].pins, act_local_pin_t);
-	    char *tmp;
-	    int len = strlen (vx->getName()) + 100;
-	    MALLOC (tmp, char, len);
-	    newid->sPrint (tmp, len);
-	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-	    ActNetlistPass::sprint_node (buf, 64, inl, inl->wvdd);
-	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
-	      FIX_STRING (Strdup (buf));
-	    A_INC (_weak[netid].pins);
-	    
-	    iweak++;
-	  }
-	  if (inl->weak_supply_gnd > 0) {
-	    Assert (iweak < A_LEN (mynl->instport_weak), "What?");
-	    int netid = find_weak_net (mynl->instport_weak[iweak]->i);
-	    Assert (netid != -1, "Missing weak supply?");
-	    
-	    A_NEW (_weak[netid].pins, act_local_pin_t);
-	    char *tmp;
-	    int len = strlen (vx->getName()) + 100;
-	    MALLOC (tmp, char, len);
-	    newid->sPrint (tmp, len);
-	    A_NEXT (_weak[netid].pins).inst = (ActId *) FIX_STRING (tmp);
-	    ActNetlistPass::sprint_node (buf, 64, inl, inl->wgnd);
-	    A_NEXT (_weak[netid].pins).pin = (act_connection *)
-	      FIX_STRING (Strdup (buf));
-	    A_INC (_weak[netid].pins);
-	    
-	    iweak++;
-	  }
-	}
-      }
-    }
-
-    for (int i=0; i < A_LEN (_weak); i++) {
-      if (print_net (a, fp, prefix, &_weak[i], prefix == NULL ? (i+1) : 0,
+    _extra_wk_nets *wk = (_extra_wk_nets *) pb->v;
+    for (int i=0; i < A_LEN (wk->weak); i++) {
+      if (print_net (a, fp, prefix, &wk->weak[i], prefix == NULL ? (i+1) : 0,
 		     do_pins)) {
 	netcount++;
       }
-      for (int j=0; j < A_LEN (_weak[i].pins); j++) {
-	FREE (ACT_NET_STRINGONLY (_weak[i].pins[j].inst));
-	FREE (ACT_NET_STRINGONLY (_weak[i].pins[j].pin));
-      }
-      A_FREE (_weak[i].pins);
-      FREE (ACT_NET_STRINGONLY (_weak[i].net));
     }
-    A_FREE (_weak);
-    
   }
-#undef FIX_STRING
 
   ActUniqProcInstiter i(p->CurScope());
 
@@ -4055,6 +3879,7 @@ void ActStackLayout::emitDEF (FILE *fp, Process *p, double pad,
     ( inst5638 A ) ( inst4678 Y )
     ;
   */
+  _lp = this;
   _collect_emit_nets (a, NULL, p, fp, do_pins);
 
   /*** XXX: add in the nets for the weak supply cells ***/
@@ -5419,4 +5244,385 @@ LayoutBlob *ActStackLayout::snapWells (LayoutBlob *b, const char *name,
   }
 
   return b;
+}
+
+
+phash_bucket_t *ActStackLayout::getWeakNets (Process *p)
+{
+  if (!p || !_wknets) {
+    return NULL;
+  }
+  return phash_lookup (_wknets, p);
+}
+
+void ActStackLayout::addWeakNets (Process *p)
+{
+  if (!p) return;
+
+  netlist_t *mynl = nl->getNL (p);
+  Assert (mynl, "hmm");
+
+  // add in local weak supply nets, if any
+  phash_bucket_t *pb;
+  pb = phash_lookup (nl->getSharedInsts(), p);
+  if (pb || mynl->wvdd || mynl->wgnd) {
+#define FIX_STRING(x) (char *) (((unsigned long)(x)|1))
+    char net[128];
+    char buf[64], buf2[64];
+    list_t *l;
+
+    if (pb) {
+      l = (list_t *) pb->v;
+    }
+    else {
+      l = NULL;
+    }
+
+    if (!_wknets) {
+      _wknets = phash_new (4);
+    }
+    pb = phash_add (_wknets, p);
+    _extra_wk_nets *wk;
+    NEW (wk, _extra_wk_nets);
+    pb->v = wk;
+    A_INIT (wk->weak);
+    
+    int count = 0;
+
+    auto find_weak_net = [&](int num) {
+      snprintf (net, 128, "_wknet_n%d", num);
+      for (int i=0; i < A_LEN (wk->weak); i++) {
+	if (strcmp (ACT_NET_STRINGONLY (wk->weak[i].net), net) == 0) {
+	  return i;
+	}
+      }
+      return -1;
+    };
+
+    auto find_weak_net_sub = [&](int num, _extra_wk_nets *sub) {
+      snprintf (net, 128, "_wknet_n%d", num);
+      for (int i=0; i < A_LEN (sub->weak); i++) {
+	if (strcmp (ACT_NET_STRINGONLY (sub->weak[i].net), net) == 0) {
+	  return i;
+	}
+      }
+      return -1;
+    };
+    
+    /* add all the shared staticizer nets for the instances */
+    for (listitem_t *li = l ? list_first (l) : NULL; li; li = list_next (li)) {
+      ActNetlistPass::shared_stat_inst *si =
+	(ActNetlistPass::shared_stat_inst *) list_value (li);
+      do {
+	snprintf (buf, 64, "wk_stat_%d", count++);
+      } while (p->CurScope()->Lookup (buf));
+      /* we have the instance name! */
+      /* the net names are si->weak_vdd, si->weak_gnd */
+      if (si->weak_vdd) {
+	int netid = find_weak_net (si->weak_vdd->i);
+	if (netid == -1) {
+	  A_NEW (wk->weak, act_local_net_t);
+	  A_NEXT(wk->weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	  if (mynl->weak_supply_vdd > 0 && mynl->wvdd == si->weak_vdd) {
+	    A_NEXT (wk->weak).port = 1;
+	  }
+	  else {
+	    A_NEXT (wk->weak).port = 0;
+	  }
+	  A_NEXT (wk->weak).skip = 0;
+	  netid = A_LEN (wk->weak);
+	  A_INC (wk->weak);
+	  A_INIT (wk->weak[netid].pins);
+	}
+	A_NEW (wk->weak[netid].pins, act_local_pin_t);
+	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
+	ActNetlistPass::sprint_wk_supply (buf2, 64, si->weak_vdd);
+	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
+	A_INC (wk->weak[netid].pins);
+      }
+      if (si->weak_gnd) {
+	int netid = find_weak_net (si->weak_gnd->i);
+	if (netid == -1) {
+	  A_NEW (wk->weak, act_local_net_t);
+	  A_NEXT(wk->weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	  if (mynl->weak_supply_gnd > 0 && mynl->wgnd == si->weak_gnd) {
+	    A_NEXT (wk->weak).port = 1;
+	  }
+	  else {
+	    A_NEXT (wk->weak).port = 0;
+	  }
+	  A_NEXT (wk->weak).skip = 0;
+	  netid = A_LEN (wk->weak);
+	  A_INC (wk->weak);
+	  A_INIT (wk->weak[netid].pins);
+	}
+	A_NEW (wk->weak[netid].pins, act_local_pin_t);
+	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
+	ActNetlistPass::sprint_wk_supply (buf2, 64, si->weak_gnd);
+	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
+	A_INC (wk->weak[netid].pins);
+      }
+    }
+    /* If I have weak ports, then those are also local nets */
+    if (mynl->weak_supply_vdd > 0) {
+      int netid = find_weak_net (mynl->wvdd->i);
+      if (netid == -1) {
+	A_NEW (wk->weak, act_local_net_t);
+	A_NEXT (wk->weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	A_NEXT (wk->weak).port = 1;
+	A_NEXT (wk->weak).skip = 0;
+	netid = A_LEN (wk->weak);
+	A_INC (wk->weak);
+	A_INIT (wk->weak[netid].pins);
+	A_NEW (wk->weak[netid].pins, act_local_pin_t);
+	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (NULL);
+	ActNetlistPass::sprint_wk_supply (buf2, 64, mynl->wvdd);
+	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
+	A_INC (wk->weak[netid].pins);
+      }
+    }
+    if (mynl->weak_supply_gnd > 0) {
+      int netid = find_weak_net (mynl->wgnd->i);
+      if (netid == -1) {
+	A_NEW (wk->weak, act_local_net_t);
+	A_NEXT (wk->weak).net = (act_connection *) FIX_STRING (Strdup (net));
+	A_NEXT (wk->weak).port = 1;
+	A_NEXT (wk->weak).skip = 0;
+	netid = A_LEN (wk->weak);
+	A_INC (wk->weak);
+	A_INIT (wk->weak[netid].pins);
+	A_NEW (wk->weak[netid].pins, act_local_pin_t);
+	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (NULL);
+	ActNetlistPass::sprint_wk_supply (buf2, 64, mynl->wgnd);
+	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
+	A_INC (wk->weak[netid].pins);
+      }
+    }
+    /*
+      We have created all the nets with weak supplies.
+      Now we have to walk through any instance that has a weak supply
+      port and connect it up!
+      Finally, we need to import pins.
+    */
+    ActUniqProcInstiter i(p->CurScope());
+    int iweak = 0;
+    for (i = i.begin(); i != i.end(); i++) {
+      ValueIdx *vx = (*i);
+      ActId *newid;
+      ActId *cpy;
+      Process *instproc = dynamic_cast<Process *>(vx->t->BaseType ());
+      netlist_t *inl;
+      int ports_exist;
+      phash_bucket_t *xsub;
+      _extra_wk_nets *wksub;
+      newid = new ActId (vx->getName());
+      cpy = newid;
+      inl = nl->getNL (instproc);
+      Assert (inl, "What?");
+      
+      xsub = phash_lookup (_wknets, instproc);
+      if (xsub) {
+	wksub = (_extra_wk_nets *) xsub->v;
+      }
+      else {
+	wksub = NULL;
+      }
+
+      char *newidbuf;
+      int newlen = strlen(vx->getName()) + 128;
+      MALLOC (newidbuf, char, newlen);
+
+      ports_exist = 0;
+      for (int i=0; i < A_LEN (inl->bN->ports); i++) {
+	if (inl->bN->ports[i].omit == 0) {
+	  ports_exist = 1;
+	  break;
+	}
+      }
+
+      if (ports_exist) {
+	Arraystep *as = NULL;
+	if (vx->t->arrayInfo()) {
+	  as = vx->t->arrayInfo()->stepper();
+	}
+	do {
+	  if (!as || vx->isPrimary (as->index())) {
+	    if (as && as->curProc() && as->curProc() != instproc) {
+	      instproc = as->curProc();
+	      inl = nl->getNL (instproc);
+	      Assert (inl, "Hmm...");
+	      xsub = phash_lookup (_wknets, instproc);
+	      if (xsub) {
+		wksub = (_extra_wk_nets *) xsub->v;
+	      }
+	      else {
+		wksub = NULL;
+	      }
+	    }
+	    Array *ta;
+	    if (as) {
+	      ta = as->toArray ();
+	    }
+	    else {
+	      ta = NULL;
+	    }
+	    newid->setArray (ta);
+
+	    newid->sPrint (newidbuf, newlen);
+
+	    /* do stuff */
+	    if (inl->weak_supply_vdd > 0) {
+	      /* We need to find the net for this sub-circuit, and
+		 then import it */
+	      Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+	      Assert (wksub, "What?");
+	      
+	      int subnetid = find_weak_net_sub (inl->wvdd->i, wksub);
+	      Assert (subnetid != -1, "Missing weak supply net from subcircuit?");
+	      int netid = find_weak_net (mynl->instport_weak[iweak]->i);
+	      Assert (netid != -1, "Missing weak supply?");
+
+	      act_local_net_t *subn = &wksub->weak[subnetid];
+#if 0
+	      printf ("Copy into %s:\n", p->getName());
+	      printf (" curnet %s\n",
+		      ACT_NET_STRINGONLY (wk->weak[netid].net));
+	      printf (" > ");
+#endif
+	      if (A_LEN (wk->weak[netid].pins) == 1 &&
+		  ACT_NET_STRINGONLY (wk->weak[netid].pins[0].inst) == NULL) {
+		FREE (ACT_NET_STRINGONLY (wk->weak[netid].pins[0].pin));
+		A_LEN_RAW (wk->weak[netid].pins) = 0;
+	      }
+#if 0
+	      for (int k=0; k < A_LEN (wk->weak[netid].pins); k++) {
+		if (ACT_NET_STRINGONLY (wk->weak[netid].pins[k].inst)) {
+		  printf (" %s", ACT_NET_STRINGONLY (wk->weak[netid].pins[k].inst));
+		}
+		else {
+		  printf ("-");
+		}
+		printf (":%s", ACT_NET_STRINGONLY (wk->weak[netid].pins[k].pin));
+	      }
+	      printf ("\n");
+	      printf ("%s subnet %s:", instproc->getName(),
+		      ACT_NET_STRINGONLY (subn->net));
+	      for (int k=0; k < A_LEN (subn->pins); k++) {
+		if (ACT_NET_STRINGONLY (subn->pins[k].inst)) {
+		  printf (" %s", ACT_NET_STRINGONLY (subn->pins[k].inst));
+		}
+		else {
+		  printf ("-");
+		}
+		printf (":%s", ACT_NET_STRINGONLY (subn->pins[k].pin));
+	      }
+	      printf("\n");
+#endif
+	      for (int k=0; k < A_LEN (subn->pins); k++) {
+		char *tmp;
+		int len = strlen (newidbuf) + 4;
+		int pos;
+
+		A_NEW (wk->weak[netid].pins, act_local_pin_t);
+		if (ACT_NET_STRINGONLY (subn->pins[k].inst)) {
+		  len += strlen (ACT_NET_STRINGONLY (subn->pins[k].inst));
+		}
+		MALLOC (tmp, char, len);
+
+		if (ACT_NET_STRINGONLY (subn->pins[k].inst)) {
+		  snprintf (tmp, len, "%s.%s", newidbuf,
+			    ACT_NET_STRINGONLY (subn->pins[k].inst));
+		}
+		else {
+		  snprintf (tmp, len, "%s", newidbuf);
+		}
+		A_NEW (wk->weak[netid].pins, act_local_pin_t);
+		A_NEXT (wk->weak[netid].pins).inst =
+		  (ActId *) FIX_STRING (tmp);
+		A_NEXT (wk->weak[netid].pins).pin =
+		  (act_connection *) FIX_STRING (Strdup (ACT_NET_STRINGONLY (subn->pins[k].pin)));
+		A_INC (wk->weak[netid].pins);
+	      }
+	      subn->skip = 1;
+#if 0
+	      printf (" UPDATED curnet %s\n",
+		      ACT_NET_STRINGONLY (wk->weak[netid].net));
+	      printf (" > ");
+	      for (int k=0; k < A_LEN (wk->weak[netid].pins); k++) {
+		if (ACT_NET_STRINGONLY (wk->weak[netid].pins[k].inst)) {
+		  printf (" %s", ACT_NET_STRINGONLY (wk->weak[netid].pins[k].inst));
+		}
+		else {
+		  printf ("-");
+		}
+		printf (":%s", ACT_NET_STRINGONLY (wk->weak[netid].pins[k].pin));
+	      }
+	      printf ("\n");
+	      printf ("\n");
+#endif
+	      iweak++;
+	    }
+	    if (inl->weak_supply_gnd > 0) {
+	      Assert (iweak < A_LEN (mynl->instport_weak), "What?");
+
+	      Assert (wksub, "What?");
+
+	      int subnetid = find_weak_net_sub (inl->wgnd->i, wksub);
+	      Assert (subnetid != -1, "Missing weak supply net from subcircuit?");
+	      int netid = find_weak_net (mynl->instport_weak[iweak]->i);
+	      Assert (netid != -1, "Missing weak supply?");
+
+	      if (A_LEN (wk->weak[netid].pins) == 1 &&
+		  ACT_NET_STRINGONLY (wk->weak[netid].pins[0].inst) == NULL) {
+		FREE (ACT_NET_STRINGONLY (wk->weak[netid].pins[0].pin));
+		A_LEN_RAW (wk->weak[netid].pins) = 0;
+	      }
+	      
+	      act_local_net_t *subn = &wksub->weak[subnetid];
+	      subn->skip = 1;
+	      for (int k=0; k < A_LEN (subn->pins); k++) {
+		char *tmp;
+		int len = strlen (newidbuf) + 4;
+		int pos;
+
+		A_NEW (wk->weak[netid].pins, act_local_pin_t);
+		if (ACT_NET_STRINGONLY (subn->pins[k].inst)) {
+		  len += strlen (ACT_NET_STRINGONLY (subn->pins[k].inst));
+		}
+		MALLOC (tmp, char, len);
+
+		if (ACT_NET_STRINGONLY (subn->pins[k].inst)) {
+		  snprintf (tmp, len, "%s.%s", newidbuf,
+			    ACT_NET_STRINGONLY (subn->pins[k].inst));
+		}
+		else {
+		  snprintf (tmp, len, "%s", newidbuf);
+		}
+		A_NEW (wk->weak[netid].pins, act_local_pin_t);
+		A_NEXT (wk->weak[netid].pins).inst =
+		  (ActId *) FIX_STRING (tmp);
+		A_NEXT (wk->weak[netid].pins).pin =
+		  (act_connection *) FIX_STRING (Strdup (ACT_NET_STRINGONLY (subn->pins[k].pin)));
+		A_INC (wk->weak[netid].pins);
+	      }
+	      iweak++;
+	    }
+	    if (ta) {
+	      delete ta;
+	    }
+	    newid->setArray (NULL);
+	  }
+	  if (as) {
+	    as->step ();
+	  }
+	} while (as && !as->isend());
+	if (as) {
+	  delete as;
+	}
+      }
+      FREE (newidbuf);
+      delete newid;
+    }
+  }
+#undef FIX_STRING
 }

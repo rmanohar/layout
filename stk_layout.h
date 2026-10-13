@@ -52,7 +52,6 @@ public:
   void incBBox (Process *p);
   long getBBoxCount (Process *p);
 
-
   int getImport () { return _rect_import; }
   void reportDirs (FILE *fp);
   void cacheConfig ();
@@ -62,6 +61,9 @@ public:
 
   list_t *getWeakSupplies () { return _weak_supplies; }
   void _maxHeightlocal (LayoutBlob *b);
+
+  void addWeakNets (Process *p);
+  phash_bucket_t *getWeakNets (Process *p);
   
  private:
   int _localdiffspace (Process *p);
@@ -121,6 +123,9 @@ public:
   void _match_shared_stat (ActNetlistPass::shared_stat_inst *,
 			   listitem_t **, listitem_t **);
 
+
+  /* weak nets */
+  struct pHashtable *_wknets;
 
   /* compute aligned LEF boundary */
   LayoutBlob *snapWells (LayoutBlob *b, const char *name = "-?-",
