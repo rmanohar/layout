@@ -5084,7 +5084,10 @@ LayoutBlob *ActStackLayout::_readweaksupply (ActNetlistPass::shared_stat *ss)
   char buf[1024];
   char name[1024];
   nl->getSharedStatName (buf, 1024, ss);
-  a->msnprintf (name, 1024, "%s.rect", buf);
+  a->msnprintf (name, 1024, "%s", buf);
+  int len = strlen (name);
+  snprintf (name + len, 1024 - len, ".rect");
+
 
   if (_rect_inpath) {
     tmpname = path_open (_rect_inpath, name, NULL);
