@@ -5262,6 +5262,21 @@ void ActStackLayout::addWeakNets (Process *p)
   netlist_t *mynl = nl->getNL (p);
   Assert (mynl, "hmm");
 
+  list_t *shared_list = nl->getSharedStatTypes();
+
+  auto find_shared_stat_type = [&](ActNetlistPass::shared_stat_inst *si)
+    {
+      ActNetlistPass::shared_stat *s;
+      for (listitem_t *li = list_first (shared_list); li; li = list_next (li)) {
+	s = (ActNetlistPass::shared_stat *) list_value (li);
+	if ((s->en && s->en->l == si->nl || !s->en && si->nl == 0) &&
+	    (s->ep && s->ep->l == si->pl || !s->ep && si->pl == 0)) {
+	  return s;
+	}
+      }
+      return (ActNetlistPass::shared_stat *) NULL;
+    };
+
   // add in local weak supply nets, if any
   phash_bucket_t *pb;
   pb = phash_lookup (nl->getSharedInsts(), p);
@@ -5316,9 +5331,13 @@ void ActStackLayout::addWeakNets (Process *p)
       do {
 	snprintf (buf, 64, "wk_stat_%d", count++);
       } while (p->CurScope()->Lookup (buf));
+
+      ActNetlistPass::shared_stat *ss = find_shared_stat_type (si);
+      Assert (ss, "What?");
       /* we have the instance name! */
       /* the net names are si->weak_vdd, si->weak_gnd */
       if (si->weak_vdd) {
+	Assert (ss->nl->wvdd, "What?");
 	int netid = find_weak_net (si->weak_vdd->i);
 	if (netid == -1) {
 	  A_NEW (wk->weak, act_local_net_t);
@@ -5336,11 +5355,13 @@ void ActStackLayout::addWeakNets (Process *p)
 	}
 	A_NEW (wk->weak[netid].pins, act_local_pin_t);
 	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	ActNetlistPass::sprint_wk_supply (buf2, 64, si->weak_vdd);
+	// pin for this instance!
+	ActNetlistPass::sprint_wk_supply (buf2, 64, ss->nl->wvdd);
 	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
 	A_INC (wk->weak[netid].pins);
       }
       if (si->weak_gnd) {
+	Assert (ss->nl->wgnd, "What?");
 	int netid = find_weak_net (si->weak_gnd->i);
 	if (netid == -1) {
 	  A_NEW (wk->weak, act_local_net_t);
@@ -5358,7 +5379,7 @@ void ActStackLayout::addWeakNets (Process *p)
 	}
 	A_NEW (wk->weak[netid].pins, act_local_pin_t);
 	A_NEXT (wk->weak[netid].pins).inst = (ActId *) FIX_STRING (Strdup (buf));
-	ActNetlistPass::sprint_wk_supply (buf2, 64, si->weak_gnd);
+	ActNetlistPass::sprint_wk_supply (buf2, 64, ss->nl->wgnd);
 	A_NEXT (wk->weak[netid].pins).pin = (act_connection *) FIX_STRING (Strdup (buf2));
 	A_INC (wk->weak[netid].pins);
       }
