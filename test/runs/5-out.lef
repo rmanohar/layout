@@ -107,6 +107,7 @@ MACRO mycell
         LAYER m2 ;
         RECT 2.400000 20.400000 3.600000 21.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_50_6
     PIN in_51_6
         DIRECTION INPUT ;
@@ -115,6 +116,7 @@ MACRO mycell
         LAYER m2 ;
         RECT 7.200000 20.400000 8.400000 21.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_51_6
     PIN in_52_6
         DIRECTION INPUT ;
@@ -123,6 +125,7 @@ MACRO mycell
         LAYER m2 ;
         RECT 12.000000 20.400000 13.200000 21.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_52_6
     PIN in_53_6
         DIRECTION INPUT ;
@@ -131,6 +134,7 @@ MACRO mycell
         LAYER m2 ;
         RECT 16.800000 20.400000 18.000000 21.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_53_6
     PIN in_54_6
         DIRECTION INPUT ;
@@ -139,6 +143,7 @@ MACRO mycell
         LAYER m2 ;
         RECT 21.600000 20.400000 22.800000 21.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_54_6
     PIN out
         DIRECTION OUTPUT ;

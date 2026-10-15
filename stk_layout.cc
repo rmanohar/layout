@@ -1968,7 +1968,7 @@ static int emit_layer_rects (FILE *fp, list_t *tiles, node_t **io = NULL,
   return emit_obs;
 }
 
-static void emit_antenna_area (FILE *fp, list_t *tiles)
+static void emit_antenna_area (FILE *fp, list_t *tiles, bool is_input = false)
 {
   double scale = Technology::T->scale/1000.0;
   listitem_t *tli;
@@ -2020,7 +2020,9 @@ static void emit_antenna_area (FILE *fp, list_t *tiles)
       }
     }
   }
-  if (ant_area > 0) {
+  if (ant_area > 0 || is_input) {
+    /* If the gate area is zero, it still needs to be printed for an
+       input pin. */
     fprintf (fp, "        ANTENNAGATEAREA %.6f ;\n", ant_area);
   }
   if (ant_diffarea > 0) {
@@ -2056,7 +2058,8 @@ static void emit_one_pin (Act *a, FILE *fp, const char *name, int isinput,
   fprintf (fp, "        END\n");
 
   // now we emit just the fet area for antennas
-  emit_antenna_area (fp, tiles);
+  emit_antenna_area (fp, tiles,
+		     (strcmp (sigtype, "SIGNAL") == 0) ? isinput : false);
 
   LayoutBlob::searchFree (tiles);
 

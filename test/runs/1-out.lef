@@ -107,6 +107,7 @@ MACRO _0_0cell_0_0g1x0
         LAYER m2 ;
         RECT 2.400000 8.400000 3.600000 9.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_50_6
     PIN in_51_6
         DIRECTION INPUT ;
@@ -115,6 +116,7 @@ MACRO _0_0cell_0_0g1x0
         LAYER m2 ;
         RECT 9.600000 8.400000 10.800000 9.600000 ;
         END
+        ANTENNAGATEAREA 0.000000 ;
     END in_51_6
     PIN out
         DIRECTION OUTPUT ;
