@@ -54,6 +54,8 @@ rect_map =  {
   'psc'         :   ['psc', 'ppdiff', 'm1' ],
   'nsubstratendiff':['nndiff'],
   'nsc'         :   ['nsc', 'nndiff', 'm1' ],
+  'nsubstratencontact'  :   ['nsc', 'nndiff', 'm1' ],
+  'psubstratepcontact'  :   ['psc', 'ppdiff', 'm1' ],
 }
 
 #
